@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Каталог для временных JSON-файлов, которыми делятся через другие приложения. -->
+    <cache-path
+        name="shared_spells"
+        path="shared/" />
+</paths>
