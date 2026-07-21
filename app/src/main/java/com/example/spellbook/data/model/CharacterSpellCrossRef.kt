@@ -33,4 +33,6 @@ data class CharacterSpellCrossRef(
     val spellId: String,
     /** Момент добавления заклинания персонажу — для сортировки «по дате добавления». */
     val addedAt: Long = System.currentTimeMillis(),
+    /** Подготовлено ли заклинание (для персонажей с переподготовкой). */
+    val prepared: Boolean = false,
 )

@@ -1,5 +1,10 @@
 package com.example.spellbook.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -100,9 +105,14 @@ fun SpellListScreen(
     onFiltersChange: (SpellFilters) -> Unit,
     onSpellClick: (String) -> Unit,
     navigationIcon: @Composable () -> Unit = {},
+    extraActions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+    headerContent: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
     emptyContent: @Composable (Modifier) -> Unit = {},
+    initialScrollIndex: Int = 0,
+    initialScrollOffset: Int = 0,
+    onScrollChanged: (index: Int, offset: Int) -> Unit = { _, _ -> },
 ) {
     var searchActive by remember { mutableStateOf(query.isNotEmpty()) }
     // Автофокус выставляется только при явном открытии поиска, а не при восстановлении сохранённого запроса.
@@ -111,6 +121,32 @@ fun SpellListScreen(
     var showSortMenu by remember { mutableStateOf(false) }
 
     val visibleSpells = spells.filterSortSearch(query, filters, sort)
+
+    // Позиция прокрутки: восстанавливается из сохранённых значений и сообщается наружу.
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(
+        initialFirstVisibleItemIndex = initialScrollIndex,
+        initialFirstVisibleItemScrollOffset = initialScrollOffset,
+    )
+    // Верхний блок (headerContent) скрывается при прокрутке вниз и появляется при прокрутке вверх.
+    var headerVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        var prevIndex = listState.firstVisibleItemIndex
+        var prevOffset = listState.firstVisibleItemScrollOffset
+        androidx.compose.runtime.snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            onScrollChanged(index, offset)
+            // Небольшой порог, чтобы блок не дёргался от микродвижений.
+            when {
+                index == 0 && offset < 8 -> headerVisible = true
+                index > prevIndex || offset > prevOffset + 6 -> headerVisible = false
+                index < prevIndex || offset < prevOffset - 6 -> headerVisible = true
+            }
+            prevIndex = index
+            prevOffset = offset
+        }
+    }
+
 
     Scaffold(
         topBar = {
@@ -142,19 +178,39 @@ fun SpellListScreen(
                     showSortMenu = it
                     if (it) showFilters = false
                 },
+                extraActions = extraActions,
             )
         },
-        bottomBar = bottomBar,
+        bottomBar = {
+            // Нижняя навигация скрывается/появляется синхронно с верхним блоком при прокрутке.
+            AnimatedVisibility(
+                visible = headerVisible,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut(),
+            ) {
+                bottomBar()
+            }
+        },
         floatingActionButton = floatingActionButton,
     ) { padding ->
         if (spells.isEmpty()) {
-            emptyContent(Modifier.padding(padding))
+            Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+                headerContent()
+                emptyContent(Modifier)
+            }
         } else {
             Column(
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize(),
             ) {
+                AnimatedVisibility(
+                    visible = headerVisible,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    Column { headerContent() }
+                }
                 if (showFilters) {
                     FilterPanel(
                         filters = filters,
@@ -180,6 +236,7 @@ fun SpellListScreen(
                         NoResults(onReset = { onQueryChange(""); onFiltersChange(SpellFilters()) })
                     } else {
                         LazyColumn(
+                            state = listState,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
@@ -217,6 +274,7 @@ private fun SpellListTopBar(
     onSortChange: (SpellSort) -> Unit,
     showSortMenu: Boolean,
     onToggleSortMenu: (Boolean) -> Unit,
+    extraActions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
     DndTopBar(
         title = {
@@ -235,6 +293,7 @@ private fun SpellListTopBar(
         navigationIcon = navigationIcon,
         actions = {
             if (!hasSpells) return@DndTopBar
+            extraActions()
 
             IconButton(onClick = onToggleSearch) {
                 Icon(

@@ -9,6 +9,9 @@ import com.example.spellbook.data.model.Spell
 import kotlinx.coroutines.flow.Flow
 import java.io.File
 
+/** Результат попытки добавить заклинание персонажу. */
+enum class AddSpellResult { ADDED, ALREADY_ADDED, CANTRIP_LIMIT_REACHED }
+
 /**
  * Единая точка доступа к данным приложения (Room). Инкапсулирует библиотеку
  * заклинаний, персонажей и связи между ними, а также разовую миграцию данных
@@ -29,6 +32,9 @@ class SpellBookRepository(private val context: Context) {
 
     fun observeSpellIdsForCharacter(characterId: String): Flow<List<String>> =
         spellDao.observeSpellIdsForCharacter(characterId)
+
+    fun observePreparedSpellIdsForCharacter(characterId: String): Flow<List<String>> =
+        spellDao.observePreparedSpellIdsForCharacter(characterId)
 
     suspend fun getSpell(spellId: String): Spell? = spellDao.getById(spellId)
 
@@ -60,8 +66,44 @@ class SpellBookRepository(private val context: Context) {
     suspend fun addSpellToCharacter(characterId: String, spellId: String) =
         spellDao.addSpellToCharacter(CharacterSpellCrossRef(characterId, spellId))
 
+    /**
+     * Добавляет заклинание персонажу с проверкой лимита заговоров.
+     * Возвращает [AddSpellResult]: успех, «уже есть» или превышение лимита заговоров.
+     * [maxCantrips] <= 0 означает отсутствие ограничения.
+     */
+    suspend fun tryAddSpellToCharacter(
+        characterId: String,
+        spellId: String,
+        spellLevel: Int,
+        maxCantrips: Int,
+    ): AddSpellResult {
+        if (spellDao.countLink(characterId, spellId) > 0) return AddSpellResult.ALREADY_ADDED
+        if (spellLevel == 0 && maxCantrips > 0 && spellDao.countCantrips(characterId) >= maxCantrips) {
+            return AddSpellResult.CANTRIP_LIMIT_REACHED
+        }
+        spellDao.addSpellToCharacter(CharacterSpellCrossRef(characterId, spellId))
+        return AddSpellResult.ADDED
+    }
+
     suspend fun removeSpellFromCharacter(characterId: String, spellId: String) =
         spellDao.removeSpellFromCharacter(characterId, spellId)
+
+    /**
+     * Меняет подготовку заклинания. При попытке подготовить сверх лимита возвращает false
+     * и ничего не меняет. [maxPrepared] <= 0 означает отсутствие лимита.
+     */
+    suspend fun setSpellPrepared(
+        characterId: String,
+        spellId: String,
+        prepared: Boolean,
+        maxPrepared: Int,
+    ): Boolean {
+        if (prepared && maxPrepared > 0 && spellDao.countPrepared(characterId) >= maxPrepared) {
+            return false
+        }
+        spellDao.setPrepared(characterId, spellId, prepared)
+        return true
+    }
 
     // endregion
 

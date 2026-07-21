@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.spellbook.data.AddSpellResult
 import com.example.spellbook.data.AppPreferences
 import com.example.spellbook.data.DndSuException
 import com.example.spellbook.data.DndSuLoader
@@ -33,6 +34,8 @@ sealed interface Screen {
     data class SpellForm(val spellId: String?) : Screen
     data class CharacterForm(val characterId: String?) : Screen
     data class AddSpells(val characterId: String) : Screen
+    data class PrepareSpells(val characterId: String) : Screen
+    data class SpellSlots(val characterId: String) : Screen
 }
 
 data class SpellBookUiState(
@@ -43,6 +46,8 @@ data class SpellBookUiState(
     val librarySpells: List<Spell> = emptyList(),
     /** id заклинаний, входящих в набор текущего открытого персонажа. */
     val currentCharacterSpellIds: Set<String> = emptySet(),
+    /** id подготовленных заклинаний текущего персонажа. */
+    val currentCharacterPreparedIds: Set<String> = emptySet(),
     val message: String? = null,
 )
 
@@ -60,6 +65,23 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     var listSort by mutableStateOf(SpellSort.DATE_ADDED)
         private set
     var listFilters by mutableStateOf(SpellFilters())
+        private set
+
+    /**
+     * Показывать ли только подготовленные (главная вкладка) или все известные заклинания.
+     * Хранится в ВМ, чтобы переживать переход к деталям заклинания и обратно.
+     */
+    var showPreparedOnly by mutableStateOf(true)
+        private set
+
+    /**
+     * Сохранённая позиция прокрутки списка (чтобы вернуться на то же место после деталей).
+     * Обычные поля (не Compose-state): читаются как «начальные» при пересоздании экрана,
+     * чтобы частая запись при прокрутке не вызывала рекомпозиций.
+     */
+    var listScrollIndex: Int = 0
+        private set
+    var listScrollOffset: Int = 0
         private set
 
     /** Джоба подписки на состав набора текущего персонажа (перезапускается при смене). */
@@ -104,10 +126,17 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Джоба подписки на подготовленные заклинания текущего персонажа. */
+    private var characterPreparedJob: Job? = null
+
     private fun observeCharacterSpells(characterId: String) {
         characterSpellsJob?.cancel()
         characterSpellsJob = repository.observeSpellIdsForCharacter(characterId)
             .onEach { uiState = uiState.copy(currentCharacterSpellIds = it.toSet()) }
+            .launchIn(viewModelScope)
+        characterPreparedJob?.cancel()
+        characterPreparedJob = repository.observePreparedSpellIdsForCharacter(characterId)
+            .onEach { uiState = uiState.copy(currentCharacterPreparedIds = it.toSet()) }
             .launchIn(viewModelScope)
     }
 
@@ -117,9 +146,29 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun updateListSort(sort: SpellSort) { listSort = sort }
     fun updateListFilters(filters: SpellFilters) { listFilters = filters }
 
+    /** Переключает вкладку «Подготовленные / Все известные» (сбрасывает прокрутку). */
+    fun changePreparedTab(value: Boolean) {
+        if (showPreparedOnly != value) {
+            showPreparedOnly = value
+            resetListScroll()
+        }
+    }
+
+    /** Запоминает позицию прокрутки перед переходом к деталям заклинания. */
+    fun saveListScroll(index: Int, offset: Int) {
+        listScrollIndex = index
+        listScrollOffset = offset
+    }
+
+    private fun resetListScroll() {
+        listScrollIndex = 0
+        listScrollOffset = 0
+    }
+
     private fun resetListControls() {
         listQuery = ""
         listFilters = SpellFilters()
+        resetListScroll()
     }
 
     // endregion
@@ -138,10 +187,19 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         uiState = uiState.copy(tab = Tab.CHARACTERS, screen = Screen.Characters)
     }
 
-    fun openCharacterSpells(characterId: String) {
+    /**
+     * Открывает экран заклинаний персонажа. [resetView] = true (при выборе персонажа)
+     * сбрасывает поиск/фильтры/прокрутку и открывает главную вкладку «Подготовленные».
+     * При возврате из деталей (resetView = false) состояние списка сохраняется.
+     */
+    fun openCharacterSpells(characterId: String, resetView: Boolean = true) {
+        val changingCharacter = (uiState.screen as? Screen.CharacterSpells)?.characterId != characterId
         prefs.lastCharacterId = characterId
-        observeCharacterSpells(characterId)
-        resetListControls()
+        if (changingCharacter) observeCharacterSpells(characterId)
+        if (resetView || changingCharacter) {
+            resetListControls()
+            showPreparedOnly = true
+        }
         uiState = uiState.copy(tab = Tab.CHARACTERS, screen = Screen.CharacterSpells(characterId))
     }
 
@@ -149,12 +207,27 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.Library)
     }
 
+    /** Экран, с которого открыли детали заклинания (чтобы вернуться именно туда). */
+    private var detailsOrigin: Screen? = null
+
     fun openDetails(spellId: String) {
+        detailsOrigin = uiState.screen
         uiState = uiState.copy(screen = Screen.Details(spellId))
     }
 
-    /** Возврат из деталей заклинания к списку той вкладки, откуда пришли. */
-    fun navigateBackFromDetails() = navigateBackToList()
+    /**
+     * Возврат из деталей заклинания. Если детали открывали с не-списочного экрана
+     * (например, переподготовки) — возвращаемся именно туда, иначе к списку вкладки.
+     */
+    fun navigateBackFromDetails() {
+        when (val origin = detailsOrigin) {
+            is Screen.PrepareSpells, is Screen.AddSpells, is Screen.SpellSlots -> {
+                detailsOrigin = null
+                uiState = uiState.copy(screen = origin)
+            }
+            else -> navigateBackToList()
+        }
+    }
 
     /** Возврат к корневому списку текущей вкладки. */
     fun navigateBackToList() {
@@ -197,6 +270,14 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         uiState = uiState.copy(screen = Screen.AddSpells(characterId))
     }
 
+    fun openPrepareSpells(characterId: String) {
+        uiState = uiState.copy(screen = Screen.PrepareSpells(characterId))
+    }
+
+    fun openSpellSlots(characterId: String) {
+        uiState = uiState.copy(screen = Screen.SpellSlots(characterId))
+    }
+
     // endregion
 
     fun getSpell(spellId: String?): Spell? =
@@ -209,6 +290,18 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun spellsForCharacter(characterId: String): List<Spell> {
         val ids = uiState.currentCharacterSpellIds
         return uiState.librarySpells.filter { it.id in ids }
+    }
+
+    /**
+     * Подготовленные заклинания персонажа. Заговоры (уровень 0) не подготавливаются,
+     * но всегда доступны — поэтому включаем все известные заговоры персонажа.
+     */
+    fun preparedSpellsForCharacter(characterId: String): List<Spell> {
+        val prepared = uiState.currentCharacterPreparedIds
+        val known = uiState.currentCharacterSpellIds
+        return uiState.librarySpells.filter {
+            it.id in prepared || (it.level == 0 && it.id in known)
+        }
     }
 
     // region Заклинания
@@ -229,12 +322,28 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
             repository.upsertSpell(normalized)
-            if (characterId != null) repository.addSpellToCharacter(characterId, normalized.id)
+            val cantripError = characterId != null &&
+                !addSpellToCharacterChecked(characterId, normalized)
             uiState = uiState.copy(
                 screen = Screen.Details(normalized.id),
-                message = "Заклинание сохранено",
+                message = if (cantripError) cantripLimitMessage(characterId!!) else "Заклинание сохранено",
             )
         }
+    }
+
+    /**
+     * Добавляет заклинание персонажу с учётом лимита заговоров.
+     * Возвращает false, если добавить не удалось из-за лимита заговоров.
+     */
+    private suspend fun addSpellToCharacterChecked(characterId: String, spell: Spell): Boolean {
+        val max = getCharacter(characterId)?.maxCantrips ?: 0
+        val result = repository.tryAddSpellToCharacter(characterId, spell.id, spell.level, max)
+        return result != AddSpellResult.CANTRIP_LIMIT_REACHED
+    }
+
+    private fun cantripLimitMessage(characterId: String): String {
+        val max = getCharacter(characterId)?.maxCantrips ?: 0
+        return "Заклинание сохранено в библиотеку, но достигнут лимит заговоров ($max)"
     }
 
     fun deleteSpell(spellId: String) {
@@ -280,22 +389,22 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val normalized = spell.copy(description = DiceRoller.wrapDiceTokens(spell.description))
         val existing = repository.findSpellByName(normalized.name)
         if (existing != null) {
-            if (characterId != null) repository.addSpellToCharacter(characterId, existing.id)
+            val limited = characterId != null && !addSpellToCharacterChecked(characterId, existing)
             uiState = uiState.copy(
                 screen = Screen.Details(existing.id),
-                message = if (characterId != null) {
-                    "Заклинание уже есть — добавлено персонажу"
-                } else {
-                    "Заклинание «${normalized.name}» уже есть в библиотеке"
+                message = when {
+                    limited -> "Заклинание уже есть. ${cantripLimitMessage(characterId!!)}"
+                    characterId != null -> "Заклинание уже есть — добавлено персонажу"
+                    else -> "Заклинание «${normalized.name}» уже есть в библиотеке"
                 },
             )
             return
         }
         repository.upsertSpell(normalized)
-        if (characterId != null) repository.addSpellToCharacter(characterId, normalized.id)
+        val cantripError = characterId != null && !addSpellToCharacterChecked(characterId, normalized)
         uiState = uiState.copy(
             screen = Screen.Details(normalized.id),
-            message = newMessage,
+            message = if (cantripError) cantripLimitMessage(characterId!!) else newMessage,
         )
     }
 
@@ -340,10 +449,19 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     // region Персонажи и связи
 
     fun saveCharacter(character: Character) {
+        // Редактирование (открыто с экрана заклинаний) — возвращаемся к ним, создание — к списку персонажей.
+        val editing = (uiState.screen as? Screen.CharacterForm)?.characterId != null
         viewModelScope.launch {
             repository.upsertCharacter(character)
-            uiState = uiState.copy(screen = Screen.Characters, message = "Персонаж сохранён")
+            val target = if (editing) Screen.CharacterSpells(character.id) else Screen.Characters
+            uiState = uiState.copy(screen = target, message = "Персонаж сохранён")
         }
+    }
+
+    /** Возврат с формы персонажа туда, откуда её открыли (без сохранения). */
+    fun exitCharacterForm() {
+        val editingId = (uiState.screen as? Screen.CharacterForm)?.characterId
+        if (editingId != null) openCharacterSpells(editingId, resetView = false) else openCharacters()
     }
 
     fun deleteCharacter(characterId: String) {
@@ -364,9 +482,53 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun toggleSpellForCharacter(characterId: String, spellId: String, add: Boolean) {
         viewModelScope.launch {
-            if (add) repository.addSpellToCharacter(characterId, spellId)
-            else repository.removeSpellFromCharacter(characterId, spellId)
+            if (add) {
+                val spell = getSpell(spellId) ?: return@launch
+                if (!addSpellToCharacterChecked(characterId, spell)) {
+                    uiState = uiState.copy(message = cantripLimitMessage(characterId))
+                }
+            } else {
+                repository.removeSpellFromCharacter(characterId, spellId)
+            }
         }
+    }
+
+    /**
+     * Меняет подготовку заклинания. Если превышен лимит подготовленных — показывает сообщение.
+     */
+    fun setSpellPrepared(characterId: String, spellId: String, prepared: Boolean) {
+        val max = getCharacter(characterId)?.maxPreparedSpells ?: 0
+        viewModelScope.launch {
+            val ok = repository.setSpellPrepared(characterId, spellId, prepared, max)
+            if (!ok) {
+                uiState = uiState.copy(message = "Достигнут лимит подготовленных заклинаний ($max)")
+            }
+        }
+    }
+
+    /** Помечает одну ячейку уровня [level] как потраченную. */
+    fun useSpellSlot(characterId: String, level: Int) {
+        val character = getCharacter(characterId) ?: return
+        if (character.availableSlots(level) <= 0) return
+        val used = character.spellSlotsUsed.toMutableMap()
+        used[level] = (used[level] ?: 0) + 1
+        viewModelScope.launch { repository.upsertCharacter(character.copy(spellSlotsUsed = used)) }
+    }
+
+    /** Восстанавливает одну потраченную ячейку уровня [level]. */
+    fun restoreSpellSlot(characterId: String, level: Int) {
+        val character = getCharacter(characterId) ?: return
+        val current = character.spellSlotsUsed[level] ?: 0
+        if (current <= 0) return
+        val used = character.spellSlotsUsed.toMutableMap()
+        used[level] = current - 1
+        viewModelScope.launch { repository.upsertCharacter(character.copy(spellSlotsUsed = used)) }
+    }
+
+    /** Восстанавливает все ячейки (короткий/долгий отдых). */
+    fun restoreAllSlots(characterId: String) {
+        val character = getCharacter(characterId) ?: return
+        viewModelScope.launch { repository.upsertCharacter(character.copy(spellSlotsUsed = emptyMap())) }
     }
 
     // endregion

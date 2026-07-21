@@ -3,6 +3,7 @@ package com.example.spellbook.data.db
 import androidx.room.TypeConverter
 import com.example.spellbook.data.model.DamagePart
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Конвертеры Room для полей-списков модели заклинания. Сериализация выполняется
@@ -38,5 +39,25 @@ class Converters {
             val pair = array.optJSONArray(i) ?: return@mapNotNull null
             DamagePart(formula = pair.optString(0), type = pair.optString(1))
         }
+    }
+
+    /** Ячейки заклинаний по уровням: Map<уровень, количество> ↔ JSON-объект. */
+    @TypeConverter
+    fun intMapToJson(map: Map<Int, Int>): String {
+        val obj = JSONObject()
+        map.forEach { (k, v) -> obj.put(k.toString(), v) }
+        return obj.toString()
+    }
+
+    @TypeConverter
+    fun jsonToIntMap(json: String): Map<Int, Int> {
+        if (json.isBlank()) return emptyMap()
+        val obj = JSONObject(json)
+        val result = mutableMapOf<Int, Int>()
+        obj.keys().forEach { key ->
+            val level = key.toIntOrNull() ?: return@forEach
+            result[level] = obj.optInt(key)
+        }
+        return result
     }
 }

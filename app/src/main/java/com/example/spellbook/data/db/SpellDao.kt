@@ -60,5 +60,31 @@ interface SpellDao {
     @Query("SELECT spellId FROM character_spells WHERE characterId = :characterId")
     fun observeSpellIdsForCharacter(characterId: String): Flow<List<String>>
 
+    /** id подготовленных заклинаний персонажа. */
+    @Query("SELECT spellId FROM character_spells WHERE characterId = :characterId AND prepared = 1")
+    fun observePreparedSpellIdsForCharacter(characterId: String): Flow<List<String>>
+
+    /** Меняет флаг подготовки конкретного заклинания персонажа. */
+    @Query("UPDATE character_spells SET prepared = :prepared WHERE characterId = :characterId AND spellId = :spellId")
+    suspend fun setPrepared(characterId: String, spellId: String, prepared: Boolean)
+
+    /** Количество подготовленных заклинаний персонажа. */
+    @Query("SELECT COUNT(*) FROM character_spells WHERE characterId = :characterId AND prepared = 1")
+    suspend fun countPrepared(characterId: String): Int
+
+    /** Количество заговоров (уровень 0) в наборе персонажа. */
+    @Query(
+        """
+        SELECT COUNT(*) FROM character_spells cs
+        INNER JOIN spells s ON s.id = cs.spellId
+        WHERE cs.characterId = :characterId AND s.level = 0
+        """
+    )
+    suspend fun countCantrips(characterId: String): Int
+
+    /** Есть ли уже это заклинание у персонажа. */
+    @Query("SELECT COUNT(*) FROM character_spells WHERE characterId = :characterId AND spellId = :spellId")
+    suspend fun countLink(characterId: String, spellId: String): Int
+
     // endregion
 }

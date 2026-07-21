@@ -29,12 +29,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -59,6 +63,8 @@ import com.example.spellbook.ui.screens.AddSpellsScreen
 import com.example.spellbook.ui.screens.CharacterFormScreen
 import com.example.spellbook.ui.screens.CharactersScreen
 import com.example.spellbook.ui.screens.FabAction
+import com.example.spellbook.ui.screens.PrepareSpellsScreen
+import com.example.spellbook.ui.screens.SpellSlotsScreen
 import com.example.spellbook.ui.screens.SpellDetailsScreen
 import com.example.spellbook.ui.screens.SpellFormScreen
 import com.example.spellbook.ui.screens.SpellListScreen
@@ -219,7 +225,9 @@ private fun SpellBookApp(
 
             is Screen.CharacterSpells -> viewModel.openCharacters()
             is Screen.AddSpells -> viewModel.openCharacterSpells(screen.characterId)
-            is Screen.CharacterForm -> viewModel.openCharacters()
+            is Screen.PrepareSpells -> viewModel.openCharacterSpells(screen.characterId)
+            is Screen.SpellSlots -> viewModel.openCharacterSpells(screen.characterId)
+            is Screen.CharacterForm -> viewModel.exitCharacterForm()
             is Screen.Details -> viewModel.navigateBackFromDetails()
             is Screen.SpellForm -> {
                 val existing = viewModel.getSpell(screen.spellId)
@@ -252,6 +260,9 @@ private fun SpellBookApp(
             filters = viewModel.listFilters,
             onFiltersChange = viewModel::updateListFilters,
             onSpellClick = viewModel::openDetails,
+            initialScrollIndex = viewModel.listScrollIndex,
+            initialScrollOffset = viewModel.listScrollOffset,
+            onScrollChanged = viewModel::saveListScroll,
             bottomBar = bottomBar,
             floatingActionButton = {
                 LibraryFab(
@@ -297,8 +308,41 @@ private fun SpellBookApp(
                 isNew = existing == null,
                 onSave = viewModel::saveCharacter,
                 onDelete = existing?.let { { viewModel.deleteCharacter(it.id) } },
-                onBack = viewModel::openCharacters,
+                onBack = viewModel::exitCharacterForm,
             )
+        }
+
+        is Screen.PrepareSpells -> {
+            val character = viewModel.getCharacter(screen.characterId)
+            if (character == null) {
+                LaunchedEffect(screen.characterId) { viewModel.openCharacters() }
+            } else {
+                PrepareSpellsScreen(
+                    // Заговоры (уровень 0) не подготавливаются — показываем только уровневые.
+                    known = viewModel.spellsForCharacter(screen.characterId).filter { it.level > 0 },
+                    preparedIds = state.currentCharacterPreparedIds,
+                    maxPrepared = character.maxPreparedSpells,
+                    onPrepare = { spellId -> viewModel.setSpellPrepared(screen.characterId, spellId, true) },
+                    onUnprepare = { spellId -> viewModel.setSpellPrepared(screen.characterId, spellId, false) },
+                    onSpellClick = viewModel::openDetails,
+                    onBack = { viewModel.openCharacterSpells(screen.characterId) },
+                )
+            }
+        }
+
+        is Screen.SpellSlots -> {
+            val character = viewModel.getCharacter(screen.characterId)
+            if (character == null) {
+                LaunchedEffect(screen.characterId) { viewModel.openCharacters() }
+            } else {
+                SpellSlotsScreen(
+                    character = character,
+                    onUseSlot = { level -> viewModel.useSpellSlot(screen.characterId, level) },
+                    onRestoreSlot = { level -> viewModel.restoreSpellSlot(screen.characterId, level) },
+                    onRestoreAll = { viewModel.restoreAllSlots(screen.characterId) },
+                    onBack = { viewModel.openCharacterSpells(screen.characterId) },
+                )
+            }
         }
 
         is Screen.Details -> {
@@ -404,9 +448,16 @@ private fun CharacterSpellsScreenContent(
         LaunchedEffect(Unit) { viewModel.openCharacters() }
         return
     }
+    // Для персонажей с переподготовкой — переключатель «Подготовленные / Все» (состояние в ВМ).
+    val showPreparedOnly = viewModel.showPreparedOnly
+    val displayedSpells = if (character.canPrepareSpells && showPreparedOnly) {
+        viewModel.preparedSpellsForCharacter(characterId)
+    } else {
+        spells
+    }
     SpellListScreen(
         title = character.name.ifBlank { "Персонаж" },
-        spells = spells,
+        spells = displayedSpells,
         query = viewModel.listQuery,
         onQueryChange = viewModel::updateListQuery,
         sort = viewModel.listSort,
@@ -419,6 +470,25 @@ private fun CharacterSpellsScreenContent(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К персонажам")
             }
         },
+        headerContent = {
+            // Отдельная панель действий персонажа (не загромождает шапку с именем и поиском).
+            CharacterActionsBar(
+                showSlots = character.spellSlots.isNotEmpty(),
+                showPrepare = character.canPrepareSpells,
+                onSettings = { viewModel.openEditCharacterForm(characterId) },
+                onSlots = { viewModel.openSpellSlots(characterId) },
+                onPrepare = { viewModel.openPrepareSpells(characterId) },
+            )
+            if (character.canPrepareSpells) {
+                PreparedFilterToggle(
+                    showPreparedOnly = showPreparedOnly,
+                    onChange = { viewModel.changePreparedTab(it) },
+                )
+            }
+        },
+        initialScrollIndex = viewModel.listScrollIndex,
+        initialScrollOffset = viewModel.listScrollOffset,
+        onScrollChanged = viewModel::saveListScroll,
         bottomBar = bottomBar,
         floatingActionButton = {
             CharacterSpellsFab(
@@ -436,6 +506,66 @@ private fun CharacterSpellsScreenContent(
             )
         },
     )
+}
+
+/**
+ * Панель действий персонажа под шапкой: настройки, ячейки, переподготовка.
+ * Вынесена из шапки, чтобы не конкурировать с именем персонажа и кнопками поиска/фильтров.
+ */
+@Composable
+private fun CharacterActionsBar(
+    showSlots: Boolean,
+    showPrepare: Boolean,
+    onSettings: () -> Unit,
+    onSlots: () -> Unit,
+    onPrepare: () -> Unit,
+) {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        androidx.compose.material3.AssistChip(
+            onClick = onSettings,
+            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            label = { Text("Настройки") },
+        )
+        if (showSlots) {
+            androidx.compose.material3.AssistChip(
+                onClick = onSlots,
+                leadingIcon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                label = { Text("Ячейки") },
+            )
+        }
+        if (showPrepare) {
+            androidx.compose.material3.AssistChip(
+                onClick = onPrepare,
+                leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                label = { Text("Подготовка") },
+            )
+        }
+    }
+}
+
+/** Переключатель «Подготовленные / Все известные» на экране персонажа. */
+@Composable
+private fun PreparedFilterToggle(
+    showPreparedOnly: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    androidx.compose.material3.TabRow(selectedTabIndex = if (showPreparedOnly) 0 else 1) {
+        androidx.compose.material3.Tab(
+            selected = showPreparedOnly,
+            onClick = { onChange(true) },
+            text = { Text("Подготовленные") },
+        )
+        androidx.compose.material3.Tab(
+            selected = !showPreparedOnly,
+            onClick = { onChange(false) },
+            text = { Text("Все известные") },
+        )
+    }
 }
 
 /**
