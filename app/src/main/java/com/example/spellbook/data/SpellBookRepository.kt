@@ -5,6 +5,9 @@ import com.example.spellbook.data.db.CharacterSpellCount
 import com.example.spellbook.data.db.SpellBookDatabase
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterSpellCrossRef
+import com.example.spellbook.data.model.Combo
+import com.example.spellbook.data.model.ComboStep
+import com.example.spellbook.data.model.ComboWithSteps
 import com.example.spellbook.data.model.Spell
 import kotlinx.coroutines.flow.Flow
 import java.io.File
@@ -22,6 +25,7 @@ class SpellBookRepository(private val context: Context) {
     private val db = SpellBookDatabase.get(context)
     private val spellDao = db.spellDao()
     private val characterDao = db.characterDao()
+    private val comboDao = db.comboDao()
 
     // region Заклинания
 
@@ -104,6 +108,35 @@ class SpellBookRepository(private val context: Context) {
         spellDao.setPrepared(characterId, spellId, prepared)
         return true
     }
+
+    // endregion
+
+    // region Комбинации и библиотека шагов
+
+    fun observeCombos(characterId: String): Flow<List<Combo>> = comboDao.observeCombos(characterId)
+
+    fun observeComboSteps(characterId: String): Flow<List<ComboStep>> = comboDao.observeSteps(characterId)
+
+    suspend fun getCombo(comboId: String): Combo? = comboDao.getCombo(comboId)
+
+    suspend fun getComboStep(stepId: String): ComboStep? = comboDao.getStep(stepId)
+
+    suspend fun getComboWithSteps(comboId: String): ComboWithSteps? {
+        val combo = comboDao.getCombo(comboId) ?: return null
+        val steps = comboDao.getStepIds(comboId).mapNotNull { comboDao.getStep(it) }
+        return ComboWithSteps(combo, steps)
+    }
+
+    suspend fun saveCombo(combo: Combo, stepIds: List<String>) {
+        comboDao.upsertCombo(combo)
+        comboDao.replaceComboSteps(combo.id, stepIds.distinct())
+    }
+
+    suspend fun saveComboStep(step: ComboStep) = comboDao.upsertStep(step)
+
+    suspend fun deleteCombo(comboId: String) = comboDao.deleteCombo(comboId)
+
+    suspend fun deleteComboStep(stepId: String) = comboDao.deleteStep(stepId)
 
     // endregion
 

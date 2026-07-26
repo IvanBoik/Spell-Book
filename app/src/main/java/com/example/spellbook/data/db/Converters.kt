@@ -1,6 +1,7 @@
 package com.example.spellbook.data.db
 
 import androidx.room.TypeConverter
+import com.example.spellbook.data.model.CharacterResource
 import com.example.spellbook.data.model.DamagePart
 import org.json.JSONArray
 import org.json.JSONObject
@@ -59,5 +60,38 @@ class Converters {
             result[level] = obj.optInt(key)
         }
         return result
+    }
+
+    /** Пользовательские ресурсы персонажа ↔ JSON-массив. */
+    @TypeConverter
+    fun resourcesToJson(resources: List<CharacterResource>): String {
+        val array = JSONArray()
+        resources.forEach { resource ->
+            array.put(JSONObject().apply {
+                put("id", resource.id)
+                put("name", resource.name)
+                put("current", resource.current)
+                put("maximum", resource.maximum)
+            })
+        }
+        return array.toString()
+    }
+
+    @TypeConverter
+    fun jsonToResources(json: String): List<CharacterResource> {
+        if (json.isBlank()) return emptyList()
+        val array = runCatching { JSONArray(json) }.getOrElse { return emptyList() }
+        return (0 until array.length()).mapNotNull { index ->
+            val obj = array.optJSONObject(index) ?: return@mapNotNull null
+            val name = obj.optString("name").trim()
+            val maximum = obj.optInt("maximum", 0)
+            if (name.isBlank() || maximum <= 0) return@mapNotNull null
+            CharacterResource(
+                id = obj.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+                name = name,
+                current = obj.optInt("current", maximum),
+                maximum = maximum,
+            ).normalized()
+        }
     }
 }

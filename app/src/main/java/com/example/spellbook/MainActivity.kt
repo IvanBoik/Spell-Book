@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Link
@@ -62,12 +63,16 @@ import com.example.spellbook.ui.components.SpellBookBottomBar
 import com.example.spellbook.ui.screens.AddSpellsScreen
 import com.example.spellbook.ui.screens.CharacterFormScreen
 import com.example.spellbook.ui.screens.CharactersScreen
+import com.example.spellbook.ui.screens.ComboEditorScreen
+import com.example.spellbook.ui.screens.ComboListScreen
+import com.example.spellbook.ui.screens.ComboResultScreen
 import com.example.spellbook.ui.screens.FabAction
 import com.example.spellbook.ui.screens.PrepareSpellsScreen
 import com.example.spellbook.ui.screens.SpellSlotsScreen
 import com.example.spellbook.ui.screens.SpellDetailsScreen
 import com.example.spellbook.ui.screens.SpellFormScreen
 import com.example.spellbook.ui.screens.SpellListScreen
+import com.example.spellbook.ui.screens.StepLibraryScreen
 import com.example.spellbook.ui.theme.SpellBookTheme
 
 class MainActivity : ComponentActivity() {
@@ -227,6 +232,10 @@ private fun SpellBookApp(
             is Screen.AddSpells -> viewModel.openCharacterSpells(screen.characterId)
             is Screen.PrepareSpells -> viewModel.openCharacterSpells(screen.characterId)
             is Screen.SpellSlots -> viewModel.openCharacterSpells(screen.characterId)
+            is Screen.Combos -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
+            is Screen.ComboEditor -> viewModel.openCombos(screen.characterId)
+            is Screen.StepLibrary -> viewModel.openCombos(screen.characterId)
+            is Screen.ComboResult -> viewModel.openCombos(screen.characterId)
             is Screen.CharacterForm -> viewModel.exitCharacterForm()
             is Screen.Details -> viewModel.navigateBackFromDetails()
             is Screen.SpellForm -> {
@@ -339,8 +348,67 @@ private fun SpellBookApp(
                     character = character,
                     onUseSlot = { level -> viewModel.useSpellSlot(screen.characterId, level) },
                     onRestoreSlot = { level -> viewModel.restoreSpellSlot(screen.characterId, level) },
-                    onRestoreAll = { viewModel.restoreAllSlots(screen.characterId) },
+                    onUseResource = { id -> viewModel.useCharacterResource(screen.characterId, id) },
+                    onRestoreResourceUnit = { id -> viewModel.restoreCharacterResourceUnit(screen.characterId, id) },
+                    onRestoreResource = { id -> viewModel.restoreCharacterResource(screen.characterId, id) },
+                    onDeleteResource = { id -> viewModel.deleteCharacterResource(screen.characterId, id) },
+                    onAddResource = { name, maximum ->
+                        viewModel.addCharacterResource(screen.characterId, name, maximum)
+                    },
+                    onRestoreAll = { viewModel.restoreAllResources(screen.characterId) },
                     onBack = { viewModel.openCharacterSpells(screen.characterId) },
+                )
+            }
+        }
+
+        is Screen.Combos -> ComboListScreen(
+            combos = state.combos,
+            onCreate = { viewModel.openComboEditor(screen.characterId) },
+            onEdit = { comboId -> viewModel.openComboEditor(screen.characterId, comboId) },
+            onOpenLibrary = { viewModel.openStepLibrary(screen.characterId) },
+            onRoll = { comboId, mode -> viewModel.rollCombo(screen.characterId, comboId, mode) },
+            onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+        )
+
+        is Screen.ComboEditor -> {
+            val combo = viewModel.editingCombo
+            if (combo == null) {
+                LaunchedEffect(screen.comboId) { viewModel.openCombos(screen.characterId) }
+            } else {
+                ComboEditorScreen(
+                    combo = combo,
+                    allSteps = state.comboSteps,
+                    selectedStepIds = viewModel.editingComboStepIds,
+                    onNameChange = viewModel::setEditingComboName,
+                    onToggleStep = viewModel::toggleStepInEditingCombo,
+                    onMoveStep = viewModel::moveEditingComboStep,
+                    onSaveStep = viewModel::saveComboStep,
+                    onSave = viewModel::saveEditingCombo,
+                    onDelete = screen.comboId?.let {
+                        { viewModel.deleteCombo(it, screen.characterId) }
+                    },
+                    onBack = { viewModel.openCombos(screen.characterId) },
+                )
+            }
+        }
+
+        is Screen.StepLibrary -> StepLibraryScreen(
+            characterId = screen.characterId,
+            steps = state.comboSteps,
+            onSave = { viewModel.saveComboStep(it) },
+            onDelete = viewModel::deleteComboStep,
+            onBack = { viewModel.openCombos(screen.characterId) },
+        )
+
+        is Screen.ComboResult -> {
+            val result = viewModel.comboRollResult
+            if (result == null) {
+                LaunchedEffect(screen.comboId) { viewModel.openCombos(screen.characterId) }
+            } else {
+                ComboResultScreen(
+                    result = result,
+                    onReroll = { mode -> viewModel.rollCombo(screen.characterId, screen.comboId, mode) },
+                    onBack = { viewModel.openCombos(screen.characterId) },
                 )
             }
         }
@@ -473,10 +541,10 @@ private fun CharacterSpellsScreenContent(
         headerContent = {
             // Отдельная панель действий персонажа (не загромождает шапку с именем и поиском).
             CharacterActionsBar(
-                showSlots = character.spellSlots.isNotEmpty(),
                 showPrepare = character.canPrepareSpells,
                 onSettings = { viewModel.openEditCharacterForm(characterId) },
-                onSlots = { viewModel.openSpellSlots(characterId) },
+                onResources = { viewModel.openSpellSlots(characterId) },
+                onCombos = { viewModel.openCombos(characterId) },
                 onPrepare = { viewModel.openPrepareSpells(characterId) },
             )
             if (character.canPrepareSpells) {
@@ -509,41 +577,51 @@ private fun CharacterSpellsScreenContent(
 }
 
 /**
- * Панель действий персонажа под шапкой: настройки, ячейки, переподготовка.
- * Вынесена из шапки, чтобы не конкурировать с именем персонажа и кнопками поиска/фильтров.
+ * Горизонтально прокручиваемая панель разделов персонажа под шапкой.
+ * Вынесена из шапки и рассчитана на добавление новых разделов в будущем.
  */
 @Composable
 private fun CharacterActionsBar(
-    showSlots: Boolean,
     showPrepare: Boolean,
     onSettings: () -> Unit,
-    onSlots: () -> Unit,
+    onResources: () -> Unit,
+    onCombos: () -> Unit,
     onPrepare: () -> Unit,
 ) {
-    androidx.compose.foundation.layout.Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
     ) {
-        androidx.compose.material3.AssistChip(
-            onClick = onSettings,
-            leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp)) },
-            label = { Text("Настройки") },
-        )
-        if (showSlots) {
+        item(key = "settings") {
             androidx.compose.material3.AssistChip(
-                onClick = onSlots,
+                onClick = onSettings,
+                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                label = { Text("Настройки") },
+            )
+        }
+        item(key = "resources") {
+            androidx.compose.material3.AssistChip(
+                onClick = onResources,
                 leadingIcon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("Ячейки") },
+                label = { Text("Ресурсы") },
+            )
+        }
+        item(key = "combos") {
+            androidx.compose.material3.AssistChip(
+                onClick = onCombos,
+                leadingIcon = { Icon(Icons.Default.Extension, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                label = { Text("Комбинации") },
             )
         }
         if (showPrepare) {
-            androidx.compose.material3.AssistChip(
-                onClick = onPrepare,
-                leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("Подготовка") },
-            )
+            item(key = "preparation") {
+                androidx.compose.material3.AssistChip(
+                    onClick = onPrepare,
+                    leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    label = { Text("Подготовка") },
+                )
+            }
         }
     }
 }

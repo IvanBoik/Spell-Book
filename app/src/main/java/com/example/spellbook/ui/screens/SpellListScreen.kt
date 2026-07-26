@@ -1,6 +1,9 @@
 package com.example.spellbook.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.expandVertically
@@ -74,8 +77,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.data.SpellComponent
@@ -86,6 +94,11 @@ import com.example.spellbook.data.castingTimeOptions
 import com.example.spellbook.data.filterSortSearch
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+
+/** Длительности мягкого скрытия/появления панелей списка. */
+private const val CHROME_ENTER_MS = 320
+private const val CHROME_EXIT_MS = 280
+private const val CHROME_FADE_MS = 240
 
 /**
  * Переиспользуемый экран списка заклинаний с поиском/фильтрами/сортировкой.
@@ -127,26 +140,44 @@ fun SpellListScreen(
         initialFirstVisibleItemIndex = initialScrollIndex,
         initialFirstVisibleItemScrollOffset = initialScrollOffset,
     )
-    // Верхний блок (headerContent) скрывается при прокрутке вниз и появляется при прокрутке вверх.
-    var headerVisible by remember { mutableStateOf(true) }
-    LaunchedEffect(listState) {
-        var prevIndex = listState.firstVisibleItemIndex
-        var prevOffset = listState.firstVisibleItemScrollOffset
-        androidx.compose.runtime.snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
-            onScrollChanged(index, offset)
-            // Небольшой порог, чтобы блок не дёргался от микродвижений.
-            when {
-                index == 0 && offset < 8 -> headerVisible = true
-                index > prevIndex || offset > prevOffset + 6 -> headerVisible = false
-                index < prevIndex || offset < prevOffset - 6 -> headerVisible = true
+    // Панели реагируют на сам жест, а не на позицию элемента: изменение высоты панелей
+    // больше не влияет на определение направления и не создаёт зацикливание/рывки.
+    var chromeVisible by remember { mutableStateOf(true) }
+    val directionThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
+    val scrollConnection = remember(directionThresholdPx) {
+        object : NestedScrollConnection {
+            private var accumulatedDelta = 0f
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+
+                // Смена направления сбрасывает накопление, чтобы UI быстро отзывался на новый жест.
+                if (accumulatedDelta != 0f && accumulatedDelta * available.y < 0f) {
+                    accumulatedDelta = 0f
+                }
+                accumulatedDelta += available.y
+
+                when {
+                    accumulatedDelta <= -directionThresholdPx && chromeVisible -> {
+                        chromeVisible = false // палец вверх — список прокручивается вниз
+                        accumulatedDelta = 0f
+                    }
+                    accumulatedDelta >= directionThresholdPx && !chromeVisible -> {
+                        chromeVisible = true // палец вниз — список прокручивается вверх
+                        accumulatedDelta = 0f
+                    }
+                }
+                return Offset.Zero
             }
-            prevIndex = index
-            prevOffset = offset
         }
     }
 
+    // Сохранение позиции списка отделено от управления видимостью панелей.
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow {
+            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) -> onScrollChanged(index, offset) }
+    }
 
     Scaffold(
         topBar = {
@@ -184,9 +215,15 @@ fun SpellListScreen(
         bottomBar = {
             // Нижняя навигация скрывается/появляется синхронно с верхним блоком при прокрутке.
             AnimatedVisibility(
-                visible = headerVisible,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut(),
+                visible = chromeVisible,
+                enter = expandVertically(
+                    expandFrom = Alignment.Bottom,
+                    animationSpec = tween(CHROME_ENTER_MS, easing = LinearOutSlowInEasing),
+                ) + fadeIn(tween(CHROME_FADE_MS, easing = LinearOutSlowInEasing)),
+                exit = shrinkVertically(
+                    shrinkTowards = Alignment.Bottom,
+                    animationSpec = tween(CHROME_EXIT_MS, easing = FastOutLinearInEasing),
+                ) + fadeOut(tween(CHROME_FADE_MS, easing = FastOutLinearInEasing)),
             ) {
                 bottomBar()
             }
@@ -202,12 +239,19 @@ fun SpellListScreen(
             Column(
                 modifier = Modifier
                     .padding(padding)
-                    .fillMaxSize(),
+                    .fillMaxSize()
+                    .nestedScroll(scrollConnection),
             ) {
                 AnimatedVisibility(
-                    visible = headerVisible,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
+                    visible = chromeVisible,
+                    enter = expandVertically(
+                        expandFrom = Alignment.Top,
+                        animationSpec = tween(CHROME_ENTER_MS, easing = LinearOutSlowInEasing),
+                    ) + fadeIn(tween(CHROME_FADE_MS, easing = LinearOutSlowInEasing)),
+                    exit = shrinkVertically(
+                        shrinkTowards = Alignment.Top,
+                        animationSpec = tween(CHROME_EXIT_MS, easing = FastOutLinearInEasing),
+                    ) + fadeOut(tween(CHROME_FADE_MS, easing = FastOutLinearInEasing)),
                 ) {
                     Column { headerContent() }
                 }

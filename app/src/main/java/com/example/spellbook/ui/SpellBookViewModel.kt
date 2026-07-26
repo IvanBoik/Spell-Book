@@ -9,12 +9,18 @@ import androidx.lifecycle.viewModelScope
 import com.example.spellbook.data.AddSpellResult
 import com.example.spellbook.data.AppPreferences
 import com.example.spellbook.data.DndSuException
+import com.example.spellbook.data.ComboRoller
 import com.example.spellbook.data.DndSuLoader
 import com.example.spellbook.data.SpellBookRepository
 import com.example.spellbook.data.SpellFilters
 import com.example.spellbook.data.SpellLssCodec
 import com.example.spellbook.data.SpellSort
 import com.example.spellbook.data.model.Character
+import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.Combo
+import com.example.spellbook.data.model.ComboRollMode
+import com.example.spellbook.data.model.ComboRollResult
+import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.util.DiceRoller
 import kotlinx.coroutines.Job
@@ -36,6 +42,10 @@ sealed interface Screen {
     data class AddSpells(val characterId: String) : Screen
     data class PrepareSpells(val characterId: String) : Screen
     data class SpellSlots(val characterId: String) : Screen
+    data class Combos(val characterId: String) : Screen
+    data class ComboEditor(val characterId: String, val comboId: String?) : Screen
+    data class StepLibrary(val characterId: String) : Screen
+    data class ComboResult(val characterId: String, val comboId: String) : Screen
 }
 
 data class SpellBookUiState(
@@ -48,6 +58,8 @@ data class SpellBookUiState(
     val currentCharacterSpellIds: Set<String> = emptySet(),
     /** id подготовленных заклинаний текущего персонажа. */
     val currentCharacterPreparedIds: Set<String> = emptySet(),
+    val combos: List<Combo> = emptyList(),
+    val comboSteps: List<ComboStep> = emptyList(),
     val message: String? = null,
 )
 
@@ -84,8 +96,17 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     var listScrollOffset: Int = 0
         private set
 
-    /** Джоба подписки на состав набора текущего персонажа (перезапускается при смене). */
+    /** Джобы подписок на данные текущего персонажа. */
     private var characterSpellsJob: Job? = null
+    private var combosJob: Job? = null
+    private var comboStepsJob: Job? = null
+
+    var editingCombo by mutableStateOf<Combo?>(null)
+        private set
+    var editingComboStepIds by mutableStateOf<List<String>>(emptyList())
+        private set
+    var comboRollResult by mutableStateOf<ComboRollResult?>(null)
+        private set
 
     /**
      * id персонажа, в контексте которого создаётся/импортируется заклинание.
@@ -137,6 +158,14 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         characterPreparedJob?.cancel()
         characterPreparedJob = repository.observePreparedSpellIdsForCharacter(characterId)
             .onEach { uiState = uiState.copy(currentCharacterPreparedIds = it.toSet()) }
+            .launchIn(viewModelScope)
+        combosJob?.cancel()
+        combosJob = repository.observeCombos(characterId)
+            .onEach { uiState = uiState.copy(combos = it) }
+            .launchIn(viewModelScope)
+        comboStepsJob?.cancel()
+        comboStepsJob = repository.observeComboSteps(characterId)
+            .onEach { uiState = uiState.copy(comboSteps = it) }
             .launchIn(viewModelScope)
     }
 
@@ -276,6 +305,22 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun openSpellSlots(characterId: String) {
         uiState = uiState.copy(screen = Screen.SpellSlots(characterId))
+    }
+
+    fun openCombos(characterId: String) {
+        uiState = uiState.copy(screen = Screen.Combos(characterId))
+    }
+
+    fun openStepLibrary(characterId: String) {
+        uiState = uiState.copy(screen = Screen.StepLibrary(characterId))
+    }
+
+    fun openComboEditor(characterId: String, comboId: String? = null) {
+        viewModelScope.launch {
+            editingCombo = comboId?.let { repository.getCombo(it) } ?: Combo(characterId = characterId, name = "")
+            editingComboStepIds = comboId?.let { repository.getComboWithSteps(it)?.steps?.map(ComboStep::id) }.orEmpty()
+            uiState = uiState.copy(screen = Screen.ComboEditor(characterId, comboId))
+        }
     }
 
     // endregion
@@ -525,10 +570,151 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { repository.upsertCharacter(character.copy(spellSlotsUsed = used)) }
     }
 
-    /** Восстанавливает все ячейки (короткий/долгий отдых). */
+    /** Восстанавливает все ячейки заклинаний. */
     fun restoreAllSlots(characterId: String) {
         val character = getCharacter(characterId) ?: return
         viewModelScope.launch { repository.upsertCharacter(character.copy(spellSlotsUsed = emptyMap())) }
+    }
+
+    /** Добавляет новый ресурс полностью восполненным. */
+    fun addCharacterResource(characterId: String, name: String, maximum: Int) {
+        val character = getCharacter(characterId) ?: return
+        if (name.isBlank() || maximum <= 0) {
+            uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
+            return
+        }
+        val resource = CharacterResource(name = name.trim(), current = maximum, maximum = maximum).normalized()
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(resources = character.resources + resource))
+        }
+    }
+
+    /** Расходует одну единицу пользовательского ресурса. */
+    fun useCharacterResource(characterId: String, resourceId: String) =
+        updateCharacterResource(characterId, resourceId) { resource ->
+            resource.copy(current = (resource.current - 1).coerceAtLeast(0))
+        }
+
+    /** Возвращает одну единицу пользовательского ресурса. */
+    fun restoreCharacterResourceUnit(characterId: String, resourceId: String) =
+        updateCharacterResource(characterId, resourceId) { resource ->
+            resource.copy(current = (resource.current + 1).coerceAtMost(resource.maximum))
+        }
+
+    /** Полностью восполняет один пользовательский ресурс. */
+    fun restoreCharacterResource(characterId: String, resourceId: String) =
+        updateCharacterResource(characterId, resourceId) { it.copy(current = it.maximum) }
+
+    /** Удаляет пользовательский ресурс. */
+    fun deleteCharacterResource(characterId: String, resourceId: String) {
+        val character = getCharacter(characterId) ?: return
+        viewModelScope.launch {
+            repository.upsertCharacter(
+                character.copy(resources = character.resources.filterNot { it.id == resourceId }),
+            )
+        }
+    }
+
+    /** Восстанавливает ячейки и вообще все пользовательские ресурсы персонажа. */
+    fun restoreAllResources(characterId: String) {
+        val character = getCharacter(characterId) ?: return
+        val restored = character.resources.map { it.copy(current = it.maximum) }
+        viewModelScope.launch {
+            repository.upsertCharacter(
+                character.copy(spellSlotsUsed = emptyMap(), resources = restored),
+            )
+        }
+    }
+
+    private fun updateCharacterResource(
+        characterId: String,
+        resourceId: String,
+        transform: (CharacterResource) -> CharacterResource,
+    ) {
+        val character = getCharacter(characterId) ?: return
+        val updated = character.resources.map { resource ->
+            if (resource.id == resourceId) transform(resource).normalized() else resource
+        }
+        viewModelScope.launch { repository.upsertCharacter(character.copy(resources = updated)) }
+    }
+
+    // endregion
+
+    // region Комбинации
+
+    fun setEditingComboName(name: String) {
+        editingCombo = editingCombo?.copy(name = name)
+    }
+
+    fun toggleStepInEditingCombo(stepId: String) {
+        editingComboStepIds = if (stepId in editingComboStepIds) {
+            editingComboStepIds - stepId
+        } else {
+            editingComboStepIds + stepId
+        }
+    }
+
+    fun moveEditingComboStep(stepId: String, direction: Int) {
+        val list = editingComboStepIds.toMutableList()
+        val index = list.indexOf(stepId)
+        val target = index + direction
+        if (index < 0 || target !in list.indices) return
+        val item = list.removeAt(index)
+        list.add(target, item)
+        editingComboStepIds = list
+    }
+
+    fun saveEditingCombo() {
+        val combo = editingCombo ?: return
+        if (combo.name.isBlank()) {
+            uiState = uiState.copy(message = "Укажите название комбинации")
+            return
+        }
+        viewModelScope.launch {
+            repository.saveCombo(combo.copy(name = combo.name.trim()), editingComboStepIds)
+            uiState = uiState.copy(screen = Screen.Combos(combo.characterId), message = "Комбинация сохранена")
+        }
+    }
+
+    fun saveComboStep(step: ComboStep, addToCurrentCombo: Boolean = false) {
+        if (step.name.isBlank()) {
+            uiState = uiState.copy(message = "Укажите название шага")
+            return
+        }
+        viewModelScope.launch {
+            repository.saveComboStep(step.copy(name = step.name.trim()))
+            if (addToCurrentCombo && step.id !in editingComboStepIds) {
+                editingComboStepIds = editingComboStepIds + step.id
+            }
+            uiState = uiState.copy(message = "Шаг сохранён")
+        }
+    }
+
+    fun deleteComboStep(stepId: String) {
+        viewModelScope.launch {
+            repository.deleteComboStep(stepId)
+            editingComboStepIds = editingComboStepIds - stepId
+            uiState = uiState.copy(message = "Шаг удалён")
+        }
+    }
+
+    fun deleteCombo(comboId: String, characterId: String) {
+        viewModelScope.launch {
+            repository.deleteCombo(comboId)
+            uiState = uiState.copy(screen = Screen.Combos(characterId), message = "Комбинация удалена")
+        }
+    }
+
+    fun rollCombo(characterId: String, comboId: String, mode: ComboRollMode) {
+        viewModelScope.launch {
+            val combo = repository.getComboWithSteps(comboId)
+            if (combo == null || combo.steps.isEmpty()) {
+                uiState = uiState.copy(message = "Добавьте хотя бы один шаг в комбинацию")
+                return@launch
+            }
+            comboRollResult = ComboRoller.roll(combo, mode)
+            uiState = uiState.copy(screen = Screen.ComboResult(characterId, comboId))
+        }
     }
 
     // endregion

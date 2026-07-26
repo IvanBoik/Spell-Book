@@ -17,8 +17,9 @@ import java.util.UUID
  * [CharacterSpellCrossRef.prepared]), а [maxPreparedSpells] ограничивает их число.
  * Заговоры (уровень 0) подготовке не подлежат и ограничиваются отдельно [maxCantrips].
  *
- * Ячейки заклинаний:
- * [spellSlots] — доступно ячеек по уровням (1..9), [spellSlotsUsed] — потрачено.
+ * Ресурсы персонажа:
+ * [spellSlots] — доступно ячеек по уровням (1..9), [spellSlotsUsed] — потрачено;
+ * [resources] — произвольные счётчики (очки, кости, заряды).
  */
 @Entity(tableName = "characters")
 data class Character(
@@ -32,6 +33,8 @@ data class Character(
     val maxCantrips: Int = 0,
     val spellSlots: Map<Int, Int> = emptyMap(),
     val spellSlotsUsed: Map<Int, Int> = emptyMap(),
+    /** Произвольные восполняемые ресурсы: очки, кости, заряды и т. п. */
+    val resources: List<CharacterResource> = emptyList(),
 ) {
     /** Количество доступных (не потраченных) ячеек указанного уровня. */
     fun availableSlots(level: Int): Int =
