@@ -24,7 +24,7 @@ import com.example.spellbook.data.model.Spell
         ComboStep::class,
         ComboStepLink::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -77,6 +77,13 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v5 → v6: тип урона у шага комбинации. */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE combo_steps ADD COLUMN damageType TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -91,6 +98,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_2_3,
                     MIGRATION_3_4,
                     MIGRATION_4_5,
+                    MIGRATION_5_6,
                 ).build().also { instance = it }
             }
     }

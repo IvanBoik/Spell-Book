@@ -24,10 +24,18 @@ object ComboRoller {
         if (step.stepType == ComboStepType.CONSTANT) {
             return ComboStepRollResult(step, emptyList(), step.flatValue)
         }
-        val count = step.diceCount.coerceAtLeast(1) * if (mode == ComboRollMode.CRITICAL) 2 else 1
+        val count = step.diceCount.coerceAtLeast(1)
         val sides = step.diceSides.coerceAtLeast(2)
-        val rolls = List(count) {
-            if (mode == ComboRollMode.MAXIMUM) sides else random.nextInt(1, sides + 1)
+        fun randomDice(): List<Int> = List(count) { random.nextInt(1, sides + 1) }
+        fun maximumDice(): List<Int> = List(count) { sides }
+
+        val rolls = when (mode) {
+            ComboRollMode.NORMAL -> randomDice()
+            ComboRollMode.MAXIMUM -> maximumDice()
+            // Все кости пробрасываются два раза, плоский модификатор добавляется один раз.
+            ComboRollMode.CRITICAL_CLASSIC -> randomDice() + randomDice()
+            // Максимум на основном наборе костей + ещё один обычный бросок всех костей.
+            ComboRollMode.CRITICAL_HOMEBREW -> maximumDice() + randomDice()
         }
         return ComboStepRollResult(step, rolls, rolls.sum() + step.modifier)
     }

@@ -352,8 +352,17 @@ private fun SpellBookApp(
                     onRestoreResourceUnit = { id -> viewModel.restoreCharacterResourceUnit(screen.characterId, id) },
                     onRestoreResource = { id -> viewModel.restoreCharacterResource(screen.characterId, id) },
                     onDeleteResource = { id -> viewModel.deleteCharacterResource(screen.characterId, id) },
-                    onAddResource = { name, maximum ->
-                        viewModel.addCharacterResource(screen.characterId, name, maximum)
+                    onAddResource = { name, description, maximum ->
+                        viewModel.addCharacterResource(screen.characterId, name, description, maximum)
+                    },
+                    onEditResource = { id, name, description, maximum ->
+                        viewModel.editCharacterResource(
+                            screen.characterId,
+                            id,
+                            name,
+                            description,
+                            maximum,
+                        )
                     },
                     onRestoreAll = { viewModel.restoreAllResources(screen.characterId) },
                     onBack = { viewModel.openCharacterSpells(screen.characterId) },
@@ -367,6 +376,7 @@ private fun SpellBookApp(
             onEdit = { comboId -> viewModel.openComboEditor(screen.characterId, comboId) },
             onOpenLibrary = { viewModel.openStepLibrary(screen.characterId) },
             onRoll = { comboId, mode -> viewModel.rollCombo(screen.characterId, comboId, mode) },
+            onDelete = { comboId -> viewModel.deleteCombo(comboId, screen.characterId) },
             onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
         )
 

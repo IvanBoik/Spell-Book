@@ -1,5 +1,10 @@
 package com.example.spellbook.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,10 +16,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,20 +35,25 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryBooks
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -52,12 +67,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.COMBO_DICE_SIDES
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboRollMode
@@ -65,6 +87,8 @@ import com.example.spellbook.data.model.ComboRollResult
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.ComboStepType
 import com.example.spellbook.ui.components.DndTopBar
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun ComboListScreen(
@@ -73,6 +97,7 @@ fun ComboListScreen(
     onEdit: (String) -> Unit,
     onOpenLibrary: () -> Unit,
     onRoll: (String, ComboRollMode) -> Unit,
+    onDelete: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(
@@ -108,29 +133,166 @@ fun ComboListScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(combos, key = { it.id }) { combo ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    ) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(combo.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                                IconButton(onClick = { onEdit(combo.id) }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Редактировать")
-                                }
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ComboRollMode.entries.forEach { mode ->
-                                    OutlinedButton(
-                                        onClick = { onRoll(combo.id, mode) },
-                                        modifier = Modifier.weight(1f),
-                                        contentPadding = PaddingValues(horizontal = 4.dp),
-                                    ) { Text(mode.label, maxLines = 1) }
-                                }
-                            }
-                        }
-                    }
+                    SwipeableComboCard(
+                        combo = combo,
+                        onRun = { mode -> onRoll(combo.id, mode) },
+                        onEdit = { onEdit(combo.id) },
+                        onDelete = { onDelete(combo.id) },
+                    )
                 }
+            }
+        }
+    }
+}
+
+private val COMBO_CARD_SHAPE = RoundedCornerShape(12.dp)
+private val SWIPE_ACTION_SIZE = 48.dp
+private val SWIPE_ACTION_GAP = 12.dp
+private val EDIT_ACTION_COLOR = Color(0xFFFBC02D)
+private const val SWIPE_ANIMATION_MS = 220
+private const val SWIPE_OPEN_THRESHOLD = 0.35f
+
+/**
+ * Карточка комбинации: обычный запуск по Play, специальные режимы в меню,
+ * редактирование и удаление открываются свайпом влево.
+ */
+@Composable
+private fun SwipeableComboCard(
+    combo: Combo,
+    onRun: (ComboRollMode) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val offsetX = remember(combo.id) { Animatable(0f) }
+    val revealPx = with(LocalDensity.current) {
+        (SWIPE_ACTION_SIZE * 2 + SWIPE_ACTION_GAP * 3).toPx()
+    }
+
+    fun animateTo(value: Float) {
+        scope.launch { offsetX.animateTo(value, tween(SWIPE_ANIMATION_MS)) }
+    }
+
+    Box(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.matchParentSize().padding(end = SWIPE_ACTION_GAP),
+            horizontalArrangement = Arrangement.spacedBy(SWIPE_ACTION_GAP, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SwipeActionButton(
+                icon = Icons.Default.Edit,
+                description = "Редактировать комбинацию",
+                background = EDIT_ACTION_COLOR,
+                contentColor = Color.Black,
+                onClick = {
+                    animateTo(0f)
+                    onEdit()
+                },
+            )
+            SwipeActionButton(
+                icon = Icons.Default.Delete,
+                description = "Удалить комбинацию",
+                background = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+                onClick = {
+                    animateTo(0f)
+                    onDelete()
+                },
+            )
+        }
+
+        Card(
+            shape = COMBO_CARD_SHAPE,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(revealPx) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            scope.launch {
+                                offsetX.snapTo((offsetX.value + dragAmount).coerceIn(-revealPx, 0f))
+                            }
+                        },
+                        onDragEnd = {
+                            val shouldOpen = offsetX.value <= -revealPx * SWIPE_OPEN_THRESHOLD
+                            animateTo(if (shouldOpen) -revealPx else 0f)
+                        },
+                        onDragCancel = { animateTo(0f) },
+                    )
+                },
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    combo.name.ifBlank { "Без названия" },
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                )
+                FilledTonalIconButton(
+                    onClick = { onRun(ComboRollMode.NORMAL) },
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Запустить комбинацию")
+                }
+                SpecialRollMenu(onRun = onRun)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwipeActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    background: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(SWIPE_ACTION_SIZE)
+            .clip(CircleShape)
+            .background(background)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = contentColor)
+    }
+}
+
+@Composable
+private fun SpecialRollMenu(onRun: (ComboRollMode) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Default.MoreVert, contentDescription = "Особые запуски")
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+        ) {
+            listOf(
+                ComboRollMode.MAXIMUM,
+                ComboRollMode.CRITICAL_CLASSIC,
+                ComboRollMode.CRITICAL_HOMEBREW,
+            ).forEach { mode ->
+                DropdownMenuItem(
+                    text = { Text(mode.label) },
+                    onClick = {
+                        expanded = false
+                        onRun(mode)
+                    },
+                )
             }
         }
     }
@@ -182,7 +344,7 @@ fun ComboEditorScreen(
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { showStepPicker = true }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { showStepPicker = true }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.LibraryBooks, contentDescription = null)
                         Text("Из библиотеки", modifier = Modifier.padding(start = 6.dp))
                     }
@@ -340,7 +502,9 @@ fun ComboResultScreen(
                 }
             }
             items(result.steps, key = { it.step.id }) { stepResult ->
-                Card {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stepResult.step.name, style = MaterialTheme.typography.titleMedium)
@@ -351,6 +515,13 @@ fun ComboResultScreen(
                                     if (stepResult.step.modifier != 0) " ${if (stepResult.step.modifier > 0) "+" else "-"} ${kotlin.math.abs(stepResult.step.modifier)}" else ""
                             }
                             Text(details, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (stepResult.step.damageType.isNotBlank()) {
+                                Text(
+                                    SpellOptions.labelFor(SpellOptions.damageTypes, stepResult.step.damageType),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
                             if (stepResult.step.effect.isNotBlank()) {
                                 Text(stepResult.step.effect, style = MaterialTheme.typography.bodySmall)
                             }
@@ -361,16 +532,21 @@ fun ComboResultScreen(
             }
             if (result.effects.isNotEmpty()) {
                 item { Text("Дополнительные эффекты", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-                items(result.effects) { effect -> Card { Text(effect, Modifier.padding(12.dp)) } }
+                items(result.effects) { effect ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    ) {
+                        Text(effect, Modifier.padding(12.dp))
+                    }
+                }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ComboRollMode.entries.forEach { mode ->
-                        OutlinedButton(onClick = { onReroll(mode) }, modifier = Modifier.weight(1f)) {
-                            if (mode == result.mode) Icon(Icons.Default.Refresh, contentDescription = null)
-                            Text(mode.label, maxLines = 1)
-                        }
-                    }
+                Button(
+                    onClick = { onReroll(result.mode) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Text("Перебросить (${result.mode.label})", modifier = Modifier.padding(start = 8.dp))
                 }
             }
         }
@@ -384,6 +560,10 @@ private fun StepCard(step: ComboStep, actions: @Composable RowScope.() -> Unit) 
             Column(Modifier.weight(1f)) {
                 Text(step.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(step.formula, color = MaterialTheme.colorScheme.primary)
+                val damageLabel = SpellOptions.labelFor(SpellOptions.damageTypes, step.damageType)
+                if (step.damageType.isNotBlank()) {
+                    Text(damageLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
                 if (step.effect.isNotBlank()) {
                     Text(step.effect, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -431,19 +611,26 @@ fun ComboStepEditorDialog(
     onDismiss: () -> Unit,
     onConfirm: (ComboStep) -> Unit,
 ) {
+    val isNewStep = initial.name.isBlank()
     var name by remember { mutableStateOf(initial.name) }
     var type by remember { mutableStateOf(initial.stepType) }
-    var diceCount by remember { mutableStateOf(initial.diceCount.toString()) }
+    var diceCount by remember { mutableStateOf(if (isNewStep) "" else initial.diceCount.toString()) }
     var diceSides by remember { mutableStateOf(initial.diceSides) }
-    var modifier by remember { mutableStateOf(initial.modifier.toString()) }
-    var flatValue by remember { mutableStateOf(initial.flatValue.toString()) }
+    var modifier by remember { mutableStateOf(if (isNewStep) "" else initial.modifier.toString()) }
+    var flatValue by remember { mutableStateOf(if (isNewStep) "" else initial.flatValue.toString()) }
+    var damageType by remember { mutableStateOf(initial.damageType) }
     var effect by remember { mutableStateOf(initial.effect) }
     var sidesExpanded by remember { mutableStateOf(false) }
+    var damageExpanded by remember { mutableStateOf(false) }
 
     fun signed(value: String): String = value.filterIndexed { index, c -> c.isDigit() || (c == '-' && index == 0) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text("Шаг комбинации") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -460,59 +647,111 @@ fun ComboStepEditorDialog(
                             selected = type == value,
                             onClick = { type = value },
                             shape = SegmentedButtonDefaults.itemShape(index, ComboStepType.entries.size),
+                            colors = SegmentedButtonDefaults.colors(
+                                activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                activeBorderColor = MaterialTheme.colorScheme.primary,
+                                inactiveContainerColor = MaterialTheme.colorScheme.surface,
+                                inactiveContentColor = MaterialTheme.colorScheme.onSurface,
+                                inactiveBorderColor = MaterialTheme.colorScheme.outline,
+                            ),
                         ) { Text(value.label) }
                     }
                 }
                 if (type == ComboStepType.DICE) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
+                        StepNumberField(
+                            label = "Кол-во",
                             value = diceCount,
+                            placeholder = "1",
                             onValueChange = { diceCount = it.filter(Char::isDigit) },
-                            label = { Text("Кол-во") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
-                        ExposedDropdownMenuBox(
-                            expanded = sidesExpanded,
-                            onExpandedChange = { sidesExpanded = it },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            OutlinedTextField(
-                                value = "к$diceSides",
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Куб") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sidesExpanded) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Куб",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
                             )
-                            ExposedDropdownMenu(expanded = sidesExpanded, onDismissRequest = { sidesExpanded = false }) {
-                                COMBO_DICE_SIDES.forEach { sides ->
-                                    DropdownMenuItem(text = { Text("к$sides") }, onClick = {
-                                        diceSides = sides
-                                        sidesExpanded = false
-                                    })
+                            ExposedDropdownMenuBox(
+                                expanded = sidesExpanded,
+                                onExpandedChange = { sidesExpanded = it },
+                            ) {
+                                OutlinedTextField(
+                                    value = "к$diceSides",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sidesExpanded) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = sidesExpanded,
+                                    onDismissRequest = { sidesExpanded = false },
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 0.dp,
+                                ) {
+                                    COMBO_DICE_SIDES.forEach { sides ->
+                                        DropdownMenuItem(text = { Text("к$sides") }, onClick = {
+                                            diceSides = sides
+                                            sidesExpanded = false
+                                        })
+                                    }
                                 }
                             }
                         }
-                        OutlinedTextField(
+                        StepNumberField(
+                            label = "Мод.",
                             value = modifier,
+                            placeholder = "0",
                             onValueChange = { modifier = signed(it) },
-                            label = { Text("Мод.") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
                             modifier = Modifier.weight(1f),
                         )
                     }
                 } else {
-                    OutlinedTextField(
+                    StepNumberField(
+                        label = "Значение",
                         value = flatValue,
+                        placeholder = "0",
                         onValueChange = { flatValue = signed(it) },
-                        label = { Text("Значение") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                }
+                ExposedDropdownMenuBox(
+                    expanded = damageExpanded,
+                    onExpandedChange = { damageExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = if (damageType.isBlank()) "Без типа" else SpellOptions.labelFor(SpellOptions.damageTypes, damageType),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Тип урона") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(damageExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = damageExpanded,
+                        onDismissRequest = { damageExpanded = false },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Без типа") },
+                            onClick = {
+                                damageType = ""
+                                damageExpanded = false
+                            },
+                        )
+                        SpellOptions.damageTypes.forEach { (code, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    damageType = code
+                                    damageExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
                 OutlinedTextField(
                     value = effect,
@@ -535,6 +774,7 @@ fun ComboStepEditorDialog(
                             diceSides = diceSides,
                             modifier = modifier.toIntOrNull() ?: 0,
                             flatValue = flatValue.toIntOrNull() ?: 0,
+                            damageType = damageType,
                             effect = effect.trim(),
                         ),
                     )
@@ -543,6 +783,38 @@ fun ComboStepEditorDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
+}
+
+/** Числовое поле с постоянно закреплённой подписью и приглушённым плейсхолдером. */
+@Composable
+private fun StepNumberField(
+    label: String,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                )
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 }
 
 @Composable

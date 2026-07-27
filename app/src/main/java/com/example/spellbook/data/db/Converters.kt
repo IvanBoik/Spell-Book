@@ -70,6 +70,7 @@ class Converters {
             array.put(JSONObject().apply {
                 put("id", resource.id)
                 put("name", resource.name)
+                put("description", resource.description)
                 put("current", resource.current)
                 put("maximum", resource.maximum)
             })
@@ -89,6 +90,7 @@ class Converters {
             CharacterResource(
                 id = obj.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
                 name = name,
+                description = obj.optString("description"),
                 current = obj.optInt("current", maximum),
                 maximum = maximum,
             ).normalized()

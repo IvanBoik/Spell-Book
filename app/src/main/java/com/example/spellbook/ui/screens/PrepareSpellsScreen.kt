@@ -253,7 +253,7 @@ private fun DragGhost(spell: Spell) {
     val shape = RoundedCornerShape(8.dp)
     Card(
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.clip(shape).border(2.dp, MaterialTheme.colorScheme.primary, shape),
     ) {
         SpellRowContent(spell)

@@ -108,6 +108,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     var comboRollResult by mutableStateOf<ComboRollResult?>(null)
         private set
 
+    /** Последняя корневая страница раздела «Персонажи»: список или конкретный персонаж. */
+    private var lastCharactersScreen: Screen = Screen.Characters
+
     /**
      * id персонажа, в контексте которого создаётся/импортируется заклинание.
      * Если задан, после сохранения заклинание автоматически добавляется в его набор.
@@ -138,9 +141,11 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val character = repository.getCharacter(lastId)
         if (character != null) {
             observeCharacterSpells(lastId)
+            val characterScreen = Screen.CharacterSpells(lastId)
+            lastCharactersScreen = characterScreen
             uiState = uiState.copy(
                 tab = Tab.CHARACTERS,
-                screen = Screen.CharacterSpells(lastId),
+                screen = characterScreen,
             )
         } else {
             prefs.lastCharacterId = null
@@ -207,12 +212,23 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun selectTab(tab: Tab) {
         uiState = when (tab) {
             Tab.LIBRARY -> uiState.copy(tab = tab, screen = Screen.Library)
-            Tab.CHARACTERS -> uiState.copy(tab = tab, screen = Screen.Characters)
+            Tab.CHARACTERS -> {
+                // Восстанавливаем последнюю страницу самого раздела: список либо персонажа.
+                val target = when (val saved = lastCharactersScreen) {
+                    is Screen.CharacterSpells -> saved.takeIf { characterScreen ->
+                        uiState.characters.any { it.id == characterScreen.characterId }
+                    } ?: Screen.Characters
+                    else -> Screen.Characters
+                }
+                lastCharactersScreen = target
+                uiState.copy(tab = tab, screen = target)
+            }
         }
         resetListControls()
     }
 
     fun openCharacters() {
+        lastCharactersScreen = Screen.Characters
         uiState = uiState.copy(tab = Tab.CHARACTERS, screen = Screen.Characters)
     }
 
@@ -229,7 +245,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             resetListControls()
             showPreparedOnly = true
         }
-        uiState = uiState.copy(tab = Tab.CHARACTERS, screen = Screen.CharacterSpells(characterId))
+        val characterScreen = Screen.CharacterSpells(characterId)
+        lastCharactersScreen = characterScreen
+        uiState = uiState.copy(tab = Tab.CHARACTERS, screen = characterScreen)
     }
 
     fun openLibrary() {
@@ -577,15 +595,43 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /** Добавляет новый ресурс полностью восполненным. */
-    fun addCharacterResource(characterId: String, name: String, maximum: Int) {
+    fun addCharacterResource(characterId: String, name: String, description: String, maximum: Int) {
         val character = getCharacter(characterId) ?: return
         if (name.isBlank() || maximum <= 0) {
             uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
             return
         }
-        val resource = CharacterResource(name = name.trim(), current = maximum, maximum = maximum).normalized()
+        val resource = CharacterResource(
+            name = name.trim(),
+            description = description.trim(),
+            current = maximum,
+            maximum = maximum,
+        ).normalized()
         viewModelScope.launch {
             repository.upsertCharacter(character.copy(resources = character.resources + resource))
+        }
+    }
+
+    /** Изменяет название, описание и максимум, сохраняя потраченное количество ресурса. */
+    fun editCharacterResource(
+        characterId: String,
+        resourceId: String,
+        name: String,
+        description: String,
+        maximum: Int,
+    ) {
+        if (name.isBlank() || maximum <= 0) {
+            uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
+            return
+        }
+        updateCharacterResource(characterId, resourceId) { resource ->
+            val spent = (resource.maximum - resource.current).coerceAtLeast(0)
+            resource.copy(
+                name = name.trim(),
+                description = description.trim(),
+                maximum = maximum,
+                current = (maximum - spent).coerceAtLeast(0),
+            )
         }
     }
 

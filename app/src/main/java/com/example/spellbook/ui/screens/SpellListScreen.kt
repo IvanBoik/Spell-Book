@@ -447,8 +447,8 @@ internal fun AddSpellFab(
                     text = { Text(action.label) },
                     icon = { Icon(action.icon, contentDescription = null) },
                     onClick = action.onClick,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.height(12.dp))
             }
@@ -544,6 +544,10 @@ private fun FilterPanel(
         // Фиксированная кнопка сворачивания в правом нижнем углу видимой части блока.
         FilledTonalIconButton(
             onClick = onCollapse,
+            colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(12.dp),

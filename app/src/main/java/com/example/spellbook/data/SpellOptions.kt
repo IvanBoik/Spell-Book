@@ -100,33 +100,33 @@ object SpellOptions {
 
     /** Типы урона и лечения. */
     val damageTypes: List<Pair<String, String>> = listOf(
-        "acid" to "Кислота",
         "bludgeoning" to "Дробящий",
-        "cold" to "Холод",
-        "fire" to "Огонь",
-        "force" to "Силовое поле",
-        "lightning" to "Электричество",
-        "necrotic" to "Некротический",
         "piercing" to "Колющий",
-        "poison" to "Яд",
-        "psychic" to "Психический",
-        "radiant" to "Излучение",
         "slashing" to "Рубящий",
+        "fire" to "Огонь",
+        "cold" to "Холод",
+        "poison" to "Яд",
+        "acid" to "Кислота",
+        "lightning" to "Электричество",
         "thunder" to "Звук",
+        "necrotic" to "Некротический",
+        "radiant" to "Излучение",
+        "psychic" to "Психический",
+        "force" to "Силовое поле",
         "healing" to "Лечение",
     )
 
     /** Классы, которым может быть доступно заклинание. */
     val classes: List<Pair<String, String>> = listOf(
-        "artificer" to "Изобретатель",
         "bard" to "Бард",
-        "cleric" to "Жрец",
+        "wizard" to "Волшебник",
         "druid" to "Друид",
+        "cleric" to "Жрец",
+        "artificer" to "Изобретатель",
+        "warlock" to "Колдун",
         "paladin" to "Паладин",
         "ranger" to "Следопыт",
         "sorcerer" to "Чародей",
-        "warlock" to "Колдун",
-        "wizard" to "Волшебник",
     )
 
     /** Круги заклинаний: 0 — заговор. */

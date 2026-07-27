@@ -14,9 +14,10 @@ enum class ComboStepType(val label: String) {
 }
 
 enum class ComboRollMode(val label: String) {
-    NORMAL("Обычный"),
-    MAXIMUM("Максимум"),
-    CRITICAL("Критический"),
+    NORMAL("Обычный бросок"),
+    MAXIMUM("Максимальный урон"),
+    CRITICAL_CLASSIC("Классический крит"),
+    CRITICAL_HOMEBREW("Homebrew крит"),
 }
 
 @Entity(
@@ -40,6 +41,8 @@ data class ComboStep(
     val modifier: Int = 0,
     /** Значение плоского шага; для DICE не используется. */
     val flatValue: Int = 0,
+    /** Код типа урона из SpellOptions.damageTypes; пусто — без типа. */
+    val damageType: String = "",
     val effect: String = "",
     val createdAt: Long = System.currentTimeMillis(),
 ) {
