@@ -70,7 +70,8 @@ fun CharacterFormScreen(
     var canPrepare by remember { mutableStateOf(initial.canPrepareSpells) }
     var maxPrepared by remember { mutableStateOf(initial.maxPreparedSpells.takeIf { it > 0 }?.toString() ?: "") }
     var maxCantrips by remember { mutableStateOf(initial.maxCantrips.takeIf { it > 0 }?.toString() ?: "") }
-    // Изменяемые значения ячеек по уровням (как строки для полей ввода).
+    var maxAttunedItems by remember { mutableStateOf(initial.maxAttunedItems.toString()) }
+    // Изменяемые значения ячеек
     val slots = remember {
         mutableStateMapOf<Int, String>().apply {
             SLOT_LEVELS.forEach { level ->
@@ -112,6 +113,7 @@ fun CharacterFormScreen(
             maxCantrips = maxCantrips.toIntOrNull() ?: 0,
             spellSlots = slotsMap,
             spellSlotsUsed = clampedUsed,
+            maxAttunedItems = maxAttunedItems.toIntOrNull()?.coerceAtLeast(0) ?: 3,
         )
     }
 
@@ -203,6 +205,19 @@ fun CharacterFormScreen(
                 value = maxCantrips,
                 onValueChange = { new -> maxCantrips = new.filter { it.isDigit() } },
                 label = { Text("Доступно заговоров") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            HorizontalDivider()
+
+            Text("Магические предметы", fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = maxAttunedItems,
+                onValueChange = { new -> maxAttunedItems = new.filter { it.isDigit() } },
+                label = { Text("Лимит настроенных предметов") },
+                supportingText = { Text("Обычно персонаж может настроиться на 3 предмета") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),

@@ -35,6 +35,10 @@ data class Character(
     val spellSlotsUsed: Map<Int, Int> = emptyMap(),
     /** Произвольные восполняемые ресурсы: очки, кости, заряды и т. п. */
     val resources: List<CharacterResource> = emptyList(),
+    /** Кошелёк: порядковый номер [CoinType] → количество монет. */
+    val coins: Map<Int, Int> = emptyMap(),
+    /** Максимальное число одновременно настроенных магических предметов. */
+    val maxAttunedItems: Int = 3,
 ) {
     /** Количество доступных (не потраченных) ячеек указанного уровня. */
     fun availableSlots(level: Int): Int =

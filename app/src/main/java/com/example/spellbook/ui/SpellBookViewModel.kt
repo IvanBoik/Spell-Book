@@ -21,12 +21,16 @@ import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboRollMode
 import com.example.spellbook.data.model.ComboRollResult
 import com.example.spellbook.data.model.ComboStep
+import com.example.spellbook.data.model.CoinType
+import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.util.DiceRoller
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Две основные вкладки приложения. */
 enum class Tab { CHARACTERS, LIBRARY }
@@ -46,6 +50,7 @@ sealed interface Screen {
     data class ComboEditor(val characterId: String, val comboId: String?) : Screen
     data class StepLibrary(val characterId: String) : Screen
     data class ComboResult(val characterId: String, val comboId: String) : Screen
+    data class Inventory(val characterId: String) : Screen
 }
 
 data class SpellBookUiState(
@@ -60,6 +65,7 @@ data class SpellBookUiState(
     val currentCharacterPreparedIds: Set<String> = emptySet(),
     val combos: List<Combo> = emptyList(),
     val comboSteps: List<ComboStep> = emptyList(),
+    val inventoryItems: List<InventoryItem> = emptyList(),
     val message: String? = null,
 )
 
@@ -100,6 +106,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     private var characterSpellsJob: Job? = null
     private var combosJob: Job? = null
     private var comboStepsJob: Job? = null
+    private var inventoryJob: Job? = null
+    /** Не позволяет более старой записи порядка завершиться после более новой. */
+    private val inventoryReorderMutex = Mutex()
 
     var editingCombo by mutableStateOf<Combo?>(null)
         private set
@@ -171,6 +180,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         comboStepsJob?.cancel()
         comboStepsJob = repository.observeComboSteps(characterId)
             .onEach { uiState = uiState.copy(comboSteps = it) }
+            .launchIn(viewModelScope)
+        inventoryJob?.cancel()
+        inventoryJob = repository.observeInventoryItems(characterId)
+            .onEach { uiState = uiState.copy(inventoryItems = it) }
             .launchIn(viewModelScope)
     }
 
@@ -323,6 +336,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun openSpellSlots(characterId: String) {
         uiState = uiState.copy(screen = Screen.SpellSlots(characterId))
+    }
+
+    fun openInventory(characterId: String) {
+        uiState = uiState.copy(screen = Screen.Inventory(characterId))
     }
 
     fun openCombos(characterId: String) {
@@ -761,6 +778,116 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             comboRollResult = ComboRoller.roll(combo, mode)
             uiState = uiState.copy(screen = Screen.ComboResult(characterId, comboId))
         }
+    }
+
+    // endregion
+
+    // region Инвентарь
+
+    fun saveInventoryItem(item: InventoryItem) {
+        if (item.name.isBlank() || item.quantity <= 0) {
+            uiState = uiState.copy(message = "Укажите название и положительное количество")
+            return
+        }
+        val normalized = item.normalized()
+        if (normalized.attuned && !canAttune(normalized.characterId, normalized.id)) {
+            val limit = getCharacter(normalized.characterId)?.maxAttunedItems ?: 0
+            uiState = uiState.copy(message = "Достигнут лимит настройки ($limit)")
+            return
+        }
+        viewModelScope.launch {
+            repository.saveInventoryItem(normalized)
+            uiState = uiState.copy(message = "Предмет сохранён")
+        }
+    }
+
+    fun changeInventoryQuantity(itemId: String, delta: Int) {
+        viewModelScope.launch {
+            val item = repository.getInventoryItem(itemId) ?: return@launch
+            repository.saveInventoryItem(item.copy(quantity = (item.quantity + delta).coerceAtLeast(1)))
+        }
+    }
+
+    fun setInventoryQuantity(itemId: String, quantity: Int) {
+        if (quantity <= 0) return
+        viewModelScope.launch {
+            val item = repository.getInventoryItem(itemId) ?: return@launch
+            repository.saveInventoryItem(item.copy(quantity = quantity))
+        }
+    }
+
+    fun deleteInventoryItem(itemId: String) {
+        viewModelScope.launch {
+            repository.deleteInventoryItem(itemId)
+            uiState = uiState.copy(message = "Предмет удалён")
+        }
+    }
+
+    /** Сохраняет пользовательский порядок предметов текущей вкладки. */
+    fun reorderInventoryItems(orderedIds: List<String>) {
+        if (orderedIds.isEmpty()) return
+        val snapshot = orderedIds.toList()
+        viewModelScope.launch {
+            inventoryReorderMutex.withLock {
+                repository.reorderInventoryItems(snapshot)
+            }
+        }
+    }
+
+    fun toggleItemAttunement(itemId: String) {
+        viewModelScope.launch {
+            val item = repository.getInventoryItem(itemId) ?: return@launch
+            if (!item.requiresAttunement) return@launch
+            if (!item.attuned && !canAttune(item.characterId, item.id)) {
+                val limit = getCharacter(item.characterId)?.maxAttunedItems ?: 0
+                uiState = uiState.copy(message = "Достигнут лимит настройки ($limit)")
+                return@launch
+            }
+            repository.saveInventoryItem(item.copy(attuned = !item.attuned))
+        }
+    }
+
+    fun updateAttunementLimit(characterId: String, newLimit: Int) {
+        val character = getCharacter(characterId) ?: return
+        val attunedCount = uiState.inventoryItems.count { it.characterId == characterId && it.attuned }
+        if (newLimit < attunedCount) {
+            uiState = uiState.copy(
+                message = "Нельзя установить лимит $newLimit: сейчас настроено $attunedCount предметов",
+            )
+            return
+        }
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(maxAttunedItems = newLimit.coerceAtLeast(0)))
+        }
+    }
+
+    fun updateCoins(characterId: String, changes: Map<CoinType, Int>, subtract: Boolean) {
+        val character = getCharacter(characterId) ?: return
+        val updated = character.coins.toMutableMap()
+        if (subtract && changes.any { (coin, value) -> (updated[coin.ordinal] ?: 0) < value }) {
+            uiState = uiState.copy(message = "Недостаточно монет для этой операции")
+            return
+        }
+        changes.forEach { (coin, value) ->
+            val delta = if (subtract) -value else value
+            updated[coin.ordinal] = ((updated[coin.ordinal] ?: 0) + delta).coerceAtLeast(0)
+        }
+        viewModelScope.launch { repository.upsertCharacter(character.copy(coins = updated)) }
+    }
+
+    fun setCoinAmount(characterId: String, coin: CoinType, amount: Int) {
+        val character = getCharacter(characterId) ?: return
+        val updated = character.coins.toMutableMap()
+        updated[coin.ordinal] = amount.coerceAtLeast(0)
+        viewModelScope.launch { repository.upsertCharacter(character.copy(coins = updated)) }
+    }
+
+    private fun canAttune(characterId: String, exceptItemId: String): Boolean {
+        val limit = getCharacter(characterId)?.maxAttunedItems ?: 0
+        if (limit <= 0) return false
+        return uiState.inventoryItems.count {
+            it.characterId == characterId && it.attuned && it.id != exceptItemId
+        } < limit
     }
 
     // endregion

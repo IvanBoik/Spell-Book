@@ -12,6 +12,7 @@ import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.ComboStepLink
+import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.Spell
 
 /** Единая база данных приложения: библиотека заклинаний, персонажи и их связи. */
@@ -23,8 +24,9 @@ import com.example.spellbook.data.model.Spell
         Combo::class,
         ComboStep::class,
         ComboStepLink::class,
+        InventoryItem::class,
     ],
-    version = 6,
+    version = 8,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -33,6 +35,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
     abstract fun spellDao(): SpellDao
     abstract fun characterDao(): CharacterDao
     abstract fun comboDao(): ComboDao
+    abstract fun inventoryDao(): InventoryDao
 
     companion object {
         private const val DB_NAME = "spellbook.db"
@@ -84,6 +87,25 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v6 → v7: инвентарь, кошелёк и лимит настройки магических предметов. */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN coins TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("ALTER TABLE characters ADD COLUMN maxAttunedItems INTEGER NOT NULL DEFAULT 3")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `inventory_items` (`id` TEXT NOT NULL, `characterId` TEXT NOT NULL, `name` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `description` TEXT NOT NULL, `categories` TEXT NOT NULL, `isMagic` INTEGER NOT NULL, `rarity` TEXT NOT NULL, `requiresAttunement` INTEGER NOT NULL, `attuned` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`characterId`) REFERENCES `characters`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_inventory_items_characterId` ON `inventory_items` (`characterId`)")
+            }
+        }
+
+        /** v7 → v8: сохраняемый пользовательский порядок предметов. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE inventory_items ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+                // Сохраняем прежний порядок «новые сверху».
+                db.execSQL("UPDATE inventory_items SET sortOrder = -createdAt")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -99,7 +121,9 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_3_4,
                     MIGRATION_4_5,
                     MIGRATION_5_6,
-                ).build().also { instance = it }
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                ).build()
             }
     }
 }

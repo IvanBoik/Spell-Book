@@ -54,6 +54,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -406,7 +407,7 @@ private fun SearchField(
     TextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("Поиск по названию", color = onColor.copy(alpha = 0.6f)) },
+        placeholder = { Text("Название", color = onColor.copy(alpha = 0.6f)) },
         singleLine = true,
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
@@ -529,11 +530,13 @@ private fun FilterPanel(
                         selected = filters.concentration,
                         onClick = { onFiltersChange(filters.copy(concentration = !filters.concentration)) },
                         label = { Text("Концентрация") },
+                        colors = burgundyFilterChipColors(),
                     )
                     FilterChip(
                         selected = filters.ritual,
                         onClick = { onFiltersChange(filters.copy(ritual = !filters.ritual)) },
                         label = { Text("Ритуал") },
+                        colors = burgundyFilterChipColors(),
                     )
                 }
             }
@@ -573,11 +576,20 @@ private fun <T> FilterChipGroup(
                     selected = code in selected,
                     onClick = { onToggle(code) },
                     label = { Text(label) },
+                    colors = burgundyFilterChipColors(),
                 )
             }
         }
     }
 }
+
+@Composable
+private fun burgundyFilterChipColors() = FilterChipDefaults.filterChipColors(
+    containerColor = MaterialTheme.colorScheme.surface,
+    labelColor = MaterialTheme.colorScheme.onSurface,
+    selectedContainerColor = MaterialTheme.colorScheme.primary,
+    selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+)
 
 @Composable
 private fun NoResults(onReset: () -> Unit) {

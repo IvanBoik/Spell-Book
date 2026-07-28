@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -66,6 +67,7 @@ import com.example.spellbook.ui.screens.CharactersScreen
 import com.example.spellbook.ui.screens.ComboEditorScreen
 import com.example.spellbook.ui.screens.ComboListScreen
 import com.example.spellbook.ui.screens.ComboResultScreen
+import com.example.spellbook.ui.screens.InventoryScreen
 import com.example.spellbook.ui.screens.FabAction
 import com.example.spellbook.ui.screens.PrepareSpellsScreen
 import com.example.spellbook.ui.screens.SpellSlotsScreen
@@ -236,6 +238,7 @@ private fun SpellBookApp(
             is Screen.ComboEditor -> viewModel.openCombos(screen.characterId)
             is Screen.StepLibrary -> viewModel.openCombos(screen.characterId)
             is Screen.ComboResult -> viewModel.openCombos(screen.characterId)
+            is Screen.Inventory -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
             is Screen.CharacterForm -> viewModel.exitCharacterForm()
             is Screen.Details -> viewModel.navigateBackFromDetails()
             is Screen.SpellForm -> {
@@ -410,6 +413,27 @@ private fun SpellBookApp(
             onBack = { viewModel.openCombos(screen.characterId) },
         )
 
+        is Screen.Inventory -> {
+            val character = viewModel.getCharacter(screen.characterId)
+            if (character == null) {
+                LaunchedEffect(screen.characterId) { viewModel.openCharacters() }
+            } else {
+                InventoryScreen(
+                    character = character,
+                    items = state.inventoryItems,
+                    onSaveItem = viewModel::saveInventoryItem,
+                    onDeleteItem = viewModel::deleteInventoryItem,
+                    onChangeQuantity = viewModel::changeInventoryQuantity,
+                    onSetQuantity = viewModel::setInventoryQuantity,
+                    onReorderItems = viewModel::reorderInventoryItems,
+                    onToggleAttunement = viewModel::toggleItemAttunement,
+                    onSetAttunementLimit = { viewModel.updateAttunementLimit(screen.characterId, it) },
+                    onSetCoinAmount = { coin, amount -> viewModel.setCoinAmount(screen.characterId, coin, amount) },
+                    onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+                )
+            }
+        }
+
         is Screen.ComboResult -> {
             val result = viewModel.comboRollResult
             if (result == null) {
@@ -555,6 +579,7 @@ private fun CharacterSpellsScreenContent(
                 onSettings = { viewModel.openEditCharacterForm(characterId) },
                 onResources = { viewModel.openSpellSlots(characterId) },
                 onCombos = { viewModel.openCombos(characterId) },
+                onInventory = { viewModel.openInventory(characterId) },
                 onPrepare = { viewModel.openPrepareSpells(characterId) },
             )
             if (character.canPrepareSpells) {
@@ -596,6 +621,7 @@ private fun CharacterActionsBar(
     onSettings: () -> Unit,
     onResources: () -> Unit,
     onCombos: () -> Unit,
+    onInventory: () -> Unit,
     onPrepare: () -> Unit,
 ) {
     androidx.compose.foundation.lazy.LazyRow(
@@ -622,6 +648,13 @@ private fun CharacterActionsBar(
                 onClick = onCombos,
                 leadingIcon = { Icon(Icons.Default.Extension, contentDescription = null, modifier = Modifier.size(18.dp)) },
                 label = { Text("Комбинации") },
+            )
+        }
+        item(key = "inventory") {
+            androidx.compose.material3.AssistChip(
+                onClick = onInventory,
+                leadingIcon = { Icon(Icons.Default.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                label = { Text("Инвентарь") },
             )
         }
         if (showPrepare) {

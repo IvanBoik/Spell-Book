@@ -8,6 +8,7 @@ import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.ComboWithSteps
+import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.Spell
 import kotlinx.coroutines.flow.Flow
 import java.io.File
@@ -26,6 +27,7 @@ class SpellBookRepository(private val context: Context) {
     private val spellDao = db.spellDao()
     private val characterDao = db.characterDao()
     private val comboDao = db.comboDao()
+    private val inventoryDao = db.inventoryDao()
 
     // region Заклинания
 
@@ -140,8 +142,23 @@ class SpellBookRepository(private val context: Context) {
 
     // endregion
 
+    // region Инвентарь
+
+    fun observeInventoryItems(characterId: String): Flow<List<InventoryItem>> =
+        inventoryDao.observeItems(characterId)
+
+    suspend fun getInventoryItem(itemId: String): InventoryItem? = inventoryDao.getItem(itemId)
+
+    suspend fun saveInventoryItem(item: InventoryItem) = inventoryDao.upsertItem(item.normalized())
+
+    suspend fun deleteInventoryItem(itemId: String) = inventoryDao.deleteItem(itemId)
+
+    suspend fun reorderInventoryItems(orderedIds: List<String>) = inventoryDao.reorderItems(orderedIds)
+
+    // endregion
+
     /**
-     * Разовая миграция: если библиотека пуста и существует старый JSON-файл,
+     * Разовая миграция: если библиотека пуста
      * переносим заклинания в БД и удаляем файл.
      */
     suspend fun migrateLegacyIfNeeded() {
