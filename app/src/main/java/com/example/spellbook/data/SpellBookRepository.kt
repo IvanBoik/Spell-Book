@@ -21,9 +21,12 @@ enum class AddSpellResult { ADDED, ALREADY_ADDED, CANTRIP_LIMIT_REACHED }
  * заклинаний, персонажей и связи между ними, а также разовую миграцию данных
  * из старого файлового хранилища [LEGACY_FILE_NAME].
  */
-class SpellBookRepository(private val context: Context) {
+class SpellBookRepository(
+    private val context: Context,
+    /** Позволяет подменить БД (например, in-memory в тестах). */
+    db: SpellBookDatabase = SpellBookDatabase.get(context),
+) {
 
-    private val db = SpellBookDatabase.get(context)
     private val spellDao = db.spellDao()
     private val characterDao = db.characterDao()
     private val comboDao = db.comboDao()

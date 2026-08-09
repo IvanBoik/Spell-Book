@@ -39,6 +39,9 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -59,6 +62,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.jsoup)
     testImplementation(libs.junit)
+    // Реальная реализация org.json: в JVM-тестах классы из android.jar — заглушки.
+    testImplementation(libs.json)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
