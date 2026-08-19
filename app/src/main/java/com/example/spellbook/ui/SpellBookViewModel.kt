@@ -109,6 +109,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     private var inventoryJob: Job? = null
     /** Не позволяет более старой записи порядка завершиться после более новой. */
     private val inventoryReorderMutex = Mutex()
+    private val comboReorderMutex = Mutex()
+    private val resourceReorderMutex = Mutex()
 
     var editingCombo by mutableStateOf<Combo?>(null)
         private set
@@ -668,6 +670,24 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun restoreCharacterResource(characterId: String, resourceId: String) =
         updateCharacterResource(characterId, resourceId) { it.copy(current = it.maximum) }
 
+    /**
+     * Сохраняет пользовательский порядок ресурсов после перетаскивания.
+     * Отдельное поле порядка не нужно: ресурсы хранятся списком внутри персонажа.
+     */
+    fun reorderCharacterResources(characterId: String, orderedIds: List<String>) {
+        if (orderedIds.isEmpty()) return
+        val character = getCharacter(characterId) ?: return
+        val byId = character.resources.associateBy { it.id }
+        val reordered = orderedIds.mapNotNull(byId::get) +
+            character.resources.filterNot { it.id in orderedIds }
+        if (reordered.size != character.resources.size) return
+        viewModelScope.launch {
+            resourceReorderMutex.withLock {
+                repository.upsertCharacter(character.copy(resources = reordered))
+            }
+        }
+    }
+
     /** Удаляет пользовательский ресурс. */
     fun deleteCharacterResource(characterId: String, resourceId: String) {
         val character = getCharacter(characterId) ?: return
@@ -758,6 +778,17 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             repository.deleteComboStep(stepId)
             editingComboStepIds = editingComboStepIds - stepId
             uiState = uiState.copy(message = "Шаг удалён")
+        }
+    }
+
+    /** Сохраняет пользовательский порядок комбинаций после перетаскивания. */
+    fun reorderCombos(orderedIds: List<String>) {
+        if (orderedIds.isEmpty()) return
+        val snapshot = orderedIds.toList()
+        viewModelScope.launch {
+            comboReorderMutex.withLock {
+                repository.reorderCombos(snapshot)
+            }
         }
     }
 

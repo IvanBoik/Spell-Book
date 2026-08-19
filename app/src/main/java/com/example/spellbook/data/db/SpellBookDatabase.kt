@@ -26,7 +26,7 @@ import com.example.spellbook.data.model.Spell
         ComboStepLink::class,
         InventoryItem::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -106,6 +106,15 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v8 → v9: сохраняемый пользовательский порядок комбинаций. */
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE combos ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+                // Сохраняем прежний порядок «новые сверху».
+                db.execSQL("UPDATE combos SET sortOrder = -createdAt")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -123,6 +132,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_5_6,
                     MIGRATION_6_7,
                     MIGRATION_7_8,
+                    MIGRATION_8_9,
                 ).build()
             }
     }

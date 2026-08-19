@@ -72,6 +72,8 @@ data class Combo(
     val characterId: String,
     val name: String,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Пользовательский порядок; по умолчанию новые комбинации оказываются сверху. */
+    val sortOrder: Long = -createdAt,
 )
 
 @Entity(

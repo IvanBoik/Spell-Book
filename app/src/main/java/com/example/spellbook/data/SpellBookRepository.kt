@@ -141,6 +141,8 @@ class SpellBookRepository(
 
     suspend fun deleteCombo(comboId: String) = comboDao.deleteCombo(comboId)
 
+    suspend fun reorderCombos(orderedIds: List<String>) = comboDao.reorderCombos(orderedIds)
+
     suspend fun deleteComboStep(stepId: String) = comboDao.deleteStep(stepId)
 
     // endregion

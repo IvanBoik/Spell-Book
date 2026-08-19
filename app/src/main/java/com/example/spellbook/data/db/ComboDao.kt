@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ComboDao {
-    @Query("SELECT * FROM combos WHERE characterId = :characterId ORDER BY createdAt DESC")
+    @Query("SELECT * FROM combos WHERE characterId = :characterId ORDER BY sortOrder ASC, createdAt DESC")
     fun observeCombos(characterId: String): Flow<List<Combo>>
 
     @Query("SELECT * FROM combo_steps WHERE characterId = :characterId ORDER BY createdAt DESC")
@@ -55,5 +55,14 @@ interface ComboDao {
     suspend fun replaceComboSteps(comboId: String, stepIds: List<String>) {
         clearComboSteps(comboId)
         insertLinks(stepIds.mapIndexed { index, stepId -> ComboStepLink(comboId, stepId, index) })
+    }
+
+    @Query("UPDATE combos SET sortOrder = :position WHERE id = :comboId")
+    suspend fun updateComboSortOrder(comboId: String, position: Long)
+
+    /** Записывает новый порядок одной транзакцией, чтобы Flow не отдавал промежуточные состояния. */
+    @Transaction
+    suspend fun reorderCombos(orderedIds: List<String>) {
+        orderedIds.forEachIndexed { index, id -> updateComboSortOrder(id, index.toLong()) }
     }
 }

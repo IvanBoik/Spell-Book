@@ -71,6 +71,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -144,12 +145,19 @@ fun SpellListScreen(
     // Панели реагируют на сам жест, а не на позицию элемента: изменение высоты панелей
     // больше не влияет на определение направления и не создаёт зацикливание/рывки.
     var chromeVisible by remember { mutableStateOf(true) }
+    // Пока фильтры развёрнуты, состояние панелей заморожено: прокрутка его не меняет,
+    // иначе вместе с верхним блоком сдвигалась и сама панель фильтров.
+    val filtersOpen by rememberUpdatedState(showFilters)
     val directionThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
     val scrollConnection = remember(directionThresholdPx) {
         object : NestedScrollConnection {
             private var accumulatedDelta = 0f
 
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (filtersOpen) {
+                    accumulatedDelta = 0f
+                    return Offset.Zero
+                }
                 if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
 
                 // Смена направления сбрасывает накопление, чтобы UI быстро отзывался на новый жест.

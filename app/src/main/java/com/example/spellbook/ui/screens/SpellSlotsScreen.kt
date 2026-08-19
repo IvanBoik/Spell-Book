@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,9 +47,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterResource
 import com.example.spellbook.ui.components.DndTopBar
@@ -82,6 +86,7 @@ fun SpellSlotsScreen(
     onDeleteResource: (resourceId: String) -> Unit,
     onAddResource: (name: String, description: String, maximum: Int) -> Unit,
     onEditResource: (resourceId: String, name: String, description: String, maximum: Int) -> Unit,
+    onReorderResources: (List<String>) -> Unit,
     onRestoreAll: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -89,6 +94,18 @@ fun SpellSlotsScreen(
     var editingResource by remember { mutableStateOf<CharacterResource?>(null) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var viewedResource by remember { mutableStateOf<CharacterResource?>(null) }
+    var draggingResourceId by remember { mutableStateOf<String?>(null) }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
+    /** Оптимистичный порядок: не даёт списку откатиться до обновления из БД. */
+    var localResourceOrder by remember { mutableStateOf<List<String>>(emptyList()) }
+    val density = LocalDensity.current
+
+    val resourceIds = character.resources.mapTo(mutableSetOf()) { it.id }
+    val effectiveResourceOrder = localResourceOrder.filter { it in resourceIds } +
+        character.resources.map { it.id }.filterNot { it in localResourceOrder }
+    val orderedResources = effectiveResourceOrder.mapNotNull { id ->
+        character.resources.firstOrNull { it.id == id }
+    }
 
     Scaffold(
         topBar = {
@@ -148,7 +165,8 @@ fun SpellSlotsScreen(
                         fontWeight = FontWeight.Bold,
                     )
                 }
-                items(character.resources, key = { it.id }) { resource ->
+                items(orderedResources, key = { it.id }) { resource ->
+                    val isDragged = draggingResourceId == resource.id
                     SwipeableResourceRow(
                         resource = resource,
                         onOpen = { viewedResource = resource },
@@ -157,6 +175,41 @@ fun SpellSlotsScreen(
                         onRestoreUnit = { onRestoreResourceUnit(resource.id) },
                         onRestore = { onRestoreResource(resource.id) },
                         onDelete = { onDeleteResource(resource.id) },
+                        isDragging = isDragged,
+                        dragTranslationY = if (isDragged) dragDistance else 0f,
+                        onDragStart = {
+                            localResourceOrder = orderedResources.map { it.id }
+                            draggingResourceId = resource.id
+                            dragDistance = 0f
+                        },
+                        onDrag = { delta ->
+                            dragDistance += delta
+                            val stepPx = with(density) { RESOURCE_DRAG_STEP.toPx() }
+
+                            // Переставляем сразу после пересечения соседней позиции, а компенсация
+                            // смещения удерживает карточку под пальцем.
+                            while (dragDistance >= stepPx) {
+                                val index = localResourceOrder.indexOf(resource.id)
+                                if (index < 0 || index >= localResourceOrder.lastIndex) break
+                                localResourceOrder = localResourceOrder.toMutableList().apply {
+                                    add(index + 1, removeAt(index))
+                                }
+                                dragDistance -= stepPx
+                            }
+                            while (dragDistance <= -stepPx) {
+                                val index = localResourceOrder.indexOf(resource.id)
+                                if (index <= 0) break
+                                localResourceOrder = localResourceOrder.toMutableList().apply {
+                                    add(index - 1, removeAt(index))
+                                }
+                                dragDistance += stepPx
+                            }
+                        },
+                        onDragEnd = {
+                            onReorderResources(localResourceOrder)
+                            draggingResourceId = null
+                            dragDistance = 0f
+                        },
                     )
                 }
             }
@@ -222,6 +275,9 @@ private val RESOURCE_EDIT_COLOR = Color(0xFFFBC02D)
 private const val RESOURCE_SWIPE_ANIMATION_MS = 220
 private const val RESOURCE_SWIPE_THRESHOLD = 0.35f
 
+/** Шаг перестановки при перетаскивании — примерная высота карточки ресурса с отступом. */
+private val RESOURCE_DRAG_STEP = 140.dp
+
 @Composable
 private fun SwipeableResourceRow(
     resource: CharacterResource,
@@ -231,36 +287,51 @@ private fun SwipeableResourceRow(
     onRestoreUnit: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit,
+    isDragging: Boolean,
+    dragTranslationY: Float,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val offsetX = remember(resource.id) { Animatable(0f) }
     val revealPx = with(LocalDensity.current) {
         (RESOURCE_SWIPE_ACTION_SIZE * 2 + RESOURCE_SWIPE_GAP * 3).toPx()
     }
+
+    // pointerInput живёт дольше одной рекомпозиции: без rememberUpdatedState он вызывал бы
+    // callback-и, захватившие устаревший порядок ресурсов.
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+
     fun animateTo(value: Float) {
         scope.launch { offsetX.animateTo(value, tween(RESOURCE_SWIPE_ANIMATION_MS)) }
     }
 
-    Box(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.matchParentSize().padding(end = RESOURCE_SWIPE_GAP),
-            horizontalArrangement = Arrangement.spacedBy(RESOURCE_SWIPE_GAP, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ResourceSwipeAction(
-                icon = Icons.Default.Edit,
-                description = "Редактировать ${resource.name}",
-                background = RESOURCE_EDIT_COLOR,
-                contentColor = Color.Black,
-                onClick = { animateTo(0f); onEdit() },
-            )
-            ResourceSwipeAction(
-                icon = Icons.Default.Delete,
-                description = "Удалить ${resource.name}",
-                background = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-                onClick = { animateTo(0f); onDelete() },
-            )
+    Box(Modifier.fillMaxWidth().zIndex(if (isDragging) 1f else 0f)) {
+        // Во время вертикального переноса действия свайпа скрыты и не просвечивают под карточкой.
+        if (!isDragging) {
+            Row(
+                modifier = Modifier.matchParentSize().padding(end = RESOURCE_SWIPE_GAP),
+                horizontalArrangement = Arrangement.spacedBy(RESOURCE_SWIPE_GAP, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ResourceSwipeAction(
+                    icon = Icons.Default.Edit,
+                    description = "Редактировать ${resource.name}",
+                    background = RESOURCE_EDIT_COLOR,
+                    contentColor = Color.Black,
+                    onClick = { animateTo(0f); onEdit() },
+                )
+                ResourceSwipeAction(
+                    icon = Icons.Default.Delete,
+                    description = "Удалить ${resource.name}",
+                    background = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    onClick = { animateTo(0f); onDelete() },
+                )
+            }
         }
 
         Card(
@@ -268,7 +339,13 @@ private fun SwipeableResourceRow(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .offset {
+                    IntOffset(
+                        offsetX.value.roundToInt(),
+                        if (isDragging) dragTranslationY.roundToInt() else 0,
+                    )
+                }
+                .zIndex(if (isDragging) 1f else 0f)
                 .pointerInput(revealPx) {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount ->
@@ -285,7 +362,22 @@ private fun SwipeableResourceRow(
                         onDragCancel = { animateTo(0f) },
                     )
                 }
-                .clickable(onClick = onOpen),
+                // Ключ не зависит от isDragging: иначе рекомпозиция отменит активный жест.
+                .pointerInput(resource.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            scope.launch { offsetX.snapTo(0f) }
+                            currentOnDragStart()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            currentOnDrag(dragAmount.y)
+                        },
+                        onDragEnd = { currentOnDragEnd() },
+                        onDragCancel = { currentOnDragEnd() },
+                    )
+                }
+                .clickable(enabled = !isDragging, onClick = onOpen),
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

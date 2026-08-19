@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,9 +66,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +82,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.COMBO_DICE_SIDES
 import com.example.spellbook.data.model.Combo
@@ -98,8 +102,20 @@ fun ComboListScreen(
     onOpenLibrary: () -> Unit,
     onRoll: (String, ComboRollMode) -> Unit,
     onDelete: (String) -> Unit,
+    onReorder: (List<String>) -> Unit,
     onBack: () -> Unit,
 ) {
+    var draggingComboId by remember { mutableStateOf<String?>(null) }
+    var dragDistance by remember { mutableFloatStateOf(0f) }
+    /** Оптимистичный порядок: не даёт списку откатиться, пока Room Flow не обновился. */
+    var localOrder by remember { mutableStateOf<List<String>>(emptyList()) }
+    val density = LocalDensity.current
+
+    val comboIds = combos.mapTo(mutableSetOf()) { it.id }
+    val effectiveOrder = localOrder.filter { it in comboIds } +
+        combos.map { it.id }.filterNot { it in localOrder }
+    val orderedCombos = effectiveOrder.mapNotNull { id -> combos.firstOrNull { it.id == id } }
+
     Scaffold(
         topBar = {
             DndTopBar(
@@ -132,12 +148,48 @@ fun ComboListScreen(
                 contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(combos, key = { it.id }) { combo ->
+                items(orderedCombos, key = { it.id }) { combo ->
+                    val isDragged = draggingComboId == combo.id
                     SwipeableComboCard(
                         combo = combo,
                         onRun = { mode -> onRoll(combo.id, mode) },
                         onEdit = { onEdit(combo.id) },
                         onDelete = { onDelete(combo.id) },
+                        isDragging = isDragged,
+                        dragTranslationY = if (isDragged) dragDistance else 0f,
+                        onDragStart = {
+                            localOrder = orderedCombos.map { it.id }
+                            draggingComboId = combo.id
+                            dragDistance = 0f
+                        },
+                        onDrag = { delta ->
+                            dragDistance += delta
+                            val stepPx = with(density) { COMBO_DRAG_STEP.toPx() }
+
+                            // Переставляем сразу после пересечения соседней позиции: соседи освобождают
+                            // место, а компенсация смещения удерживает карточку под пальцем.
+                            while (dragDistance >= stepPx) {
+                                val index = localOrder.indexOf(combo.id)
+                                if (index < 0 || index >= localOrder.lastIndex) break
+                                localOrder = localOrder.toMutableList().apply {
+                                    add(index + 1, removeAt(index))
+                                }
+                                dragDistance -= stepPx
+                            }
+                            while (dragDistance <= -stepPx) {
+                                val index = localOrder.indexOf(combo.id)
+                                if (index <= 0) break
+                                localOrder = localOrder.toMutableList().apply {
+                                    add(index - 1, removeAt(index))
+                                }
+                                dragDistance += stepPx
+                            }
+                        },
+                        onDragEnd = {
+                            onReorder(localOrder)
+                            draggingComboId = null
+                            dragDistance = 0f
+                        },
                     )
                 }
             }
@@ -152,9 +204,13 @@ private val EDIT_ACTION_COLOR = Color(0xFFFBC02D)
 private const val SWIPE_ANIMATION_MS = 220
 private const val SWIPE_OPEN_THRESHOLD = 0.35f
 
+/** Шаг перестановки при вертикальном перетаскивании — примерная высота карточки с отступом. */
+private val COMBO_DRAG_STEP = 84.dp
+
 /**
  * Карточка комбинации: обычный запуск по Play, специальные режимы в меню,
- * редактирование и удаление открываются свайпом влево.
+ * редактирование и удаление открываются свайпом влево,
+ * а долгое нажатие включает вертикальное перетаскивание.
  */
 @Composable
 private fun SwipeableComboCard(
@@ -162,6 +218,11 @@ private fun SwipeableComboCard(
     onRun: (ComboRollMode) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    isDragging: Boolean,
+    dragTranslationY: Float,
+    onDragStart: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onDragEnd: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val offsetX = remember(combo.id) { Animatable(0f) }
@@ -169,36 +230,45 @@ private fun SwipeableComboCard(
         (SWIPE_ACTION_SIZE * 2 + SWIPE_ACTION_GAP * 3).toPx()
     }
 
+    // pointerInput живёт дольше одной рекомпозиции: без rememberUpdatedState он вызывал бы
+    // callback-и, захватившие устаревший порядок комбинаций.
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+
     fun animateTo(value: Float) {
         scope.launch { offsetX.animateTo(value, tween(SWIPE_ANIMATION_MS)) }
     }
 
-    Box(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.matchParentSize().padding(end = SWIPE_ACTION_GAP),
-            horizontalArrangement = Arrangement.spacedBy(SWIPE_ACTION_GAP, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SwipeActionButton(
-                icon = Icons.Default.Edit,
-                description = "Редактировать комбинацию",
-                background = EDIT_ACTION_COLOR,
-                contentColor = Color.Black,
-                onClick = {
-                    animateTo(0f)
-                    onEdit()
-                },
-            )
-            SwipeActionButton(
-                icon = Icons.Default.Delete,
-                description = "Удалить комбинацию",
-                background = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError,
-                onClick = {
-                    animateTo(0f)
-                    onDelete()
-                },
-            )
+    Box(Modifier.fillMaxWidth().zIndex(if (isDragging) 1f else 0f)) {
+        // Во время вертикального переноса действия свайпа скрыты и не просвечивают под карточкой.
+        if (!isDragging) {
+            Row(
+                modifier = Modifier.matchParentSize().padding(end = SWIPE_ACTION_GAP),
+                horizontalArrangement = Arrangement.spacedBy(SWIPE_ACTION_GAP, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SwipeActionButton(
+                    icon = Icons.Default.Edit,
+                    description = "Редактировать комбинацию",
+                    background = EDIT_ACTION_COLOR,
+                    contentColor = Color.Black,
+                    onClick = {
+                        animateTo(0f)
+                        onEdit()
+                    },
+                )
+                SwipeActionButton(
+                    icon = Icons.Default.Delete,
+                    description = "Удалить комбинацию",
+                    background = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError,
+                    onClick = {
+                        animateTo(0f)
+                        onDelete()
+                    },
+                )
+            }
         }
 
         Card(
@@ -206,7 +276,13 @@ private fun SwipeableComboCard(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .offset {
+                    IntOffset(
+                        offsetX.value.roundToInt(),
+                        if (isDragging) dragTranslationY.roundToInt() else 0,
+                    )
+                }
+                .zIndex(if (isDragging) 1f else 0f)
                 .pointerInput(revealPx) {
                     detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount ->
@@ -220,6 +296,21 @@ private fun SwipeableComboCard(
                             animateTo(if (shouldOpen) -revealPx else 0f)
                         },
                         onDragCancel = { animateTo(0f) },
+                    )
+                }
+                // Ключ не зависит от isDragging: иначе рекомпозиция отменит активный жест.
+                .pointerInput(combo.id) {
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            scope.launch { offsetX.snapTo(0f) }
+                            currentOnDragStart()
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            currentOnDrag(dragAmount.y)
+                        },
+                        onDragEnd = { currentOnDragEnd() },
+                        onDragCancel = { currentOnDragEnd() },
                     )
                 },
         ) {

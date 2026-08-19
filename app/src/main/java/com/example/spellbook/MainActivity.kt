@@ -367,6 +367,9 @@ private fun SpellBookApp(
                             maximum,
                         )
                     },
+                    onReorderResources = { orderedIds ->
+                        viewModel.reorderCharacterResources(screen.characterId, orderedIds)
+                    },
                     onRestoreAll = { viewModel.restoreAllResources(screen.characterId) },
                     onBack = { viewModel.openCharacterSpells(screen.characterId) },
                 )
@@ -380,6 +383,7 @@ private fun SpellBookApp(
             onOpenLibrary = { viewModel.openStepLibrary(screen.characterId) },
             onRoll = { comboId, mode -> viewModel.rollCombo(screen.characterId, comboId, mode) },
             onDelete = { comboId -> viewModel.deleteCombo(comboId, screen.characterId) },
+            onReorder = { orderedIds -> viewModel.reorderCombos(orderedIds) },
             onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
         )
 
