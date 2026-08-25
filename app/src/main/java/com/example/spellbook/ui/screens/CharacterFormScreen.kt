@@ -46,6 +46,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import com.example.spellbook.data.model.Character
+import com.example.spellbook.data.model.formatModifier
+import com.example.spellbook.data.model.proficiencyBonusFor
 import com.example.spellbook.ui.components.DndTopBar
 
 /** Уровни ячеек заклинаний D&D: 1..9. */
@@ -67,6 +69,7 @@ fun CharacterFormScreen(
     val context = LocalContext.current
     var name by remember { mutableStateOf(initial.name) }
     var imageUri by remember { mutableStateOf(initial.imageUri) }
+    var level by remember { mutableStateOf(initial.level.toString()) }
     var canPrepare by remember { mutableStateOf(initial.canPrepareSpells) }
     var maxPrepared by remember { mutableStateOf(initial.maxPreparedSpells.takeIf { it > 0 }?.toString() ?: "") }
     var maxCantrips by remember { mutableStateOf(initial.maxCantrips.takeIf { it > 0 }?.toString() ?: "") }
@@ -108,6 +111,7 @@ fun CharacterFormScreen(
         return initial.copy(
             name = name.trim(),
             imageUri = imageUri,
+            level = level.toIntOrNull()?.coerceIn(1, 20) ?: initial.level,
             canPrepareSpells = canPrepare,
             maxPreparedSpells = if (canPrepare) maxPrepared.toIntOrNull() ?: 0 else 0,
             maxCantrips = maxCantrips.toIntOrNull() ?: 0,
@@ -171,6 +175,22 @@ fun CharacterFormScreen(
                 onValueChange = { name = it },
                 label = { Text("Имя персонажа") },
                 singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            OutlinedTextField(
+                value = level,
+                onValueChange = { new -> level = new.filter { it.isDigit() }.take(2) },
+                label = { Text("Уровень персонажа") },
+                supportingText = {
+                    val bonus = level.toIntOrNull()?.coerceIn(1, 20)?.let { proficiencyBonusFor(it) }
+                    Text(
+                        if (bonus != null) "Бонус мастерства: ${formatModifier(bonus)}"
+                        else "Укажите уровень от 1 до 20",
+                    )
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
             )
 

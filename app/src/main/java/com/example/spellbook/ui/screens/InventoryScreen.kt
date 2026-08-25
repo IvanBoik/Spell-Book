@@ -135,6 +135,7 @@ fun InventoryScreen(
     onSetAttunementLimit: (Int) -> Unit,
     onSetCoinAmount: (CoinType, Int) -> Unit,
     onBack: () -> Unit,
+    sectionsBar: @Composable () -> Unit = {},
 ) {
     var tab by remember { mutableStateOf(InventoryTab.ITEMS) }
     var query by remember { mutableStateOf("") }
@@ -279,6 +280,8 @@ fun InventoryScreen(
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
+            sectionsBar()
+
             TabRow(selectedTabIndex = if (tab == InventoryTab.ITEMS) 0 else 1) {
                 Tab(
                     selected = tab == InventoryTab.ITEMS,
@@ -910,8 +913,9 @@ private fun ExactCoinDialog(
     )
 }
 
+/** Простой диалог ввода числа; переиспользуется также на экране характеристик. */
 @Composable
-private fun NumberDialog(
+internal fun NumberDialog(
     title: String,
     initial: Int,
     onDismiss: () -> Unit,

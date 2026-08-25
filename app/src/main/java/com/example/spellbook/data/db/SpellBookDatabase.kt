@@ -12,7 +12,10 @@ import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.ComboStepLink
+import com.example.spellbook.data.model.CharacterFeatCrossRef
+import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
+import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.model.Spell
 
 /** Единая база данных приложения: библиотека заклинаний, персонажи и их связи. */
@@ -25,8 +28,11 @@ import com.example.spellbook.data.model.Spell
         ComboStep::class,
         ComboStepLink::class,
         InventoryItem::class,
+        NoteBlock::class,
+        Feat::class,
+        CharacterFeatCrossRef::class,
     ],
-    version = 9,
+    version = 13,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -36,6 +42,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
     abstract fun characterDao(): CharacterDao
     abstract fun comboDao(): ComboDao
     abstract fun inventoryDao(): InventoryDao
+    abstract fun noteDao(): NoteDao
+    abstract fun featDao(): FeatDao
 
     companion object {
         private const val DB_NAME = "spellbook.db"
@@ -115,6 +123,85 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v9 → v10: уровень, хиты, защита, скорость и характеристики персонажа. */
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN level INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE characters ADD COLUMN maxHp INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE characters ADD COLUMN currentHp INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE characters ADD COLUMN tempHp INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE characters ADD COLUMN armorClass INTEGER NOT NULL DEFAULT 10")
+                db.execSQL("ALTER TABLE characters ADD COLUMN speed INTEGER NOT NULL DEFAULT 30")
+                db.execSQL("ALTER TABLE characters ADD COLUMN abilityScores TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("ALTER TABLE characters ADD COLUMN saveProficiencies TEXT NOT NULL DEFAULT '{}'")
+                db.execSQL("ALTER TABLE characters ADD COLUMN skillProficiencies TEXT NOT NULL DEFAULT '{}'")
+            }
+        }
+
+        /** v10 → v11: блоки заметок персонажа. */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `note_blocks` (`id` TEXT NOT NULL, `characterId` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, `collapsed` INTEGER NOT NULL, `paragraphs` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
+                        "FOREIGN KEY(`characterId`) REFERENCES `characters`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_note_blocks_characterId` ON `note_blocks` (`characterId`)")
+            }
+        }
+
+        /** v11 → v12: черты персонажа. */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `feats` (`id` TEXT NOT NULL, `characterId` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `description` TEXT NOT NULL, `source` TEXT NOT NULL, " +
+                        "`collapsed` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`), FOREIGN KEY(`characterId`) REFERENCES `characters`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_feats_characterId` ON `feats` (`characterId`)")
+            }
+        }
+
+        /**
+         * v12 → v13: черты становятся общей библиотекой, а персонаж ссылается на них.
+         * Существующие черты переносятся в библиотеку с сохранением привязки к персонажам.
+         */
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `character_feats` (`characterId` TEXT NOT NULL, " +
+                        "`featId` TEXT NOT NULL, `collapsed` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`characterId`, `featId`), " +
+                        "FOREIGN KEY(`characterId`) REFERENCES `characters`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE, " +
+                        "FOREIGN KEY(`featId`) REFERENCES `feats`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_character_feats_characterId` ON `character_feats` (`characterId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_character_feats_featId` ON `character_feats` (`featId`)")
+
+                // Привязки строим до пересоздания таблицы черт, пока characterId ещё доступен.
+                db.execSQL(
+                    "INSERT OR IGNORE INTO `character_feats` (`characterId`, `featId`, `collapsed`, `sortOrder`) " +
+                        "SELECT `characterId`, `id`, `collapsed`, `sortOrder` FROM `feats`",
+                )
+
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `feats_new` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                        "`description` TEXT NOT NULL, `source` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`id`))",
+                )
+                // Одинаковые черты разных персонажей остаются отдельными записями: так ни одна привязка не теряется.
+                db.execSQL(
+                    "INSERT INTO `feats_new` (`id`, `name`, `description`, `source`, `createdAt`) " +
+                        "SELECT `id`, `name`, `description`, `source`, `createdAt` FROM `feats`",
+                )
+                db.execSQL("DROP TABLE `feats`")
+                db.execSQL("ALTER TABLE `feats_new` RENAME TO `feats`")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -133,6 +220,10 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_6_7,
                     MIGRATION_7_8,
                     MIGRATION_8_9,
+                    MIGRATION_9_10,
+                    MIGRATION_10_11,
+                    MIGRATION_11_12,
+                    MIGRATION_12_13,
                 ).build()
             }
     }

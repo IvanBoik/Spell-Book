@@ -89,6 +89,7 @@ fun SpellSlotsScreen(
     onReorderResources: (List<String>) -> Unit,
     onRestoreAll: () -> Unit,
     onBack: () -> Unit,
+    sectionsBar: @Composable () -> Unit = {},
 ) {
     val levels = (1..9).filter { (character.spellSlots[it] ?: 0) > 0 }
     var editingResource by remember { mutableStateOf<CharacterResource?>(null) }
@@ -131,9 +132,12 @@ fun SpellSlotsScreen(
     ) { padding ->
         LazyColumn(
             modifier = Modifier.padding(padding).fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
+            // Верхний отступ задаёт сама панель разделов — одинаково на всех экранах.
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item(key = "sections") { sectionsBar() }
+
             if (levels.isNotEmpty()) {
                 item {
                     Text(

@@ -3,6 +3,9 @@ package com.example.spellbook.data.db
 import androidx.room.TypeConverter
 import com.example.spellbook.data.model.CharacterResource
 import com.example.spellbook.data.model.DamagePart
+import com.example.spellbook.data.model.NOTE_DEFAULT_FONT_SIZE
+import com.example.spellbook.data.model.NoteParagraph
+import com.example.spellbook.data.model.NoteSpan
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -94,6 +97,57 @@ class Converters {
                 current = obj.optInt("current", maximum),
                 maximum = maximum,
             ).normalized()
+        }
+    }
+
+    /** Абзацы заметки с оформлением ↔ JSON-массив. */
+    @TypeConverter
+    fun paragraphsToJson(paragraphs: List<NoteParagraph>): String {
+        val array = JSONArray()
+        paragraphs.forEach { paragraph ->
+            val spans = JSONArray()
+            paragraph.spans.forEach { span ->
+                spans.put(JSONObject().apply {
+                    put("start", span.start)
+                    put("end", span.end)
+                    put("bold", span.bold)
+                    put("italic", span.italic)
+                    put("underline", span.underline)
+                    put("fontSize", span.fontSize)
+                })
+            }
+            array.put(JSONObject().apply {
+                put("id", paragraph.id)
+                put("text", paragraph.text)
+                put("spans", spans)
+            })
+        }
+        return array.toString()
+    }
+
+    @TypeConverter
+    fun jsonToParagraphs(json: String): List<NoteParagraph> {
+        if (json.isBlank()) return emptyList()
+        val array = runCatching { JSONArray(json) }.getOrElse { return emptyList() }
+        return (0 until array.length()).mapNotNull { index ->
+            val obj = array.optJSONObject(index) ?: return@mapNotNull null
+            val spansArray = obj.optJSONArray("spans")
+            val spans = (0 until (spansArray?.length() ?: 0)).mapNotNull { spanIndex ->
+                val spanObj = spansArray?.optJSONObject(spanIndex) ?: return@mapNotNull null
+                NoteSpan(
+                    start = spanObj.optInt("start"),
+                    end = spanObj.optInt("end"),
+                    bold = spanObj.optBoolean("bold"),
+                    italic = spanObj.optBoolean("italic"),
+                    underline = spanObj.optBoolean("underline"),
+                    fontSize = spanObj.optInt("fontSize", NOTE_DEFAULT_FONT_SIZE),
+                )
+            }
+            NoteParagraph(
+                id = obj.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+                text = obj.optString("text"),
+                spans = spans,
+            )
         }
     }
 }

@@ -35,12 +35,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -60,6 +63,8 @@ import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.Screen
 import com.example.spellbook.ui.SpellBookViewModel
 import com.example.spellbook.ui.Tab
+import com.example.spellbook.ui.components.CharacterSection
+import com.example.spellbook.ui.components.CharacterSectionsBar
 import com.example.spellbook.ui.components.SpellBookBottomBar
 import com.example.spellbook.ui.screens.AddSpellsScreen
 import com.example.spellbook.ui.screens.CharacterFormScreen
@@ -70,7 +75,12 @@ import com.example.spellbook.ui.screens.ComboResultScreen
 import com.example.spellbook.ui.screens.InventoryScreen
 import com.example.spellbook.ui.screens.FabAction
 import com.example.spellbook.ui.screens.PrepareSpellsScreen
+import com.example.spellbook.util.DiceRoller
+import com.example.spellbook.ui.screens.AddFeatsScreen
+import com.example.spellbook.ui.screens.FeatsScreen
+import com.example.spellbook.ui.screens.NotesScreen
 import com.example.spellbook.ui.screens.SpellSlotsScreen
+import com.example.spellbook.ui.screens.StatsScreen
 import com.example.spellbook.ui.screens.SpellDetailsScreen
 import com.example.spellbook.ui.screens.SpellFormScreen
 import com.example.spellbook.ui.screens.SpellListScreen
@@ -159,7 +169,8 @@ private fun SpellBookApp(
     LaunchedEffect(sharedUrl) {
         val url = sharedUrl ?: return@LaunchedEffect
         viewModel.prepareImportForCharacter(null)
-        viewModel.importFromDndSu(url)
+        // Тип определяется по адресу: /feats/ — черта, иначе заклинание.
+        viewModel.importFromDndSuUrl(url)
         onSharedUrlHandled()
     }
 
@@ -234,6 +245,10 @@ private fun SpellBookApp(
             is Screen.AddSpells -> viewModel.openCharacterSpells(screen.characterId)
             is Screen.PrepareSpells -> viewModel.openCharacterSpells(screen.characterId)
             is Screen.SpellSlots -> viewModel.openCharacterSpells(screen.characterId)
+            is Screen.Stats -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
+            is Screen.Notes -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
+            is Screen.Feats -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
+            is Screen.AddFeats -> viewModel.openFeats(screen.characterId)
             is Screen.Combos -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
             is Screen.ComboEditor -> viewModel.openCombos(screen.characterId)
             is Screen.StepLibrary -> viewModel.openCombos(screen.characterId)
@@ -372,9 +387,110 @@ private fun SpellBookApp(
                     },
                     onRestoreAll = { viewModel.restoreAllResources(screen.characterId) },
                     onBack = { viewModel.openCharacterSpells(screen.characterId) },
+                    sectionsBar = {
+                        CharacterSectionsBar(
+                            current = CharacterSection.RESOURCES,
+                            showPrepare = character.canPrepareSpells,
+                            onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
+                            initialScrollIndex = viewModel.sectionsScrollIndex,
+                            initialScrollOffset = viewModel.sectionsScrollOffset,
+                            onScrollChanged = viewModel::saveSectionsScroll,
+                        )
+                    },
                 )
             }
         }
+
+        is Screen.Stats -> {
+            val character = viewModel.getCharacter(screen.characterId)
+            if (character == null) {
+                LaunchedEffect(screen.characterId) { viewModel.openCharacters() }
+            } else {
+                StatsScreen(
+                    character = character,
+                    lastRoll = state.lastD20Roll,
+                    onChangeHp = { delta -> viewModel.changeHp(screen.characterId, delta) },
+                    onSetHpValues = { tempHp, maxHp ->
+                        viewModel.setHpValues(screen.characterId, tempHp, maxHp)
+                    },
+                    onSetArmorClass = { value -> viewModel.setArmorClass(screen.characterId, value) },
+                    onSetSpeed = { value -> viewModel.setSpeed(screen.characterId, value) },
+                    onSetAbilityScore = { ability, value ->
+                        viewModel.setAbilityScore(screen.characterId, ability, value)
+                    },
+                    onToggleSave = { ability -> viewModel.toggleSaveProficiency(screen.characterId, ability) },
+                    onCycleSkill = { skill -> viewModel.cycleSkillProficiency(screen.characterId, skill) },
+                    onRoll = { title, kind, bonus -> viewModel.rollD20(title, kind, bonus) },
+                    onDismissRoll = viewModel::dismissD20Roll,
+                    onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+                    sectionsBar = {
+                        CharacterSectionsBar(
+                            current = CharacterSection.STATS,
+                            showPrepare = character.canPrepareSpells,
+                            onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
+                            initialScrollIndex = viewModel.sectionsScrollIndex,
+                            initialScrollOffset = viewModel.sectionsScrollOffset,
+                            onScrollChanged = viewModel::saveSectionsScroll,
+                        )
+                    },
+                )
+            }
+        }
+
+        is Screen.Notes -> NotesScreen(
+            blocks = state.noteBlocks,
+            onAddBlock = { title -> viewModel.addNoteBlock(screen.characterId, title) },
+            onSaveBlock = viewModel::saveNoteBlock,
+            onDeleteBlock = viewModel::deleteNoteBlock,
+            onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+            sectionsBar = {
+                CharacterSectionsBar(
+                    current = CharacterSection.NOTES,
+                    showPrepare = viewModel.getCharacter(screen.characterId)?.canPrepareSpells == true,
+                    onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
+                    initialScrollIndex = viewModel.sectionsScrollIndex,
+                    initialScrollOffset = viewModel.sectionsScrollOffset,
+                    onScrollChanged = viewModel::saveSectionsScroll,
+                )
+            },
+        )
+
+        is Screen.Feats -> FeatsScreen(
+            feats = state.feats,
+            onAddFeat = { name, description -> viewModel.addFeat(screen.characterId, name, description) },
+            onSaveFeat = viewModel::saveFeat,
+            onToggleCollapsed = { featId, collapsed ->
+                viewModel.toggleFeatCollapsed(screen.characterId, featId, collapsed)
+            },
+            onRemoveFromCharacter = { featId ->
+                viewModel.removeFeatFromCharacter(screen.characterId, featId)
+            },
+            onReorder = { orderedIds -> viewModel.reorderFeats(screen.characterId, orderedIds) },
+            onLoadFromDndSu = { url -> viewModel.importFeatFromDndSu(screen.characterId, url) },
+            onAddFromLibrary = { viewModel.openAddFeats(screen.characterId) },
+            onDiceClick = { formula -> DiceRoller.roll(formula) },
+            onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+            sectionsBar = {
+                CharacterSectionsBar(
+                    current = CharacterSection.FEATS,
+                    showPrepare = viewModel.getCharacter(screen.characterId)?.canPrepareSpells == true,
+                    onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
+                    initialScrollIndex = viewModel.sectionsScrollIndex,
+                    initialScrollOffset = viewModel.sectionsScrollOffset,
+                    onScrollChanged = viewModel::saveSectionsScroll,
+                )
+            },
+        )
+
+        is Screen.AddFeats -> AddFeatsScreen(
+            libraryFeats = state.libraryFeats,
+            selectedIds = state.currentCharacterFeatIds,
+            onToggle = { featId, add ->
+                viewModel.toggleFeatForCharacter(screen.characterId, featId, add)
+            },
+            onDeleteFromLibrary = viewModel::deleteFeat,
+            onBack = { viewModel.openFeats(screen.characterId) },
+        )
 
         is Screen.Combos -> ComboListScreen(
             combos = state.combos,
@@ -385,6 +501,16 @@ private fun SpellBookApp(
             onDelete = { comboId -> viewModel.deleteCombo(comboId, screen.characterId) },
             onReorder = { orderedIds -> viewModel.reorderCombos(orderedIds) },
             onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+            sectionsBar = {
+                CharacterSectionsBar(
+                    current = CharacterSection.COMBOS,
+                    showPrepare = viewModel.getCharacter(screen.characterId)?.canPrepareSpells == true,
+                    onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
+                    initialScrollIndex = viewModel.sectionsScrollIndex,
+                    initialScrollOffset = viewModel.sectionsScrollOffset,
+                    onScrollChanged = viewModel::saveSectionsScroll,
+                )
+            },
         )
 
         is Screen.ComboEditor -> {
@@ -434,6 +560,16 @@ private fun SpellBookApp(
                     onSetAttunementLimit = { viewModel.updateAttunementLimit(screen.characterId, it) },
                     onSetCoinAmount = { coin, amount -> viewModel.setCoinAmount(screen.characterId, coin, amount) },
                     onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+                    sectionsBar = {
+                        CharacterSectionsBar(
+                            current = CharacterSection.INVENTORY,
+                            showPrepare = character.canPrepareSpells,
+                            onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
+                            initialScrollIndex = viewModel.sectionsScrollIndex,
+                            initialScrollOffset = viewModel.sectionsScrollOffset,
+                            onScrollChanged = viewModel::saveSectionsScroll,
+                        )
+                    },
                 )
             }
         }
@@ -577,14 +713,14 @@ private fun CharacterSpellsScreenContent(
             }
         },
         headerContent = {
-            // Отдельная панель действий персонажа (не загромождает шапку с именем и поиском).
-            CharacterActionsBar(
+            // Отдельная панель разделов (не загромождает шапку с именем и поиском).
+            CharacterSectionsBar(
+                current = CharacterSection.SPELLS,
                 showPrepare = character.canPrepareSpells,
-                onSettings = { viewModel.openEditCharacterForm(characterId) },
-                onResources = { viewModel.openSpellSlots(characterId) },
-                onCombos = { viewModel.openCombos(characterId) },
-                onInventory = { viewModel.openInventory(characterId) },
-                onPrepare = { viewModel.openPrepareSpells(characterId) },
+                onSelect = { section -> openCharacterSection(viewModel, characterId, section) },
+                initialScrollIndex = viewModel.sectionsScrollIndex,
+                initialScrollOffset = viewModel.sectionsScrollOffset,
+                onScrollChanged = viewModel::saveSectionsScroll,
             )
             if (character.canPrepareSpells) {
                 PreparedFilterToggle(
@@ -616,60 +752,24 @@ private fun CharacterSpellsScreenContent(
 }
 
 /**
- * Горизонтально прокручиваемая панель разделов персонажа под шапкой.
- * Вынесена из шапки и рассчитана на добавление новых разделов в будущем.
+ * Открывает выбранный раздел персонажа. Общий обработчик для панели,
+ * которая показывается на всех экранах персонажа.
  */
-@Composable
-private fun CharacterActionsBar(
-    showPrepare: Boolean,
-    onSettings: () -> Unit,
-    onResources: () -> Unit,
-    onCombos: () -> Unit,
-    onInventory: () -> Unit,
-    onPrepare: () -> Unit,
+private fun openCharacterSection(
+    viewModel: SpellBookViewModel,
+    characterId: String,
+    section: CharacterSection,
 ) {
-    androidx.compose.foundation.lazy.LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-    ) {
-        item(key = "settings") {
-            androidx.compose.material3.AssistChip(
-                onClick = onSettings,
-                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("Настройки") },
-            )
-        }
-        item(key = "resources") {
-            androidx.compose.material3.AssistChip(
-                onClick = onResources,
-                leadingIcon = { Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("Ресурсы") },
-            )
-        }
-        item(key = "combos") {
-            androidx.compose.material3.AssistChip(
-                onClick = onCombos,
-                leadingIcon = { Icon(Icons.Default.Extension, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("Комбинации") },
-            )
-        }
-        item(key = "inventory") {
-            androidx.compose.material3.AssistChip(
-                onClick = onInventory,
-                leadingIcon = { Icon(Icons.Default.Inventory2, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                label = { Text("Инвентарь") },
-            )
-        }
-        if (showPrepare) {
-            item(key = "preparation") {
-                androidx.compose.material3.AssistChip(
-                    onClick = onPrepare,
-                    leadingIcon = { Icon(Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    label = { Text("Подготовка") },
-                )
-            }
-        }
+    when (section) {
+        CharacterSection.SPELLS -> viewModel.openCharacterSpells(characterId, resetView = false)
+        CharacterSection.SETTINGS -> viewModel.openEditCharacterForm(characterId)
+        CharacterSection.STATS -> viewModel.openStats(characterId)
+        CharacterSection.RESOURCES -> viewModel.openSpellSlots(characterId)
+        CharacterSection.COMBOS -> viewModel.openCombos(characterId)
+        CharacterSection.INVENTORY -> viewModel.openInventory(characterId)
+        CharacterSection.FEATS -> viewModel.openFeats(characterId)
+        CharacterSection.NOTES -> viewModel.openNotes(characterId)
+        CharacterSection.PREPARE -> viewModel.openPrepareSpells(characterId)
     }
 }
 

@@ -104,6 +104,7 @@ fun ComboListScreen(
     onDelete: (String) -> Unit,
     onReorder: (List<String>) -> Unit,
     onBack: () -> Unit,
+    sectionsBar: @Composable () -> Unit = {},
 ) {
     var draggingComboId by remember { mutableStateOf<String?>(null) }
     var dragDistance by remember { mutableFloatStateOf(0f) }
@@ -135,19 +136,24 @@ fun ComboListScreen(
         },
     ) { padding ->
         if (combos.isEmpty()) {
-            EmptyState(
-                title = "Комбинаций пока нет",
-                message = "Соберите последовательность атак, заклинаний и дополнительных эффектов.",
-                button = "Создать комбинацию",
-                onClick = onCreate,
-                modifier = Modifier.padding(padding),
-            )
+            Column(Modifier.padding(padding).fillMaxSize()) {
+                sectionsBar()
+                EmptyState(
+                    title = "Комбинаций пока нет",
+                    message = "Соберите последовательность атак, заклинаний и дополнительных эффектов.",
+                    button = "Создать комбинацию",
+                    onClick = onCreate,
+                )
+            }
         } else {
             LazyColumn(
                 modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 96.dp),
+                // Верхний отступ задаёт сама панель разделов — одинаково на всех экранах.
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "sections") { sectionsBar() }
+
                 items(orderedCombos, key = { it.id }) { combo ->
                     val isDragged = draggingComboId == combo.id
                     SwipeableComboCard(

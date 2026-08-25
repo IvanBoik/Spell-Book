@@ -190,7 +190,7 @@ private fun InfoRow(label: String, value: String) {
  * а токены `[[ref Рывок]]` — на подсвеченное фоном слово, чтобы за него цеплялся глаз.
  */
 @Composable
-private fun DescriptionText(description: String, onDiceClick: (String) -> Unit) {
+internal fun DescriptionText(description: String, onDiceClick: (String) -> Unit) {
     val diceLinkStyle = TextLinkStyles(
         style = SpanStyle(
             color = MaterialTheme.colorScheme.primary,

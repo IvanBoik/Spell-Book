@@ -39,8 +39,54 @@ data class Character(
     val coins: Map<Int, Int> = emptyMap(),
     /** Максимальное число одновременно настроенных магических предметов. */
     val maxAttunedItems: Int = 3,
+    /** Уровень персонажа: от него зависит бонус мастерства. */
+    val level: Int = 1,
+    val maxHp: Int = 0,
+    val currentHp: Int = 0,
+    /** Временные хиты тратятся раньше обычных и не ограничены максимумом. */
+    val tempHp: Int = 0,
+    val armorClass: Int = 10,
+    /** Скорость в футах. */
+    val speed: Int = 30,
+    /** Значения характеристик: порядковый номер [AbilityType] → значение. */
+    val abilityScores: Map<Int, Int> = emptyMap(),
+    /** Владение спасбросками: номер [AbilityType] → множитель бонуса мастерства. */
+    val saveProficiencies: Map<Int, Int> = emptyMap(),
+    /** Владение навыками: номер [SkillType] → множитель (1 — владение, 2 — экспертиза). */
+    val skillProficiencies: Map<Int, Int> = emptyMap(),
 ) {
     /** Количество доступных (не потраченных) ячеек указанного уровня. */
     fun availableSlots(level: Int): Int =
         (spellSlots[level] ?: 0) - (spellSlotsUsed[level] ?: 0)
+
+    val proficiencyBonus: Int get() = proficiencyBonusFor(level)
+
+    /** Значение характеристики; по умолчанию 10 (нулевой модификатор). */
+    fun abilityScore(ability: AbilityType): Int = abilityScores[ability.ordinal] ?: DEFAULT_ABILITY_SCORE
+
+    fun abilityModifierOf(ability: AbilityType): Int = abilityModifier(abilityScore(ability))
+
+    fun saveProficiency(ability: AbilityType): ProficiencyLevel =
+        proficiencyOf(saveProficiencies[ability.ordinal])
+
+    fun skillProficiency(skill: SkillType): ProficiencyLevel =
+        proficiencyOf(skillProficiencies[skill.ordinal])
+
+    /** Итоговый бонус спасброска с учётом владения. */
+    fun saveBonus(ability: AbilityType): Int =
+        abilityModifierOf(ability) + proficiencyBonus * saveProficiency(ability).multiplier
+
+    /** Итоговый бонус навыка: экспертиза добавляет бонус мастерства дважды. */
+    fun skillBonus(skill: SkillType): Int =
+        abilityModifierOf(skill.ability) + proficiencyBonus * skillProficiency(skill).multiplier
+
+    private fun proficiencyOf(multiplier: Int?): ProficiencyLevel = when (multiplier) {
+        ProficiencyLevel.EXPERTISE.multiplier -> ProficiencyLevel.EXPERTISE
+        ProficiencyLevel.PROFICIENT.multiplier -> ProficiencyLevel.PROFICIENT
+        else -> ProficiencyLevel.NONE
+    }
+
+    companion object {
+        const val DEFAULT_ABILITY_SCORE = 10
+    }
 }

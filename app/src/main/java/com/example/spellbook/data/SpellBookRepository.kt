@@ -8,7 +8,11 @@ import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.ComboWithSteps
+import com.example.spellbook.data.model.CharacterFeat
+import com.example.spellbook.data.model.CharacterFeatCrossRef
+import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
+import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.model.Spell
 import kotlinx.coroutines.flow.Flow
 import java.io.File
@@ -31,6 +35,8 @@ class SpellBookRepository(
     private val characterDao = db.characterDao()
     private val comboDao = db.comboDao()
     private val inventoryDao = db.inventoryDao()
+    private val noteDao = db.noteDao()
+    private val featDao = db.featDao()
 
     // region Заклинания
 
@@ -159,6 +165,48 @@ class SpellBookRepository(
     suspend fun deleteInventoryItem(itemId: String) = inventoryDao.deleteItem(itemId)
 
     suspend fun reorderInventoryItems(orderedIds: List<String>) = inventoryDao.reorderItems(orderedIds)
+
+    // endregion
+
+    // region Заметки
+
+    fun observeNoteBlocks(characterId: String): Flow<List<NoteBlock>> = noteDao.observeBlocks(characterId)
+
+    suspend fun saveNoteBlock(block: NoteBlock) = noteDao.upsertBlock(block)
+
+    suspend fun deleteNoteBlock(blockId: String) = noteDao.deleteBlock(blockId)
+
+    suspend fun reorderNoteBlocks(orderedIds: List<String>) = noteDao.reorderBlocks(orderedIds)
+
+    // endregion
+
+    // region Черты
+
+    fun observeAllFeats(): Flow<List<Feat>> = featDao.observeAllFeats()
+
+    fun observeFeatsForCharacter(characterId: String): Flow<List<CharacterFeat>> =
+        featDao.observeFeatsForCharacter(characterId)
+
+    fun observeFeatIdsForCharacter(characterId: String): Flow<List<String>> =
+        featDao.observeFeatIdsForCharacter(characterId)
+
+    suspend fun findFeatByName(name: String): Feat? = featDao.findByName(name.trim())
+
+    suspend fun saveFeat(feat: Feat) = featDao.upsertFeat(feat)
+
+    suspend fun deleteFeat(featId: String) = featDao.deleteFeat(featId)
+
+    suspend fun addFeatToCharacter(characterId: String, featId: String) =
+        featDao.addFeatToCharacter(CharacterFeatCrossRef(characterId = characterId, featId = featId))
+
+    suspend fun removeFeatFromCharacter(characterId: String, featId: String) =
+        featDao.removeFeatFromCharacter(characterId, featId)
+
+    suspend fun setFeatCollapsed(characterId: String, featId: String, collapsed: Boolean) =
+        featDao.updateCollapsed(characterId, featId, collapsed)
+
+    suspend fun reorderFeats(characterId: String, orderedIds: List<String>) =
+        featDao.reorderFeats(characterId, orderedIds)
 
     // endregion
 

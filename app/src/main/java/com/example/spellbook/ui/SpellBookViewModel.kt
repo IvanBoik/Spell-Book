@@ -16,13 +16,22 @@ import com.example.spellbook.data.SpellFilters
 import com.example.spellbook.data.SpellLssCodec
 import com.example.spellbook.data.SpellSort
 import com.example.spellbook.data.model.Character
+import com.example.spellbook.data.model.AbilityType
 import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.D20RollResult
+import com.example.spellbook.data.model.ProficiencyLevel
+import com.example.spellbook.data.model.RollKind
+import com.example.spellbook.data.model.SkillType
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboRollMode
 import com.example.spellbook.data.model.ComboRollResult
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.CoinType
+import com.example.spellbook.data.model.CharacterFeat
+import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
+import com.example.spellbook.data.model.NoteBlock
+import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.util.DiceRoller
 import kotlinx.coroutines.Job
@@ -34,6 +43,12 @@ import kotlinx.coroutines.sync.withLock
 
 /** Две основные вкладки приложения. */
 enum class Tab { CHARACTERS, LIBRARY }
+
+/** Граней у проверочного кубика. */
+private const val D20_SIDES = 20
+
+/** Заголовок блока заметок, если пользователь его не указал. */
+private const val DEFAULT_NOTE_TITLE = "Новый блок"
 
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
@@ -51,6 +66,10 @@ sealed interface Screen {
     data class StepLibrary(val characterId: String) : Screen
     data class ComboResult(val characterId: String, val comboId: String) : Screen
     data class Inventory(val characterId: String) : Screen
+    data class Stats(val characterId: String) : Screen
+    data class Notes(val characterId: String) : Screen
+    data class Feats(val characterId: String) : Screen
+    data class AddFeats(val characterId: String) : Screen
 }
 
 data class SpellBookUiState(
@@ -66,6 +85,15 @@ data class SpellBookUiState(
     val combos: List<Combo> = emptyList(),
     val comboSteps: List<ComboStep> = emptyList(),
     val inventoryItems: List<InventoryItem> = emptyList(),
+    val noteBlocks: List<NoteBlock> = emptyList(),
+    /** Черты текущего персонажа. */
+    val feats: List<CharacterFeat> = emptyList(),
+    /** Общая библиотека черт. */
+    val libraryFeats: List<Feat> = emptyList(),
+    /** id черт, входящих в набор текущего персонажа. */
+    val currentCharacterFeatIds: Set<String> = emptySet(),
+    /** Последний бросок d20: показывается небольшой плашкой слева внизу. */
+    val lastD20Roll: D20RollResult? = null,
     val message: String? = null,
 )
 
@@ -107,10 +135,15 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     private var combosJob: Job? = null
     private var comboStepsJob: Job? = null
     private var inventoryJob: Job? = null
+    private var notesJob: Job? = null
+    private var featsJob: Job? = null
+    private var characterFeatIdsJob: Job? = null
     /** Не позволяет более старой записи порядка завершиться после более новой. */
     private val inventoryReorderMutex = Mutex()
     private val comboReorderMutex = Mutex()
     private val resourceReorderMutex = Mutex()
+    private val noteReorderMutex = Mutex()
+    private val featReorderMutex = Mutex()
 
     var editingCombo by mutableStateOf<Combo?>(null)
         private set
@@ -143,6 +176,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             .launchIn(viewModelScope)
         repository.observeAllSpells()
             .onEach { uiState = uiState.copy(librarySpells = it) }
+            .launchIn(viewModelScope)
+        repository.observeAllFeats()
+            .onEach { uiState = uiState.copy(libraryFeats = it) }
             .launchIn(viewModelScope)
     }
 
@@ -187,6 +223,18 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         inventoryJob = repository.observeInventoryItems(characterId)
             .onEach { uiState = uiState.copy(inventoryItems = it) }
             .launchIn(viewModelScope)
+        notesJob?.cancel()
+        notesJob = repository.observeNoteBlocks(characterId)
+            .onEach { uiState = uiState.copy(noteBlocks = it) }
+            .launchIn(viewModelScope)
+        featsJob?.cancel()
+        featsJob = repository.observeFeatsForCharacter(characterId)
+            .onEach { uiState = uiState.copy(feats = it) }
+            .launchIn(viewModelScope)
+        characterFeatIdsJob?.cancel()
+        characterFeatIdsJob = repository.observeFeatIdsForCharacter(characterId)
+            .onEach { uiState = uiState.copy(currentCharacterFeatIds = it.toSet()) }
+            .launchIn(viewModelScope)
     }
 
     // region Список: поиск / сортировка / фильтры
@@ -207,6 +255,20 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun saveListScroll(index: Int, offset: Int) {
         listScrollIndex = index
         listScrollOffset = offset
+    }
+
+    /**
+     * Позиция панели разделов. Панель пересоздаётся на каждом экране,
+     * поэтому её прокрутка хранится здесь, а не в композиции.
+     */
+    var sectionsScrollIndex: Int = 0
+        private set
+    var sectionsScrollOffset: Int = 0
+        private set
+
+    fun saveSectionsScroll(index: Int, offset: Int) {
+        sectionsScrollIndex = index
+        sectionsScrollOffset = offset
     }
 
     private fun resetListScroll() {
@@ -343,6 +405,144 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun openInventory(characterId: String) {
         uiState = uiState.copy(screen = Screen.Inventory(characterId))
     }
+
+    fun openStats(characterId: String) {
+        uiState = uiState.copy(screen = Screen.Stats(characterId), lastD20Roll = null)
+    }
+
+    fun openNotes(characterId: String) {
+        uiState = uiState.copy(screen = Screen.Notes(characterId))
+    }
+
+    fun openFeats(characterId: String) {
+        uiState = uiState.copy(screen = Screen.Feats(characterId))
+    }
+
+    fun openAddFeats(characterId: String) {
+        uiState = uiState.copy(screen = Screen.AddFeats(characterId))
+    }
+
+    // region Черты
+
+    /** Создаёт черту в библиотеке и сразу добавляет её персонажу. */
+    fun addFeat(characterId: String, name: String, description: String) {
+        if (name.isBlank()) {
+            uiState = uiState.copy(message = "Укажите название черты")
+            return
+        }
+        viewModelScope.launch {
+            val feat = Feat(name = name.trim(), description = description.trim())
+            repository.saveFeat(feat)
+            repository.addFeatToCharacter(characterId, feat.id)
+        }
+    }
+
+    fun saveFeat(feat: Feat) {
+        viewModelScope.launch { repository.saveFeat(feat) }
+    }
+
+    /** Удаляет черту только у персонажа; в библиотеке она остаётся. */
+    fun removeFeatFromCharacter(characterId: String, featId: String) {
+        viewModelScope.launch { repository.removeFeatFromCharacter(characterId, featId) }
+    }
+
+    /** Удаляет черту из библиотеки и у всех персонажей. */
+    fun deleteFeat(featId: String) {
+        viewModelScope.launch { repository.deleteFeat(featId) }
+    }
+
+    fun toggleFeatCollapsed(characterId: String, featId: String, collapsed: Boolean) {
+        viewModelScope.launch { repository.setFeatCollapsed(characterId, featId, collapsed) }
+    }
+
+    fun toggleFeatForCharacter(characterId: String, featId: String, add: Boolean) {
+        viewModelScope.launch {
+            if (add) repository.addFeatToCharacter(characterId, featId)
+            else repository.removeFeatFromCharacter(characterId, featId)
+        }
+    }
+
+    fun reorderFeats(characterId: String, orderedIds: List<String>) {
+        if (orderedIds.isEmpty()) return
+        val snapshot = orderedIds.toList()
+        viewModelScope.launch {
+            featReorderMutex.withLock { repository.reorderFeats(characterId, snapshot) }
+        }
+    }
+
+    /**
+     * Загружает черту с dnd.su в общую библиотеку.
+     * Если задан [characterId], черта сразу добавляется этому персонажу.
+     */
+    fun importFeatFromDndSu(characterId: String?, url: String) {
+        viewModelScope.launch {
+            uiState = uiState.copy(message = "Загрузка черты…")
+            val parsed = runCatching { DndSuLoader.loadFeat(url) }.getOrElse { error ->
+                uiState = uiState.copy(
+                    message = (error as? DndSuException)?.message
+                        ?: "Не удалось загрузить черту: ${error.localizedMessage ?: "ошибка"}",
+                )
+                return@launch
+            }
+            // Повторная загрузка обновляет текст, а не создаёт дубль.
+            val existing = repository.findFeatByName(parsed.name)
+            val feat = existing?.copy(description = parsed.description, source = url.trim())
+                ?: Feat(name = parsed.name, description = parsed.description, source = url.trim())
+            repository.saveFeat(feat)
+
+            val target = characterId ?: pendingCharacterId
+            if (target != null) repository.addFeatToCharacter(target, feat.id)
+
+            uiState = uiState.copy(
+                message = when {
+                    target != null -> "Черта «${parsed.name}» добавлена персонажу"
+                    existing == null -> "Черта «${parsed.name}» добавлена в библиотеку"
+                    else -> "Черта «${parsed.name}» обновлена"
+                },
+            )
+        }
+    }
+
+    /**
+     * Разбирает ссылку из «Поделиться»: адрес черты грузится как черта,
+     * остальное — как заклинание.
+     */
+    fun importFromDndSuUrl(url: String) {
+        if (DndSuLoader.isFeatUrl(url)) importFeatFromDndSu(characterId = null, url = url)
+        else importFromDndSu(url)
+    }
+
+    // endregion
+
+    // region Заметки
+
+    fun addNoteBlock(characterId: String, title: String) {
+        val block = NoteBlock(
+            characterId = characterId,
+            title = title.trim().ifBlank { DEFAULT_NOTE_TITLE },
+            paragraphs = listOf(NoteParagraph()),
+        )
+        viewModelScope.launch { repository.saveNoteBlock(block) }
+    }
+
+    /** Сохраняет блок целиком: заголовок, абзацы и состояние сворачивания. */
+    fun saveNoteBlock(block: NoteBlock) {
+        viewModelScope.launch { repository.saveNoteBlock(block) }
+    }
+
+    fun deleteNoteBlock(blockId: String) {
+        viewModelScope.launch { repository.deleteNoteBlock(blockId) }
+    }
+
+    fun reorderNoteBlocks(orderedIds: List<String>) {
+        if (orderedIds.isEmpty()) return
+        val snapshot = orderedIds.toList()
+        viewModelScope.launch {
+            noteReorderMutex.withLock { repository.reorderNoteBlocks(snapshot) }
+        }
+    }
+
+    // endregion
 
     fun openCombos(characterId: String) {
         uiState = uiState.copy(screen = Screen.Combos(characterId))
@@ -687,6 +887,112 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
     }
+
+    // region Характеристики, хиты и броски d20
+
+    /**
+     * Изменяет текущие хиты. Урон сначала снимает временные хиты,
+     * лечение не превышает максимум.
+     */
+    fun changeHp(characterId: String, delta: Int) {
+        val character = getCharacter(characterId) ?: return
+        if (delta == 0) return
+        val updated = if (delta < 0) {
+            val fromTemp = minOf(character.tempHp, -delta)
+            val rest = -delta - fromTemp
+            character.copy(
+                tempHp = character.tempHp - fromTemp,
+                currentHp = (character.currentHp - rest).coerceAtLeast(0),
+            )
+        } else {
+            character.copy(currentHp = (character.currentHp + delta).coerceAtMost(character.maxHp))
+        }
+        viewModelScope.launch { repository.upsertCharacter(updated) }
+    }
+
+    /**
+     * Записывает временные хиты и максимум за одну операцию.
+     * Раздельные вызовы читали один и тот же снимок персонажа, поэтому вторая
+     * запись затирала результат первой — временные хиты не сохранялись.
+     */
+    fun setHpValues(characterId: String, tempHp: Int, maxHp: Int) {
+        val character = getCharacter(characterId) ?: return
+        val safeMax = maxHp.coerceAtLeast(0)
+        viewModelScope.launch {
+            repository.upsertCharacter(
+                character.copy(
+                    tempHp = tempHp.coerceAtLeast(0),
+                    maxHp = safeMax,
+                    currentHp = character.currentHp.coerceAtMost(safeMax),
+                ),
+            )
+        }
+    }
+
+    fun setArmorClass(characterId: String, value: Int) {
+        val character = getCharacter(characterId) ?: return
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(armorClass = value.coerceAtLeast(0)))
+        }
+    }
+
+    fun setSpeed(characterId: String, value: Int) {
+        val character = getCharacter(characterId) ?: return
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(speed = value.coerceAtLeast(0)))
+        }
+    }
+
+    fun setAbilityScore(characterId: String, ability: AbilityType, value: Int) {
+        val character = getCharacter(characterId) ?: return
+        val scores = character.abilityScores + (ability.ordinal to value.coerceIn(1, 30))
+        viewModelScope.launch { repository.upsertCharacter(character.copy(abilityScores = scores)) }
+    }
+
+    /** Спасброски знают только владение, без экспертизы. */
+    fun toggleSaveProficiency(characterId: String, ability: AbilityType) {
+        val character = getCharacter(characterId) ?: return
+        val next = when (character.saveProficiency(ability)) {
+            ProficiencyLevel.NONE -> ProficiencyLevel.PROFICIENT
+            else -> ProficiencyLevel.NONE
+        }
+        val updated = character.saveProficiencies.toMutableMap().apply {
+            if (next == ProficiencyLevel.NONE) remove(ability.ordinal) else put(ability.ordinal, next.multiplier)
+        }
+        viewModelScope.launch { repository.upsertCharacter(character.copy(saveProficiencies = updated)) }
+    }
+
+    /** Навыки переключаются по кругу: нет → владение → экспертиза. */
+    fun cycleSkillProficiency(characterId: String, skill: SkillType) {
+        val character = getCharacter(characterId) ?: return
+        val next = when (character.skillProficiency(skill)) {
+            ProficiencyLevel.NONE -> ProficiencyLevel.PROFICIENT
+            ProficiencyLevel.PROFICIENT -> ProficiencyLevel.EXPERTISE
+            ProficiencyLevel.EXPERTISE -> ProficiencyLevel.NONE
+        }
+        val updated = character.skillProficiencies.toMutableMap().apply {
+            if (next == ProficiencyLevel.NONE) remove(skill.ordinal) else put(skill.ordinal, next.multiplier)
+        }
+        viewModelScope.launch { repository.upsertCharacter(character.copy(skillProficiencies = updated)) }
+    }
+
+    /** Бросает d20 и показывает результат всплывающей плашкой. */
+    fun rollD20(title: String, kind: RollKind, bonus: Int) {
+        uiState = uiState.copy(
+            lastD20Roll = D20RollResult(
+                title = title,
+                kind = kind,
+                roll = (1..D20_SIDES).random(),
+                bonus = bonus,
+            ),
+        )
+    }
+
+    fun dismissD20Roll() {
+        uiState = uiState.copy(lastD20Roll = null)
+    }
+
+    // endregion
 
     /** Удаляет пользовательский ресурс. */
     fun deleteCharacterResource(characterId: String, resourceId: String) {
