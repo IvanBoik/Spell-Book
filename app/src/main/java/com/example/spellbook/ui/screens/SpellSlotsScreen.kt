@@ -130,13 +130,14 @@ fun SpellSlotsScreen(
             }
         },
     ) { padding ->
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            // Панель вне списка: отступы одинаковы на всех экранах персонажа.
+            sectionsBar()
         LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize(),
-            // Верхний отступ задаёт сама панель разделов — одинаково на всех экранах.
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "sections") { sectionsBar() }
 
             if (levels.isNotEmpty()) {
                 item {
@@ -244,6 +245,7 @@ fun SpellSlotsScreen(
                     }
                 }
             }
+        }
         }
     }
 

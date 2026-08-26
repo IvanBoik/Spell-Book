@@ -54,7 +54,20 @@ data class Character(
     val saveProficiencies: Map<Int, Int> = emptyMap(),
     /** Владение навыками: номер [SkillType] → множитель (1 — владение, 2 — экспертиза). */
     val skillProficiencies: Map<Int, Int> = emptyMap(),
+    /** Порядковые номера [ArmorProficiency], которыми владеет персонаж. */
+    val armorProficiencies: List<String> = emptyList(),
+    /** Порядковые номера [WeaponProficiency], которыми владеет персонаж. */
+    val weaponProficiencies: List<String> = emptyList(),
+    /** Описание прочих владений оружием — для [WeaponProficiency.OTHER]. */
+    val otherWeaponProficiencies: String = "",
+    /** Инструменты и языки задаются свободным текстом через запятую. */
+    val toolProficiencies: String = "",
+    val languages: String = "",
 ) {
+    fun hasArmorProficiency(armor: ArmorProficiency): Boolean = armor.name in armorProficiencies
+
+    fun hasWeaponProficiency(weapon: WeaponProficiency): Boolean = weapon.name in weaponProficiencies
+
     /** Количество доступных (не потраченных) ячеек указанного уровня. */
     fun availableSlots(level: Int): Int =
         (spellSlots[level] ?: 0) - (spellSlotsUsed[level] ?: 0)

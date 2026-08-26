@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 
 /** Единый отступ панели от шапки и от содержимого экрана. */
-private val SECTIONS_BAR_VERTICAL_PADDING = 8.dp
+private val SECTIONS_BAR_VERTICAL_PADDING = 2.dp
 
 /** Разделы персонажа, между которыми переключает панель. */
 enum class CharacterSection(val label: String, val icon: ImageVector) {

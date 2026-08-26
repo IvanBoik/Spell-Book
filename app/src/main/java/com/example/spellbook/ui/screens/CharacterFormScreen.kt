@@ -5,8 +5,11 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,8 +18,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -27,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -34,24 +40,76 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
+import com.example.spellbook.data.model.ArmorProficiency
 import com.example.spellbook.data.model.Character
+import com.example.spellbook.data.model.WeaponProficiency
 import com.example.spellbook.data.model.formatModifier
 import com.example.spellbook.data.model.proficiencyBonusFor
 import com.example.spellbook.ui.components.DndTopBar
 
 /** Уровни ячеек заклинаний D&D: 1..9. */
 private val SLOT_LEVELS = (1..9).toList()
+
+/** Размер кружка-переключателя владения. */
+private val PROFICIENCY_MARK_SIZE = 18.dp
+
+/**
+ * Компактная строка владений: название слева, справа — варианты с кружками.
+ * Кружок пустой — владения нет, залитый — есть. Экспертизы здесь нет.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> ProficiencyToggleRow(
+    title: String,
+    options: List<T>,
+    label: (T) -> String,
+    isSelected: (T) -> Boolean,
+    onToggle: (T) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            options.forEach { option ->
+                val selected = isSelected(option)
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onToggle(option) }
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val markColor = MaterialTheme.colorScheme.primary
+                    Canvas(Modifier.size(PROFICIENCY_MARK_SIZE)) {
+                        val radius = size.minDimension / 2f
+                        val stroke = radius * 0.25f
+                        drawCircle(
+                            color = markColor.copy(alpha = 0.75f),
+                            radius = radius - stroke / 2f,
+                            style = Stroke(width = stroke),
+                        )
+                        if (selected) drawCircle(color = markColor, radius = radius - stroke)
+                    }
+                    Text(label(option), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
 
 /**
  * Форма создания/редактирования персонажа и страница настройки его параметров:
@@ -74,6 +132,20 @@ fun CharacterFormScreen(
     var maxPrepared by remember { mutableStateOf(initial.maxPreparedSpells.takeIf { it > 0 }?.toString() ?: "") }
     var maxCantrips by remember { mutableStateOf(initial.maxCantrips.takeIf { it > 0 }?.toString() ?: "") }
     var maxAttunedItems by remember { mutableStateOf(initial.maxAttunedItems.toString()) }
+    // Владения: доспехи и оружие — кружочки, инструменты и языки — свободный текст.
+    val armorProficiencies = remember {
+        mutableStateListOf<ArmorProficiency>().apply {
+            addAll(ArmorProficiency.entries.filter { initial.hasArmorProficiency(it) })
+        }
+    }
+    val weaponProficiencies = remember {
+        mutableStateListOf<WeaponProficiency>().apply {
+            addAll(WeaponProficiency.entries.filter { initial.hasWeaponProficiency(it) })
+        }
+    }
+    var otherWeaponProficiencies by remember { mutableStateOf(initial.otherWeaponProficiencies) }
+    var toolProficiencies by remember { mutableStateOf(initial.toolProficiencies) }
+    var languages by remember { mutableStateOf(initial.languages) }
     // Изменяемые значения ячеек
     val slots = remember {
         mutableStateMapOf<Int, String>().apply {
@@ -118,6 +190,16 @@ fun CharacterFormScreen(
             spellSlots = slotsMap,
             spellSlotsUsed = clampedUsed,
             maxAttunedItems = maxAttunedItems.toIntOrNull()?.coerceAtLeast(0) ?: 3,
+            armorProficiencies = armorProficiencies.map { it.name },
+            weaponProficiencies = weaponProficiencies.map { it.name },
+            // Описание храним только при выбранном варианте «Другое».
+            otherWeaponProficiencies = if (WeaponProficiency.OTHER in weaponProficiencies) {
+                otherWeaponProficiencies.trim()
+            } else {
+                ""
+            },
+            toolProficiencies = toolProficiencies.trim(),
+            languages = languages.trim(),
         )
     }
 
@@ -227,6 +309,51 @@ fun CharacterFormScreen(
                 label = { Text("Доступно заговоров") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            HorizontalDivider()
+
+            Text("Владения", fontWeight = FontWeight.Bold)
+            ProficiencyToggleRow(
+                title = "Доспехи",
+                options = ArmorProficiency.entries,
+                label = { it.label },
+                isSelected = { it in armorProficiencies },
+                onToggle = { armor ->
+                    if (armor in armorProficiencies) armorProficiencies.remove(armor)
+                    else armorProficiencies.add(armor)
+                },
+            )
+            ProficiencyToggleRow(
+                title = "Оружие",
+                options = WeaponProficiency.entries,
+                label = { it.label },
+                isSelected = { it in weaponProficiencies },
+                onToggle = { weapon ->
+                    if (weapon in weaponProficiencies) weaponProficiencies.remove(weapon)
+                    else weaponProficiencies.add(weapon)
+                },
+            )
+            if (WeaponProficiency.OTHER in weaponProficiencies) {
+                // Списки владений бывают длинными: текст переносится и виден целиком.
+                OutlinedTextField(
+                    value = otherWeaponProficiencies,
+                    onValueChange = { otherWeaponProficiencies = it },
+                    label = { Text("Другое оружие") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            OutlinedTextField(
+                value = toolProficiencies,
+                onValueChange = { toolProficiencies = it },
+                label = { Text("Инструменты") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = languages,
+                onValueChange = { languages = it },
+                label = { Text("Языки") },
                 modifier = Modifier.fillMaxWidth(),
             )
 

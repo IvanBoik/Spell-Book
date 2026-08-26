@@ -120,33 +120,35 @@ fun StatsScreen(
         },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                // Верхний отступ задаёт сама панель разделов — одинаково на всех экранах.
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item(key = "sections") { sectionsBar() }
+            Column(Modifier.fillMaxSize()) {
+                // Панель вне списка: так её отступы не зависят от интервалов между карточками
+                // и одинаковы со всеми остальными экранами персонажа.
+                sectionsBar()
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    item(key = "vitals") {
+                        VitalsCard(
+                            character = character,
+                            onHpClick = { showHpDialog = true },
+                            onArmorClick = { editingArmor = true },
+                            onSpeedClick = { editingSpeed = true },
+                        )
+                    }
 
-                item(key = "vitals") {
-                    VitalsCard(
-                        character = character,
-                        onHpClick = { showHpDialog = true },
-                        onArmorClick = { editingArmor = true },
-                        onSpeedClick = { editingSpeed = true },
-                    )
-                }
-
-                // Характеристика — заголовок блока, внутри — её спасбросок и связанные навыки.
-                items(AbilityType.entries, key = { "ability_${it.ordinal}" }) { ability ->
-                    AbilityBlock(
-                        character = character,
-                        ability = ability,
-                        onRoll = onRoll,
-                        onEditScore = { editingAbility = ability },
-                        onToggleSave = { onToggleSave(ability) },
-                        onCycleSkill = onCycleSkill,
-                    )
+                    // Характеристика — заголовок блока, внутри — её спасбросок и связанные навыки.
+                    items(AbilityType.entries, key = { "ability_${it.ordinal}" }) { ability ->
+                        AbilityBlock(
+                            character = character,
+                            ability = ability,
+                            onRoll = onRoll,
+                            onEditScore = { editingAbility = ability },
+                            onToggleSave = { onToggleSave(ability) },
+                            onCycleSkill = onCycleSkill,
+                        )
+                    }
                 }
             }
 

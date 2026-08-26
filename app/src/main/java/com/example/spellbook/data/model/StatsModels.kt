@@ -32,6 +32,23 @@ enum class SkillType(val label: String, val ability: AbilityType) {
     SURVIVAL("Выживание", AbilityType.WISDOM),
 }
 
+/** Виды доспехов, владение которыми отмечается в настройках персонажа. */
+enum class ArmorProficiency(val label: String) {
+    LIGHT("Лёгкие"),
+    MEDIUM("Средние"),
+    HEAVY("Тяжёлые"),
+    SHIELDS("Щиты"),
+}
+
+/** Категории оружия, владение которыми отмечается в настройках персонажа. */
+enum class WeaponProficiency(val label: String) {
+    SIMPLE("Простое"),
+    MARTIAL("Воинское"),
+
+    /** При выборе открывается поле с подробным описанием владений. */
+    OTHER("Другое"),
+}
+
 /** Уровень владения навыком или спасброском. */
 enum class ProficiencyLevel(val label: String, val multiplier: Int) {
     NONE("Нет владения", 0),

@@ -32,7 +32,7 @@ import com.example.spellbook.data.model.Spell
         Feat::class,
         CharacterFeatCrossRef::class,
     ],
-    version = 13,
+    version = 15,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -202,6 +202,23 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v13 → v14: владения доспехами, оружием, инструментами и языками. */
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN armorProficiencies TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE characters ADD COLUMN weaponProficiencies TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE characters ADD COLUMN toolProficiencies TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE characters ADD COLUMN languages TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** v14 → v15: описание прочих владений оружием. */
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN otherWeaponProficiencies TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -224,6 +241,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_10_11,
                     MIGRATION_11_12,
                     MIGRATION_12_13,
+                    MIGRATION_13_14,
+                    MIGRATION_14_15,
                 ).build()
             }
     }
