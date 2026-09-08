@@ -56,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.data.CharacterLssCodec
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.ui.screens.EmptySpellList
 import com.example.spellbook.ui.screens.AddSpellFab
@@ -128,6 +129,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/** Что выгружается в файл: отдельное заклинание или лист персонажа. */
+private enum class ExportKind { SPELL, CHARACTER }
+
 /** Извлекает первую http(s)-ссылку из произвольного текста (браузеры часто шлют «название + URL»). */
 private fun extractUrl(text: String?): String? {
     if (text.isNullOrBlank()) return null
@@ -148,6 +152,12 @@ private fun SpellBookApp(
     // JSON, ожидающий записи в выбранный пользователем файл (для выгрузки).
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
 
+    // Что именно выгружается — от этого зависит текст уведомления.
+    var pendingExportKind by remember { mutableStateOf(ExportKind.SPELL) }
+
+    /** К какому персонажу применить загружаемый лист; null — создать нового. */
+    var sheetImportTargetId by remember { mutableStateOf<String?>(null) }
+
     // Показан ли диалог ввода ссылки dnd.su.
     var showDndSuDialog by remember { mutableStateOf(false) }
 
@@ -158,7 +168,12 @@ private fun SpellBookApp(
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         }.getOrNull()
         if (text != null) {
-            viewModel.importSpellJson(text)
+            // Лист персонажа и заклинание различаются по структуре JSON.
+            if (CharacterLssCodec.looksLikeCharacterSheet(text)) {
+                viewModel.importCharacterJson(text)
+            } else {
+                viewModel.importSpellJson(text)
+            }
         } else {
             Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
         }
@@ -182,7 +197,11 @@ private fun SpellBookApp(
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         }.getOrNull()
         if (text != null) {
-            viewModel.importSpellJson(text)
+            if (CharacterLssCodec.looksLikeCharacterSheet(text)) {
+                viewModel.importCharacterJson(text)
+            } else {
+                viewModel.importSpellJson(text)
+            }
         } else {
             Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
         }
@@ -197,11 +216,32 @@ private fun SpellBookApp(
         val ok = runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
         }.isSuccess
+        val successText = when (pendingExportKind) {
+            ExportKind.SPELL -> "Заклинание выгружено"
+            ExportKind.CHARACTER -> "Лист персонажа выгружен"
+        }
         Toast.makeText(
             context,
-            if (ok) "Заклинание выгружено" else "Не удалось сохранить файл",
+            if (ok) successText else "Не удалось сохранить файл",
             Toast.LENGTH_SHORT,
         ).show()
+    }
+
+    // Загрузка листа персонажа в формате LSS.
+    val sheetImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val targetId = sheetImportTargetId
+        sheetImportTargetId = null
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = runCatching {
+            context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+        }.getOrNull()
+        if (text != null) {
+            viewModel.importCharacterJson(text, targetId)
+        } else {
+            Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+        }
     }
 
     LaunchedEffect(state.message) {
@@ -212,6 +252,7 @@ private fun SpellBookApp(
     }
 
     val importSpell = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
+    val importSheet = { sheetImportLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }
 
     if (showDndSuDialog) {
         DndSuUrlDialog(
@@ -274,6 +315,11 @@ private fun SpellBookApp(
             spellCounts = state.spellCounts,
             onCharacterClick = viewModel::openCharacterSpells,
             onAddCharacter = viewModel::openCreateCharacterForm,
+            onImportSheet = {
+                // Новый лист создаёт персонажа, а не обновляет существующего.
+                sheetImportTargetId = null
+                importSheet()
+            },
             bottomBar = bottomBar,
         )
 
@@ -336,6 +382,20 @@ private fun SpellBookApp(
                 onSave = viewModel::saveCharacter,
                 onDelete = existing?.let { { viewModel.deleteCharacter(it.id) } },
                 onBack = viewModel::exitCharacterForm,
+                onExportSheet = existing?.let { character ->
+                    {
+                        pendingExportJson = viewModel.exportCharacterJson(character.id)
+                        pendingExportKind = ExportKind.CHARACTER
+                        exportLauncher.launch(suggestFileName(character.name))
+                    }
+                },
+                onImportSheet = existing?.let { character ->
+                    {
+                        // Лист применяется к текущему персонажу.
+                        sheetImportTargetId = character.id
+                        importSheet()
+                    }
+                },
             )
         }
 
@@ -370,16 +430,23 @@ private fun SpellBookApp(
                     onRestoreResourceUnit = { id -> viewModel.restoreCharacterResourceUnit(screen.characterId, id) },
                     onRestoreResource = { id -> viewModel.restoreCharacterResource(screen.characterId, id) },
                     onDeleteResource = { id -> viewModel.deleteCharacterResource(screen.characterId, id) },
-                    onAddResource = { name, description, maximum ->
-                        viewModel.addCharacterResource(screen.characterId, name, description, maximum)
+                    onAddResource = { name, description, maximum, formula ->
+                        viewModel.addCharacterResource(
+                            screen.characterId,
+                            name,
+                            description,
+                            maximum,
+                            formula,
+                        )
                     },
-                    onEditResource = { id, name, description, maximum ->
+                    onEditResource = { id, name, description, maximum, formula ->
                         viewModel.editCharacterResource(
                             screen.characterId,
                             id,
                             name,
                             description,
                             maximum,
+                            formula,
                         )
                     },
                     onReorderResources = { orderedIds ->
@@ -600,6 +667,7 @@ private fun SpellBookApp(
                         val json = viewModel.exportSpellJson(spell.id)
                         if (json != null) {
                             pendingExportJson = json
+                            pendingExportKind = ExportKind.SPELL
                             exportLauncher.launch(suggestFileName(spell.name))
                         }
                     },

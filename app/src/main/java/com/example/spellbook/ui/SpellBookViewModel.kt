@@ -8,6 +8,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.spellbook.data.AddSpellResult
 import com.example.spellbook.data.AppPreferences
+import com.example.spellbook.data.CharacterLssCodec
+import com.example.spellbook.data.StatFormula
+import com.example.spellbook.data.withRecalculatedResources
 import com.example.spellbook.data.DndSuException
 import com.example.spellbook.data.ComboRoller
 import com.example.spellbook.data.DndSuLoader
@@ -734,9 +737,37 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         // Редактирование (открыто с экрана заклинаний) — возвращаемся к ним, создание — к списку персонажей.
         val editing = (uiState.screen as? Screen.CharacterForm)?.characterId != null
         viewModelScope.launch {
-            repository.upsertCharacter(character)
+            // Уровень и характеристики могли измениться — пересчитываем ресурсы на формулах.
+            repository.upsertCharacter(character.withRecalculatedResources())
             val target = if (editing) Screen.CharacterSpells(character.id) else Screen.Characters
             uiState = uiState.copy(screen = target, message = "Персонаж сохранён")
+        }
+    }
+
+    /** Выгружает лист персонажа в формате LSS; null — персонаж не найден. */
+    fun exportCharacterJson(characterId: String): String? =
+        getCharacter(characterId)?.let(CharacterLssCodec::encode)
+
+    /**
+     * Загружает лист персонажа из JSON формата LSS.
+     *
+     * @param characterId если задан, лист применяется к существующему персонажу,
+     * иначе создаётся новый.
+     */
+    fun importCharacterJson(json: String, characterId: String? = null) {
+        val existing = characterId?.let(::getCharacter)
+        val imported = runCatching { CharacterLssCodec.decode(json, existing) }
+            .getOrElse {
+                uiState = uiState.copy(
+                    message = "Не удалось прочитать лист: ${it.localizedMessage ?: "ошибка формата"}",
+                )
+                return
+            }
+        viewModelScope.launch {
+            repository.upsertCharacter(imported)
+            val message = if (existing != null) "Лист персонажа обновлён" else "Персонаж загружен"
+            openCharacterSpells(imported.id)
+            uiState = uiState.copy(message = message)
         }
     }
 
@@ -814,17 +845,26 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /** Добавляет новый ресурс полностью восполненным. */
-    fun addCharacterResource(characterId: String, name: String, description: String, maximum: Int) {
+    fun addCharacterResource(
+        characterId: String,
+        name: String,
+        description: String,
+        maximum: Int,
+        maximumFormula: String = "",
+    ) {
         val character = getCharacter(characterId) ?: return
-        if (name.isBlank() || maximum <= 0) {
+        // Формула задаёт максимум автоматически, поэтому число вводить не обязательно.
+        val resolved = resolveResourceMaximum(maximumFormula, maximum, character)
+        if (name.isBlank() || resolved <= 0) {
             uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
             return
         }
         val resource = CharacterResource(
             name = name.trim(),
             description = description.trim(),
-            current = maximum,
-            maximum = maximum,
+            current = resolved,
+            maximum = resolved,
+            maximumFormula = maximumFormula.trim(),
         ).normalized()
         viewModelScope.launch {
             repository.upsertCharacter(character.copy(resources = character.resources + resource))
@@ -838,8 +878,11 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         name: String,
         description: String,
         maximum: Int,
+        maximumFormula: String = "",
     ) {
-        if (name.isBlank() || maximum <= 0) {
+        val character = getCharacter(characterId) ?: return
+        val resolved = resolveResourceMaximum(maximumFormula, maximum, character)
+        if (name.isBlank() || resolved <= 0) {
             uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
             return
         }
@@ -848,11 +891,18 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             resource.copy(
                 name = name.trim(),
                 description = description.trim(),
-                maximum = maximum,
-                current = (maximum - spent).coerceAtLeast(0),
+                maximum = resolved,
+                maximumFormula = maximumFormula.trim(),
+                current = (resolved - spent).coerceAtLeast(0),
             )
         }
     }
+
+    /** Формула имеет приоритет над введённым вручную числом. */
+    private fun resolveResourceMaximum(formula: String, fallback: Int, character: Character): Int =
+        formula.takeIf { it.isNotBlank() }
+            ?.let { StatFormula.evaluateValue(it, character) }
+            ?: fallback
 
     /** Расходует одну единицу пользовательского ресурса. */
     fun useCharacterResource(characterId: String, resourceId: String) =
@@ -1112,7 +1162,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                 uiState = uiState.copy(message = "Добавьте хотя бы один шаг в комбинацию")
                 return@launch
             }
-            comboRollResult = ComboRoller.roll(combo, mode)
+            // Формулы шагов вычисляются по текущим характеристикам персонажа.
+            comboRollResult = ComboRoller.roll(combo, mode, getCharacter(characterId))
             uiState = uiState.copy(screen = Screen.ComboResult(characterId, comboId))
         }
     }

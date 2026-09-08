@@ -76,6 +76,7 @@ class Converters {
                 put("description", resource.description)
                 put("current", resource.current)
                 put("maximum", resource.maximum)
+                put("maximumFormula", resource.maximumFormula)
             })
         }
         return array.toString()
@@ -96,6 +97,7 @@ class Converters {
                 description = obj.optString("description"),
                 current = obj.optInt("current", maximum),
                 maximum = maximum,
+                maximumFormula = obj.optString("maximumFormula"),
             ).normalized()
         }
     }

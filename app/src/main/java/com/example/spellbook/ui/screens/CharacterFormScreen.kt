@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -123,6 +125,9 @@ fun CharacterFormScreen(
     onSave: (Character) -> Unit,
     onDelete: (() -> Unit)?,
     onBack: () -> Unit,
+    /** Выгрузка и загрузка листа в формате LSS; null — действие недоступно. */
+    onExportSheet: (() -> Unit)? = null,
+    onImportSheet: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initial.name) }
@@ -385,6 +390,31 @@ fun CharacterFormScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.width(100.dp),
                     )
+                }
+            }
+
+            // Обмен листом персонажа в формате LSS — только для созданного персонажа.
+            if (!isNew && (onExportSheet != null || onImportSheet != null)) {
+                HorizontalDivider()
+                Text("Лист персонажа", fontWeight = FontWeight.Bold)
+                Text(
+                    "Формат LSS (Long Story Short).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                onExportSheet?.let { export ->
+                    OutlinedButton(onClick = export, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.FileUpload, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Выгрузить JSON")
+                    }
+                }
+                onImportSheet?.let { import ->
+                    OutlinedButton(onClick = import, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.FileDownload, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Загрузить JSON")
+                    }
                 }
             }
 

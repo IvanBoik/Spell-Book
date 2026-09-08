@@ -41,20 +41,34 @@ data class ComboStep(
     val modifier: Int = 0,
     /** Значение плоского шага; для DICE не используется. */
     val flatValue: Int = 0,
+    /**
+     * Универсальное выражение шага, например `6d8 + [int]` или `[pb] * 2`.
+     * Задаёт и кости, и модификаторы, поэтому заменяет отдельные числовые поля.
+     */
+    val expression: String = "",
     /** Код типа урона из SpellOptions.damageTypes; пусто — без типа. */
     val damageType: String = "",
     val effect: String = "",
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     val stepType: ComboStepType get() = runCatching { ComboStepType.valueOf(type) }.getOrDefault(ComboStepType.DICE)
-    val formula: String get() = when (stepType) {
-        ComboStepType.DICE -> buildString {
-            append(diceCount.coerceAtLeast(1)).append('к').append(diceSides)
-            if (modifier > 0) append(" + ").append(modifier)
-            if (modifier < 0) append(" - ").append(-modifier)
+
+    /**
+     * Читаемая запись шага. Для старых шагов без [expression]
+     * собирается из сохранённых числовых полей.
+     */
+    val formula: String
+        get() = expression.ifBlank {
+            when (stepType) {
+                ComboStepType.DICE -> buildString {
+                    append(diceCount.coerceAtLeast(1)).append('d').append(diceSides)
+                    if (modifier > 0) append(" + ").append(modifier)
+                    if (modifier < 0) append(" - ").append(-modifier)
+                }
+
+                ComboStepType.CONSTANT -> if (flatValue >= 0) "+$flatValue" else flatValue.toString()
+            }
         }
-        ComboStepType.CONSTANT -> if (flatValue >= 0) "+$flatValue" else flatValue.toString()
-    }
 }
 
 @Entity(
@@ -106,10 +120,16 @@ data class ComboWithSteps(
     val steps: List<ComboStep>,
 )
 
+/**
+ * Результат одного шага.
+ *
+ * @param breakdown слагаемые с подставленными значениями, например `6 + 2 + 5`.
+ */
 data class ComboStepRollResult(
     val step: ComboStep,
     val rolls: List<Int>,
     val total: Int,
+    val breakdown: String = "",
 )
 
 data class ComboRollResult(

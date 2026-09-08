@@ -13,6 +13,11 @@ data class CharacterResource(
     val description: String = "",
     val current: Int,
     val maximum: Int,
+    /**
+     * Формула максимума, например `бм` или `инт + 1`. Если задана,
+     * [maximum] пересчитывается автоматически при изменении уровня и характеристик.
+     */
+    val maximumFormula: String = "",
 ) {
     /** Нормализованное состояние, устойчивое к отрицательным и слишком большим значениям. */
     fun normalized(): CharacterResource {
@@ -20,6 +25,7 @@ data class CharacterResource(
         return copy(
             name = name.trim(),
             description = description.trim(),
+            maximumFormula = maximumFormula.trim(),
             maximum = safeMaximum,
             current = current.coerceIn(0, safeMaximum),
         )

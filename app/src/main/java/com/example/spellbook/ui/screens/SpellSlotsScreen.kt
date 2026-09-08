@@ -64,9 +64,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterResource
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.FormulaTextField
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -84,8 +86,14 @@ fun SpellSlotsScreen(
     onRestoreResourceUnit: (resourceId: String) -> Unit,
     onRestoreResource: (resourceId: String) -> Unit,
     onDeleteResource: (resourceId: String) -> Unit,
-    onAddResource: (name: String, description: String, maximum: Int) -> Unit,
-    onEditResource: (resourceId: String, name: String, description: String, maximum: Int) -> Unit,
+    onAddResource: (name: String, description: String, maximum: Int, formula: String) -> Unit,
+    onEditResource: (
+        resourceId: String,
+        name: String,
+        description: String,
+        maximum: Int,
+        formula: String,
+    ) -> Unit,
     onReorderResources: (List<String>) -> Unit,
     onRestoreAll: () -> Unit,
     onBack: () -> Unit,
@@ -253,8 +261,8 @@ fun SpellSlotsScreen(
         ResourceEditorDialog(
             initial = null,
             onDismiss = { showCreateDialog = false },
-            onSave = { name, description, maximum ->
-                onAddResource(name, description, maximum)
+            onSave = { name, description, maximum, formula ->
+                onAddResource(name, description, maximum, formula)
                 showCreateDialog = false
             },
         )
@@ -263,8 +271,8 @@ fun SpellSlotsScreen(
         ResourceEditorDialog(
             initial = resource,
             onDismiss = { editingResource = null },
-            onSave = { name, description, maximum ->
-                onEditResource(resource.id, name, description, maximum)
+            onSave = { name, description, maximum, formula ->
+                onEditResource(resource.id, name, description, maximum, formula)
                 editingResource = null
             },
         )
@@ -444,13 +452,23 @@ private fun ResourceSwipeAction(
 private fun ResourceEditorDialog(
     initial: CharacterResource?,
     onDismiss: () -> Unit,
-    onSave: (name: String, description: String, maximum: Int) -> Unit,
+    onSave: (name: String, description: String, maximum: Int, maximumFormula: String) -> Unit,
 ) {
     var name by remember(initial?.id) { mutableStateOf(initial?.name.orEmpty()) }
     var description by remember(initial?.id) { mutableStateOf(initial?.description.orEmpty()) }
-    var maximum by remember(initial?.id) { mutableStateOf(initial?.maximum?.toString().orEmpty()) }
-    val parsedMaximum = maximum.toIntOrNull() ?: 0
-    val valid = name.isNotBlank() && parsedMaximum > 0
+    // В одном поле допустимо число или формула вида `[pb] * 2`.
+    var maximum by remember(initial?.id) {
+        mutableStateOf(
+            initial?.maximumFormula?.takeIf { it.isNotBlank() }
+                ?: initial?.maximum?.toString().orEmpty(),
+        )
+    }
+    val parsedMaximum = maximum.trim().toIntOrNull() ?: 0
+    val isFormula = StatFormula.isFormula(maximum)
+    // Лимит ресурса должен быть предсказуемым, поэтому кости здесь недопустимы.
+    val hasDice = StatFormula.hasDice(maximum)
+    val formulaValid = StatFormula.isValid(maximum) && !hasDice
+    val valid = name.isNotBlank() && formulaValid && (parsedMaximum > 0 || isFormula)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -475,20 +493,26 @@ private fun ResourceEditorDialog(
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(
+                FormulaTextField(
                     value = maximum,
-                    onValueChange = { value -> maximum = value.filter(Char::isDigit) },
-                    label = { Text("Максимум") },
-                    placeholder = { Text("0") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    onValueChange = { maximum = it },
+                    label = "Максимум",
+                    placeholder = "[pb] + 1",
+                    isError = hasDice,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(name.trim(), description.trim(), parsedMaximum) },
+                onClick = {
+                    onSave(
+                        name.trim(),
+                        description.trim(),
+                        parsedMaximum,
+                        if (isFormula) maximum.trim() else "",
+                    )
+                },
                 enabled = valid,
             ) { Text("Сохранить") }
         },

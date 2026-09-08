@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -59,13 +60,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
+
+
+
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +79,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -84,13 +90,14 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.spellbook.data.SpellOptions
-import com.example.spellbook.data.model.COMBO_DICE_SIDES
+import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboRollMode
 import com.example.spellbook.data.model.ComboRollResult
 import com.example.spellbook.data.model.ComboStep
 import com.example.spellbook.data.model.ComboStepType
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.FormulaTextField
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -586,8 +593,36 @@ fun ComboResultScreen(
             )
         },
     ) { padding ->
+        val listState = rememberLazyListState()
+        val density = LocalDensity.current
+        val buttonHeightPx = with(density) { REROLL_BUTTON_HEIGHT.toPx() }
+        val edgePaddingPx = with(density) { REROLL_EDGE_PADDING.toPx() }
+
+        // Кнопка всегда одна и та же: она следует за своим местом в списке,
+        // пока то не уйдёт ниже экрана, а дальше остаётся внизу. Переход привязан
+        // к прокрутке, поэтому происходит плавно, без резких переключений.
+        var containerTopPx by remember { mutableFloatStateOf(0f) }
+        var containerHeightPx by remember { mutableFloatStateOf(0f) }
+        var anchorTopPx by remember { mutableStateOf<Float?>(null) }
+
+        val pinnedTopPx = (containerHeightPx - buttonHeightPx - edgePaddingPx).coerceAtLeast(0f)
+        val buttonTopPx = anchorTopPx
+            ?.minus(containerTopPx)
+            ?.coerceAtMost(pinnedTopPx)
+            ?: pinnedTopPx
+
+        Box(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .onGloballyPositioned { coordinates ->
+                    containerTopPx = coordinates.positionInWindow().y
+                    containerHeightPx = coordinates.size.height.toFloat()
+                },
+        ) {
         LazyColumn(
-            modifier = Modifier.padding(padding).fillMaxSize(),
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -606,13 +641,17 @@ fun ComboResultScreen(
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stepResult.step.name, style = MaterialTheme.typography.titleMedium)
-                            val details = if (stepResult.rolls.isEmpty()) {
-                                stepResult.step.formula
-                            } else {
-                                stepResult.rolls.joinToString(" + ") +
-                                    if (stepResult.step.modifier != 0) " ${if (stepResult.step.modifier > 0) "+" else "-"} ${kotlin.math.abs(stepResult.step.modifier)}" else ""
-                            }
-                            Text(details, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            // Слагаемые с подставленными значениями: `6 + 2 + 5`.
+                            Text(
+                                stepResult.breakdown.ifBlank { stepResult.total.toString() },
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            // Исходная запись шага с читаемыми названиями переменных.
+                            Text(
+                                StatFormula.humanize(stepResult.step.formula),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                             if (stepResult.step.damageType.isNotBlank()) {
                                 Text(
                                     SpellOptions.labelFor(SpellOptions.damageTypes, stepResult.step.damageType),
@@ -638,16 +677,47 @@ fun ComboResultScreen(
                     }
                 }
             }
-            item {
-                Button(
-                    onClick = { onReroll(result.mode) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
-                    Text("Перебросить (${result.mode.label})", modifier = Modifier.padding(start = 8.dp))
+            // Место кнопки в потоке: сама кнопка рисуется поверх списка.
+            item(key = REROLL_ITEM_KEY) {
+                Spacer(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(REROLL_BUTTON_HEIGHT)
+                        .onGloballyPositioned { anchorTopPx = it.positionInWindow().y },
+                )
+                // Когда место уходит из композиции, кнопка возвращается вниз экрана.
+                DisposableEffect(Unit) {
+                    onDispose { anchorTopPx = null }
                 }
             }
         }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { translationY = buttonTopPx }
+                    .padding(horizontal = REROLL_EDGE_PADDING),
+            ) {
+                RerollButton(mode = result.mode, onReroll = onReroll)
+            }
+        }
+    }
+}
+
+/** Ключ элемента, резервирующего место кнопки в списке. */
+private const val REROLL_ITEM_KEY = "reroll-button"
+
+private val REROLL_BUTTON_HEIGHT = 48.dp
+private val REROLL_EDGE_PADDING = 16.dp
+
+@Composable
+private fun RerollButton(mode: ComboRollMode, onReroll: (ComboRollMode) -> Unit) {
+    Button(
+        onClick = { onReroll(mode) },
+        modifier = Modifier.fillMaxWidth().height(REROLL_BUTTON_HEIGHT),
+    ) {
+        Icon(Icons.Default.Refresh, contentDescription = null)
+        Text("Перебросить (${mode.label})", modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -711,17 +781,12 @@ fun ComboStepEditorDialog(
 ) {
     val isNewStep = initial.name.isBlank()
     var name by remember { mutableStateOf(initial.name) }
-    var type by remember { mutableStateOf(initial.stepType) }
-    var diceCount by remember { mutableStateOf(if (isNewStep) "" else initial.diceCount.toString()) }
-    var diceSides by remember { mutableStateOf(initial.diceSides) }
-    var modifier by remember { mutableStateOf(if (isNewStep) "" else initial.modifier.toString()) }
-    var flatValue by remember { mutableStateOf(if (isNewStep) "" else initial.flatValue.toString()) }
+    // Одно поле задаёт и кости, и числа, и переменные: `6d8 + [int]`.
+    var expression by remember { mutableStateOf(if (isNewStep) "" else initial.formula) }
     var damageType by remember { mutableStateOf(initial.damageType) }
     var effect by remember { mutableStateOf(initial.effect) }
-    var sidesExpanded by remember { mutableStateOf(false) }
     var damageExpanded by remember { mutableStateOf(false) }
-
-    fun signed(value: String): String = value.filterIndexed { index, c -> c.isDigit() || (c == '-' && index == 0) }
+    val expressionValid = StatFormula.isValid(expression)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -739,82 +804,13 @@ fun ComboStepEditorDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    ComboStepType.entries.forEachIndexed { index, value ->
-                        SegmentedButton(
-                            selected = type == value,
-                            onClick = { type = value },
-                            shape = SegmentedButtonDefaults.itemShape(index, ComboStepType.entries.size),
-                            colors = SegmentedButtonDefaults.colors(
-                                activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                activeBorderColor = MaterialTheme.colorScheme.primary,
-                                inactiveContainerColor = MaterialTheme.colorScheme.surface,
-                                inactiveContentColor = MaterialTheme.colorScheme.onSurface,
-                                inactiveBorderColor = MaterialTheme.colorScheme.outline,
-                            ),
-                        ) { Text(value.label) }
-                    }
-                }
-                if (type == ComboStepType.DICE) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StepNumberField(
-                            label = "Кол-во",
-                            value = diceCount,
-                            placeholder = "1",
-                            onValueChange = { diceCount = it.filter(Char::isDigit) },
-                            modifier = Modifier.weight(1f),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Куб",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
-                            )
-                            ExposedDropdownMenuBox(
-                                expanded = sidesExpanded,
-                                onExpandedChange = { sidesExpanded = it },
-                            ) {
-                                OutlinedTextField(
-                                    value = "к$diceSides",
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sidesExpanded) },
-                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = sidesExpanded,
-                                    onDismissRequest = { sidesExpanded = false },
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    tonalElevation = 0.dp,
-                                ) {
-                                    COMBO_DICE_SIDES.forEach { sides ->
-                                        DropdownMenuItem(text = { Text("к$sides") }, onClick = {
-                                            diceSides = sides
-                                            sidesExpanded = false
-                                        })
-                                    }
-                                }
-                            }
-                        }
-                        StepNumberField(
-                            label = "Мод.",
-                            value = modifier,
-                            placeholder = "0",
-                            onValueChange = { modifier = signed(it) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                } else {
-                    StepNumberField(
-                        label = "Значение",
-                        value = flatValue,
-                        placeholder = "0",
-                        onValueChange = { flatValue = signed(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                FormulaTextField(
+                    value = expression,
+                    onValueChange = { expression = it },
+                    label = "Значение",
+                    placeholder = "1d8 + [str]",
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 ExposedDropdownMenuBox(
                     expanded = damageExpanded,
                     onExpandedChange = { damageExpanded = it },
@@ -862,16 +858,12 @@ fun ComboStepEditorDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = name.isNotBlank(),
+                enabled = name.isNotBlank() && expression.isNotBlank() && expressionValid,
                 onClick = {
                     onConfirm(
                         initial.copy(
                             name = name.trim(),
-                            type = type.name,
-                            diceCount = diceCount.toIntOrNull()?.coerceAtLeast(1) ?: 1,
-                            diceSides = diceSides,
-                            modifier = modifier.toIntOrNull() ?: 0,
-                            flatValue = flatValue.toIntOrNull() ?: 0,
+                            expression = expression.trim(),
                             damageType = damageType,
                             effect = effect.trim(),
                         ),
@@ -882,6 +874,8 @@ fun ComboStepEditorDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
     )
 }
+
+
 
 /** Числовое поле с постоянно закреплённой подписью и приглушённым плейсхолдером. */
 @Composable

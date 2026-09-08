@@ -18,16 +18,26 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,23 +56,51 @@ fun CharactersScreen(
     spellCounts: Map<String, Int>,
     onCharacterClick: (String) -> Unit,
     onAddCharacter: () -> Unit,
+    onImportSheet: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = { DndTopBar(title = "Персонажи") },
         bottomBar = bottomBar,
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddCharacter,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить персонажа")
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (menuExpanded) {
+                    ExtendedFloatingActionButton(
+                        onClick = { menuExpanded = false; onImportSheet() },
+                        icon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+                        text = { Text("Загрузить лист") },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    )
+                    ExtendedFloatingActionButton(
+                        onClick = { menuExpanded = false; onAddCharacter() },
+                        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        text = { Text("Создать вручную") },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                FloatingActionButton(
+                    onClick = { menuExpanded = !menuExpanded },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Icon(
+                        imageVector = if (menuExpanded) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = if (menuExpanded) "Закрыть меню" else "Добавить персонажа",
+                    )
+                }
             }
         },
     ) { padding ->
         if (characters.isEmpty()) {
-            EmptyCharacters(onAddCharacter = onAddCharacter, modifier = Modifier.padding(padding))
+            EmptyCharacters(
+                onAddCharacter = onAddCharacter,
+                onImportSheet = onImportSheet,
+                modifier = Modifier.padding(padding),
+            )
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -155,7 +193,11 @@ fun CharacterAvatar(character: Character, size: Int) {
 }
 
 @Composable
-private fun EmptyCharacters(onAddCharacter: () -> Unit, modifier: Modifier = Modifier) {
+private fun EmptyCharacters(
+    onAddCharacter: () -> Unit,
+    onImportSheet: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier = modifier.fillMaxSize().padding(24.dp),
         contentAlignment = Alignment.Center,
@@ -167,7 +209,11 @@ private fun EmptyCharacters(onAddCharacter: () -> Unit, modifier: Modifier = Mod
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
-            Text("Создайте персонажа, чтобы собрать его личный список заклинаний.")
+            Text("Создайте персонажа или загрузите готовый лист в формате LSS.")
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onAddCharacter) { Text("Создать персонажа") }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onImportSheet) { Text("Загрузить лист") }
         }
     }
 }

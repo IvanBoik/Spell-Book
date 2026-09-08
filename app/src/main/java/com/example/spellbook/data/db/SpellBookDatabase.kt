@@ -32,7 +32,7 @@ import com.example.spellbook.data.model.Spell
         Feat::class,
         CharacterFeatCrossRef::class,
     ],
-    version = 15,
+    version = 17,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -219,6 +219,61 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v15 → v16: формулы от характеристик в шагах комбинаций. */
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE combo_steps ADD COLUMN diceCountFormula TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE combo_steps ADD COLUMN modifierFormula TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE combo_steps ADD COLUMN flatValueFormula TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
+         * v16 → v17: единое выражение шага вместо отдельных формул.
+         * Старые шаги переносятся в запись вида `2d6 + 3`.
+         */
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Таблица пересоздаётся: колонки отдельных формул больше не нужны,
+                // а SQLite не умеет удалять столбцы через ALTER TABLE.
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `combo_steps_new` (`id` TEXT NOT NULL, " +
+                        "`characterId` TEXT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, " +
+                        "`diceCount` INTEGER NOT NULL, `diceSides` INTEGER NOT NULL, " +
+                        "`modifier` INTEGER NOT NULL, `flatValue` INTEGER NOT NULL, " +
+                        "`expression` TEXT NOT NULL, `damageType` TEXT NOT NULL, `effect` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`), " +
+                        "FOREIGN KEY(`characterId`) REFERENCES `characters`(`id`) " +
+                        "ON UPDATE NO ACTION ON DELETE CASCADE)",
+                )
+                // Старые шаги переносятся в единое выражение вида `2d6 + 3`.
+                db.execSQL(
+                    """
+                    INSERT INTO `combo_steps_new` (`id`, `characterId`, `name`, `type`, `diceCount`,
+                        `diceSides`, `modifier`, `flatValue`, `expression`, `damageType`, `effect`, `createdAt`)
+                    SELECT `id`, `characterId`, `name`, `type`, `diceCount`, `diceSides`, `modifier`, `flatValue`,
+                        CASE WHEN `type` = 'CONSTANT'
+                            THEN CAST(`flatValue` AS TEXT)
+                            ELSE CAST(MAX(`diceCount`, 1) AS TEXT) || 'd' || CAST(`diceSides` AS TEXT) ||
+                                CASE
+                                    WHEN `modifier` > 0 THEN ' + ' || CAST(`modifier` AS TEXT)
+                                    WHEN `modifier` < 0 THEN ' - ' || CAST(-`modifier` AS TEXT)
+                                    ELSE ''
+                                END
+                        END,
+                        `damageType`, `effect`, `createdAt`
+                    FROM `combo_steps`
+                    """.trimIndent(),
+                )
+                db.execSQL("DROP TABLE `combo_steps`")
+                db.execSQL("ALTER TABLE `combo_steps_new` RENAME TO `combo_steps`")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_combo_steps_characterId` " +
+                        "ON `combo_steps` (`characterId`)",
+                )
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -243,6 +298,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_12_13,
                     MIGRATION_13_14,
                     MIGRATION_14_15,
+                    MIGRATION_15_16,
+                    MIGRATION_16_17,
                 ).build()
             }
     }

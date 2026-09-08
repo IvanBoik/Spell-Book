@@ -170,14 +170,14 @@ class ModelsTest {
 
     @Test
     fun `dice formula includes modifier sign`() {
-        assertEquals("2к8", step().formula)
-        assertEquals("2к8 + 3", step(modifier = 3).formula)
-        assertEquals("2к8 - 3", step(modifier = -3).formula)
+        assertEquals("2d8", step().formula)
+        assertEquals("2d8 + 3", step(modifier = 3).formula)
+        assertEquals("2d8 - 3", step(modifier = -3).formula)
     }
 
     @Test
     fun `dice formula raises dice count to one`() {
-        assertEquals("1к8", step(count = 0).formula)
+        assertEquals("1d8", step(count = 0).formula)
     }
 
     @Test
