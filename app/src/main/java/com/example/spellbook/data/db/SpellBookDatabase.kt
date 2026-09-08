@@ -32,7 +32,7 @@ import com.example.spellbook.data.model.Spell
         Feat::class,
         CharacterFeatCrossRef::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -274,6 +274,13 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v17 → v18: классы и уровни персонажа. */
+        private val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN classes TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -300,6 +307,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_14_15,
                     MIGRATION_15_16,
                     MIGRATION_16_17,
+                    MIGRATION_17_18,
                 ).build()
             }
     }

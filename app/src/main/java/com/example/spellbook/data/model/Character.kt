@@ -41,6 +41,8 @@ data class Character(
     val maxAttunedItems: Int = 3,
     /** Уровень персонажа: от него зависит бонус мастерства. */
     val level: Int = 1,
+    /** Классы и уровни в формате `WIZARD:5` — задаются при создании персонажа. */
+    val classes: List<String> = emptyList(),
     val maxHp: Int = 0,
     val currentHp: Int = 0,
     /** Временные хиты тратятся раньше обычных и не ограничены максимумом. */
@@ -64,6 +66,14 @@ data class Character(
     val toolProficiencies: String = "",
     val languages: String = "",
 ) {
+    /** Разобранный список классов с уровнями. */
+    val classLevels: List<CharacterClassLevel>
+        get() = classes.mapNotNull(CharacterClassLevel::parse)
+
+    /** Краткое описание классов, например «Волшебник 5 / Колдун 2». */
+    val classSummary: String
+        get() = classLevels.joinToString(" / ") { "${it.displayName} ${it.level}" }
+
     fun hasArmorProficiency(armor: ArmorProficiency): Boolean = armor.name in armorProficiencies
 
     fun hasWeaponProficiency(weapon: WeaponProficiency): Boolean = weapon.name in weaponProficiencies
