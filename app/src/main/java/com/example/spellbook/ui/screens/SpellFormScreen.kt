@@ -64,6 +64,18 @@ private val TARGET_TYPES_WITH_SIZE = setOf(
 /** Типы активации, не подразумевающие числового времени сотворения (Особая). */
 private val ACTIVATION_TYPES_WITHOUT_VALUE = setOf("special")
 
+/** Заготовка таблицы с шапкой и двумя строками — пользователю остаётся заменить текст. */
+private val TABLE_TEMPLATE = listOf(
+    "| Заголовок 1 | Заголовок 2 |",
+    "| --- | --- |",
+    "| Ячейка | Ячейка |",
+    "| Ячейка | Ячейка |",
+).joinToString("\n")
+
+/** Добавляет шаблон таблицы в конец описания, отделяя его от текста. */
+private fun appendTableTemplate(description: String): String =
+    if (description.isBlank()) TABLE_TEMPLATE else "${description.trimEnd()}\n$TABLE_TEMPLATE"
+
 /**
  * Форма создания/редактирования заклинания. Все поля соответствуют формату LSS,
  * чтобы созданное заклинание можно было без потерь выгрузить и загрузить обратно.
@@ -148,6 +160,24 @@ fun SpellFormScreen(
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth(),
             )
+            // Таблицы записываются строками с `|`, поэтому предлагаем готовый шаблон.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "**жирный**, *курсив*, ## заголовок, списки через - или 1.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                OutlinedButton(onClick = {
+                    draft = draft.copy(description = appendTableTemplate(draft.description))
+                }) {
+                    Text("Вставить таблицу")
+                }
+            }
 
             SectionTitle("Время сотворения")
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
