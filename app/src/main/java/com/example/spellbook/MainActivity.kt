@@ -22,22 +22,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Save
+
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Edit
+
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Inventory2
@@ -45,8 +53,13 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +68,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.data.CharacterLssCodec
 import com.example.spellbook.data.model.Character
@@ -62,6 +76,8 @@ import com.example.spellbook.ui.screens.EmptySpellList
 import com.example.spellbook.ui.screens.AddSpellFab
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.Screen
+import com.example.spellbook.ui.LibraryDownloadProgress
+import com.example.spellbook.ui.LibraryDownloadReport
 import com.example.spellbook.ui.SpellBookViewModel
 import com.example.spellbook.ui.Tab
 import com.example.spellbook.ui.components.CharacterSection
@@ -129,8 +145,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Что выгружается в файл: отдельное заклинание или лист персонажа. */
-private enum class ExportKind { SPELL, CHARACTER }
+/** Что выгружается в файл: заклинание, лист персонажа или вся библиотека. */
+private enum class ExportKind { SPELL, CHARACTER, LIBRARY }
 
 /** Извлекает первую http(s)-ссылку из произвольного текста (браузеры часто шлют «название + URL»). */
 private fun extractUrl(text: String?): String? {
@@ -219,6 +235,7 @@ private fun SpellBookApp(
         val successText = when (pendingExportKind) {
             ExportKind.SPELL -> "Заклинание выгружено"
             ExportKind.CHARACTER -> "Лист персонажа выгружен"
+            ExportKind.LIBRARY -> "Библиотека выгружена"
         }
         Toast.makeText(
             context,
@@ -265,6 +282,11 @@ private fun SpellBookApp(
                 viewModel.prepareImportForCharacter(null)
             },
         )
+    }
+
+    // Лог показывается только если при массовой загрузке были ошибки.
+    state.libraryReport?.let { report ->
+        LibraryReportDialog(report = report, onDismiss = viewModel::dismissLibraryReport)
     }
 
     // Обработка системной кнопки «Назад»: на внутренних экранах — возврат к предыдущему,
@@ -337,11 +359,30 @@ private fun SpellBookApp(
             initialScrollOffset = viewModel.listScrollOffset,
             onScrollChanged = viewModel::saveListScroll,
             bottomBar = bottomBar,
+            headerContent = {
+                // Пока идёт массовая загрузка — показываем прогресс над списком.
+                state.libraryProgress?.let { progress ->
+                    LibraryDownloadBanner(
+                        progress = progress,
+                        onCancel = viewModel::cancelLibraryDownload,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+            },
             floatingActionButton = {
                 LibraryFab(
                     viewModel = viewModel,
                     onImport = importSpell,
                     onLoadFromDndSu = { showDndSuDialog = true },
+                    onExportLibrary = {
+                        // Один файл со всей библиотекой можно передать другому человеку.
+                        val json = viewModel.exportLibraryJson()
+                        if (json != null) {
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.LIBRARY
+                            exportLauncher.launch("spellbook-library.json")
+                        }
+                    },
                 )
             },
             emptyContent = { modifier -> LibraryEmpty(modifier, viewModel, importSpell) },
@@ -379,7 +420,9 @@ private fun SpellBookApp(
             CharacterFormScreen(
                 initial = existing ?: Character(),
                 isNew = existing == null,
-                onSave = viewModel::saveCharacter,
+                onSave = { character, addClassSpells ->
+                    viewModel.saveCharacter(character, addClassSpells)
+                },
                 onDelete = existing?.let { { viewModel.deleteCharacter(it.id) } },
                 onBack = viewModel::exitCharacterForm,
                 onExportSheet = existing?.let { character ->
@@ -702,12 +745,21 @@ private fun LibraryFab(
     viewModel: SpellBookViewModel,
     onImport: () -> Unit,
     onLoadFromDndSu: () -> Unit,
+    onExportLibrary: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     AddSpellFab(
         expanded = expanded,
         onToggle = { expanded = !expanded },
         actions = listOf(
+            FabAction("Скачать всё с dnd.su", Icons.Default.CloudDownload) {
+                expanded = false
+                viewModel.downloadOfficialLibrary()
+            },
+            FabAction("Выгрузить библиотеку", Icons.Default.Save) {
+                expanded = false
+                onExportLibrary()
+            },
             FabAction("Загрузить с dnd.su", Icons.Default.Link) {
                 expanded = false
                 viewModel.prepareImportForCharacter(null)
@@ -741,6 +793,54 @@ private fun LibraryEmpty(
         },
         modifier = modifier,
     )
+}
+
+/**
+ * Плашка прогресса массовой загрузки библиотеки: загрузка идёт долго,
+ * поэтому показываем счётчик и даём возможность остановить её в любой момент.
+ */
+@Composable
+private fun LibraryDownloadBanner(
+    progress: LibraryDownloadProgress,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 6.dp,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                if (progress.total > 0) "Загрузка заклинаний: ${progress.processed} из ${progress.total}"
+                else "Получаем список заклинаний…",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            if (progress.total > 0) {
+                LinearProgressIndicator(
+                    progress = { progress.fraction },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Сохранено: ${progress.saved}" +
+                        (if (progress.skipped > 0) " · своих: ${progress.skipped}" else "") +
+                        (if (progress.failed > 0) " · ошибок: ${progress.failed}" else ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) {
+                Text("Остановить")
+            }
+        }
+    }
 }
 
 /** Экран заклинаний персонажа с FAB «добавить из библиотеки» и переходом назад к персонажам. */
@@ -921,6 +1021,62 @@ private fun CharacterSpellsEmpty(
     }
 }
 
+/**
+ * Лог после массовой загрузки: какие заклинания не удалось загрузить и почему.
+ * Список может быть длинным, поэтому он прокручивается и ограничен по высоте.
+ */
+@Composable
+private fun LibraryReportDialog(
+    report: LibraryDownloadReport,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        title = { Text("Загрузка завершена") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    buildString {
+                        append("Сохранено: ${report.saved}")
+                        if (report.skipped > 0) append(" · своих сохранено: ${report.skipped}")
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "Не удалось загрузить: ${report.failures.size}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = LIBRARY_REPORT_MAX_HEIGHT),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(report.failures, key = { it.url }) { failure ->
+                        Column {
+                            Text(
+                                failure.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                failure.reason,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text("Понятно") }
+        },
+    )
+}
+
 /** Диалог ввода ссылки на заклинание с dnd.su. */
 @Composable
 private fun DndSuUrlDialog(
@@ -987,3 +1143,6 @@ private const val SHARE_DIR_NAME = "shared"
 
 /** Интервал, в течение которого повторное нажатие «Назад» закрывает приложение. */
 private const val EXIT_CONFIRM_WINDOW_MILLIS = 2000L
+
+/** Максимальная высота списка ошибок в логе загрузки: дальше он прокручивается. */
+private val LIBRARY_REPORT_MAX_HEIGHT = 320.dp

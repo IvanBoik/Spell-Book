@@ -16,10 +16,27 @@ import java.util.UUID
  * [id] — локальный идентификатор записи, в чистый LSS-экспорт не попадает.
  * [createdAt] — момент добавления в библиотеку (для сортировки «по дате добавления»).
  */
+/**
+ * Происхождение записи в библиотеке. Нужно, чтобы массовая загрузка официальных
+ * заклинаний не затирала то, что пользователь создал вручную.
+ */
+enum class SpellOrigin {
+    /** Создано пользователем вручную: при обновлении библиотеки не трогаем. */
+    USER,
+
+    /** Загружено пользователем по одиночной ссылке или из JSON. */
+    IMPORTED,
+
+    /** Получено массовой загрузкой официального списка. */
+    OFFICIAL,
+}
+
 @Entity(tableName = "spells")
 data class Spell(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val createdAt: Long = System.currentTimeMillis(),
+    /** [SpellOrigin] в виде имени — Room хранит его строкой. */
+    val origin: String = SpellOrigin.USER.name,
     val name: String = "",
     /** Описание в виде простого текста; абзацы разделяются переводом строки. */
     val description: String = "",
@@ -28,6 +45,11 @@ data class Spell(
     val level: Int = 1,
     /** Школа магии, код LSS: abj, con, div, enc, evo, ill, nec, trs. */
     val school: String = "evo",
+    /**
+     * Уточнение школы без скобок, например «дюнамантия: гравитургия».
+     * В формате LSS такого поля нет, поэтому храним готовую подпись.
+     */
+    val schoolNote: String = "",
     /** Тип активации: action, bonus, reaction, minute, hour, day, special. */
     val activationType: String = "action",
     val activationCost: Int? = 1,
@@ -52,7 +74,19 @@ data class Spell(
     val scalingFormula: String = "",
     /** Классы, которым доступно заклинание (коды LSS): wizard, warlock, ... */
     val classes: List<String> = emptyList(),
-)
+    /**
+     * Подклассы в виде готовых подписей, например «домен магии (жрец)».
+     * Некоторые заклинания доступны только отдельным подклассам, а не классу целиком.
+     */
+    val subclasses: List<String> = emptyList(),
+) {
+    val spellOrigin: SpellOrigin
+        get() = runCatching { SpellOrigin.valueOf(origin) }.getOrDefault(SpellOrigin.USER)
+
+    /** Можно ли перезаписать запись при массовой загрузке официальных заклинаний. */
+    val isReplaceableByOfficial: Boolean
+        get() = spellOrigin != SpellOrigin.USER
+}
 
 data class Target(
     val value: Int? = null,

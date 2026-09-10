@@ -72,6 +72,42 @@ class SpellLssCodecTest {
     }
 
     @Test
+    fun `subclasses survive round trip`() {
+        val spell = fireball.copy(subclasses = listOf("домен магии (жрец)", "круг земли (друид)"))
+
+        val restored = SpellLssCodec.decodeSpell(SpellLssCodec.encodeSpell(spell))
+
+        assertEquals(spell.subclasses, restored.subclasses)
+    }
+
+    @Test
+    fun `school note survives round trip`() {
+        val spell = fireball.copy(schoolNote = "дюнамантия: гравитургия")
+
+        val restored = SpellLssCodec.decodeSpell(SpellLssCodec.encodeSpell(spell))
+
+        assertEquals(spell.schoolNote, restored.schoolNote)
+    }
+
+    @Test
+    fun `spell without school note stays clean after export`() {
+        // Уточнения школы нет в базовом формате LSS — пустое поле в экспорт не попадает.
+        val json = SpellLssCodec.encodeSpell(fireball)
+
+        assertFalse(json.contains("schoolNote"))
+        assertEquals("", SpellLssCodec.decodeSpell(json).schoolNote)
+    }
+
+    @Test
+    fun `spell without subclasses stays clean after export`() {
+        // Подклассов нет в формате LSS, поэтому пустое поле не должно попадать в экспорт.
+        val json = SpellLssCodec.encodeSpell(fireball)
+
+        assertFalse(json.contains("subclasses"))
+        assertTrue(SpellLssCodec.decodeSpell(json).subclasses.isEmpty())
+    }
+
+    @Test
     fun `encodeList and decodeList keep local ids and order`() {
         val second = fireball.copy(id = "local-id-2", name = "Щит", level = 1)
 

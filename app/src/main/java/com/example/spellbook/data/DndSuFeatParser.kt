@@ -37,6 +37,7 @@ object DndSuFeatParser {
         desc.select("span[tooltip-for]").forEach { span ->
             span.text("[[ref ${span.text()}]]")
         }
-        return HtmlUtils.htmlToPlain(desc.html())
+        // Комментарии маскота сайта — не часть черты, поэтому в описание не попадают.
+        return HtmlUtils.removeMascotNotes(HtmlUtils.htmlToPlain(desc.html()))
     }
 }

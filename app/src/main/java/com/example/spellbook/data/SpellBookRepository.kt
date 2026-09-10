@@ -14,7 +14,10 @@ import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.model.Spell
+import com.example.spellbook.data.model.SpellOrigin
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /** Результат попытки добавить заклинание персонажу. */
@@ -57,6 +60,28 @@ class SpellBookRepository(
     suspend fun findSpellByName(name: String): Spell? = spellDao.findByName(name.trim())
 
     suspend fun upsertSpell(spell: Spell) = spellDao.upsert(spell)
+
+    /**
+     * Сохраняет официальное заклинание, не создавая дублей по названию.
+     *
+     * Правила разрешения конфликтов:
+     * - записи, созданной пользователем вручную, никогда не касаемся;
+     * - ранее загруженную запись обновляем, сохраняя `id`, чтобы не потерять
+     *   привязки к персонажам и отметки о подготовке.
+     *
+     * @return была ли запись добавлена или обновлена.
+     */
+    suspend fun saveOfficialSpell(spell: Spell): Boolean {
+        val official = spell.copy(origin = SpellOrigin.OFFICIAL.name)
+        val existing = findSpellByName(spell.name)
+            ?: run {
+                spellDao.upsert(official)
+                return true
+            }
+        if (!existing.isReplaceableByOfficial) return false
+        spellDao.upsert(official.copy(id = existing.id, createdAt = existing.createdAt))
+        return true
+    }
 
     suspend fun deleteSpell(spellId: String) = spellDao.deleteById(spellId)
 
@@ -225,7 +250,32 @@ class SpellBookRepository(
         legacy.delete()
     }
 
+    /**
+     * Импортирует набор заклинаний, вложенный в приложение как файл в `assets`.
+     *
+     * Выполняется в фоне: файл большой, а разбор JSON недёшев. Действуют те же
+     * правила, что и при загрузке с сайта: заклинания, созданные пользователем
+     * вручную, не затираются, а ранее загруженные обновляются на месте.
+     *
+     * @return сколько записей добавлено или обновлено; 0 — если файла нет.
+     */
+    suspend fun importBundledLibrary(): Int = withContext(Dispatchers.IO) {
+        val json = runCatching {
+            context.assets.open(BUNDLED_LIBRARY_ASSET).bufferedReader().use { it.readText() }
+        }.getOrNull() ?: return@withContext 0
+
+        val spells = runCatching { SpellLssCodec.decodeList(json) }.getOrNull().orEmpty()
+        var saved = 0
+        spells.forEach { spell ->
+            if (spell.name.isNotBlank() && saveOfficialSpell(spell)) saved++
+        }
+        saved
+    }
+
     private companion object {
         const val LEGACY_FILE_NAME = "spells.json"
+
+        /** Файл со встроенной библиотекой; лежит в `app/src/main/assets`. */
+        const val BUNDLED_LIBRARY_ASSET = "spellbook-library.json"
     }
 }

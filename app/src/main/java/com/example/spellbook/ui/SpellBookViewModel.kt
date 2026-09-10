@@ -13,6 +13,7 @@ import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.withRecalculatedResources
 import com.example.spellbook.data.DndSuException
 import com.example.spellbook.data.ComboRoller
+import com.example.spellbook.data.DndSuCatalog
 import com.example.spellbook.data.DndSuLoader
 import com.example.spellbook.data.SpellBookRepository
 import com.example.spellbook.data.SpellFilters
@@ -21,6 +22,7 @@ import com.example.spellbook.data.SpellSort
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.AbilityType
 import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.classListPreparingLimits
 import com.example.spellbook.data.model.D20RollResult
 import com.example.spellbook.data.model.ProficiencyLevel
 import com.example.spellbook.data.model.RollKind
@@ -38,11 +40,17 @@ import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.util.DiceRoller
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 
 /** Две основные вкладки приложения. */
 enum class Tab { CHARACTERS, LIBRARY }
@@ -52,6 +60,12 @@ private const val D20_SIDES = 20
 
 /** Заголовок блока заметок, если пользователь его не указал. */
 private const val DEFAULT_NOTE_TITLE = "Новый блок"
+
+/**
+ * Сколько заклинаний скачиваем одновременно. Последовательная загрузка занимала минуты;
+ * при этом слишком большая параллельность грозит отказами со стороны сайта.
+ */
+private const val LIBRARY_DOWNLOAD_PARALLELISM = 8
 
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
@@ -97,7 +111,44 @@ data class SpellBookUiState(
     val currentCharacterFeatIds: Set<String> = emptySet(),
     /** Последний бросок d20: показывается небольшой плашкой слева внизу. */
     val lastD20Roll: D20RollResult? = null,
+    /** Прогресс массовой загрузки библиотеки; null — загрузка не идёт. */
+    val libraryProgress: LibraryDownloadProgress? = null,
+    /** Итог последней массовой загрузки с логом ошибок; null — показывать нечего. */
+    val libraryReport: LibraryDownloadReport? = null,
     val message: String? = null,
+)
+
+/** Состояние загрузки официальной библиотеки заклинаний. */
+data class LibraryDownloadProgress(
+    val processed: Int = 0,
+    val total: Int = 0,
+    /** Добавлено или обновлено записей. */
+    val saved: Int = 0,
+    /** Пропущено: такое заклинание создано пользователем вручную. */
+    val skipped: Int = 0,
+    val failed: Int = 0,
+) {
+    /** Доля выполненного от 0 до 1; до получения списка — 0. */
+    val fraction: Float
+        get() = if (total > 0) processed.toFloat() / total else 0f
+}
+
+/**
+ * Заклинание, которое не удалось загрузить.
+ *
+ * [name] берётся из адреса страницы: если загрузка упала, настоящего названия ещё нет.
+ */
+data class LibraryDownloadFailure(
+    val name: String,
+    val url: String,
+    val reason: String,
+)
+
+/** Итог массовой загрузки: сколько сохранено и что не получилось. */
+data class LibraryDownloadReport(
+    val saved: Int = 0,
+    val skipped: Int = 0,
+    val failures: List<LibraryDownloadFailure> = emptyList(),
 )
 
 class SpellBookViewModel(application: Application) : AndroidViewModel(application) {
@@ -105,13 +156,16 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     private val repository = SpellBookRepository(application)
     private val prefs = AppPreferences(application)
 
+    /** Активная массовая загрузка библиотеки — чтобы не запустить её дважды и мочь отменить. */
+    private var libraryDownload: Job? = null
+
     var uiState by mutableStateOf(SpellBookUiState())
         private set
 
     /** Параметры отображения списка (общие для библиотеки и экрана персонажа). */
     var listQuery by mutableStateOf("")
         private set
-    var listSort by mutableStateOf(SpellSort.DATE_ADDED)
+    var listSort by mutableStateOf(SpellSort.LEVEL)
         private set
     var listFilters by mutableStateOf(SpellFilters())
         private set
@@ -167,6 +221,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         viewModelScope.launch {
             repository.migrateLegacyIfNeeded()
+            importBundledLibraryOnce()
             restoreLastCharacter()
         }
         repository.observeCharacters()
@@ -183,6 +238,18 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         repository.observeAllFeats()
             .onEach { uiState = uiState.copy(libraryFeats = it) }
             .launchIn(viewModelScope)
+    }
+
+    /**
+     * При первом запуске наполняет библиотеку из встроенного файла, чтобы заклинания
+     * были доступны сразу и офлайн. Повторно не выполняется: иначе удалённые
+     * заклинания возвращались бы при каждом старте.
+     */
+    private suspend fun importBundledLibraryOnce() {
+        if (prefs.bundledLibraryImported) return
+        // Импорт идёт молча: для пользователя библиотека просто уже есть при первом запуске.
+        repository.importBundledLibrary()
+        prefs.bundledLibraryImported = true
     }
 
     /** При старте открываем набор последнего выбранного персонажа, если он ещё существует. */
@@ -729,19 +796,218 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Загружает всю официальную библиотеку заклинаний, чтобы дальше пользоваться ею офлайн.
+     *
+     * Заклинания, созданные вручную, остаются нетронутыми; ранее загруженные обновляются
+     * на месте, так что привязки к персонажам сохраняются.
+     */
+    fun downloadOfficialLibrary() {
+        if (libraryDownload != null) return
+        libraryDownload = viewModelScope.launch {
+            uiState = uiState.copy(libraryProgress = LibraryDownloadProgress(), libraryReport = null)
+            val urls = try {
+                DndSuCatalog.loadOfficialSpellUrls()
+            } catch (e: DndSuException) {
+                finishLibraryDownload(e.message ?: "Не удалось получить список заклинаний")
+                return@launch
+            }
+
+            var processed = 0
+            var saved = 0
+            var skipped = 0
+            val failures = mutableListOf<LibraryDownloadFailure>()
+            val counters = Mutex()
+            // Ограничиваем число одновременных запросов: без этого сайт может начать отказывать.
+            val limiter = Semaphore(LIBRARY_DOWNLOAD_PARALLELISM)
+
+            coroutineScope {
+                urls.map { url ->
+                    async {
+                        limiter.withPermit {
+                            ensureActive()
+                            // Сохраняем причину сбоя, чтобы показать её в логе после загрузки.
+                            val attempt = runCatching { DndSuLoader.load(url) }
+                            val spell = attempt.getOrNull()
+                            val failure = when {
+                                spell == null -> attempt.exceptionOrNull()
+                                    ?.let { it.message ?: it::class.simpleName }
+                                    ?: "неизвестная ошибка"
+
+                                spell.name.isBlank() -> "не удалось распознать заклинание на странице"
+                                else -> null
+                            }
+                            val replaced = if (failure == null && spell != null) {
+                                repository.saveOfficialSpell(spell)
+                            } else {
+                                false
+                            }
+
+                            // Счётчики общие для всех корутин, поэтому обновляем их под замком.
+                            counters.withLock {
+                                processed++
+                                when {
+                                    failure != null -> failures += LibraryDownloadFailure(
+                                        name = spellNameFromUrl(url),
+                                        url = url,
+                                        reason = failure,
+                                    )
+
+                                    replaced -> saved++
+                                    else -> skipped++
+                                }
+                                uiState = uiState.copy(
+                                    libraryProgress = LibraryDownloadProgress(
+                                        processed = processed,
+                                        total = urls.size,
+                                        saved = saved,
+                                        skipped = skipped,
+                                        failed = failures.size,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }.awaitAll()
+            }
+
+            val summary = buildString {
+                append("Загружено заклинаний: $saved")
+                if (skipped > 0) append(", своих сохранено: $skipped")
+                if (failures.isNotEmpty()) append(", ошибок: ${failures.size}")
+            }
+            // Лог показываем только при наличии ошибок: иначе достаточно краткого итога.
+            val report = failures
+                .takeIf { it.isNotEmpty() }
+                ?.let { LibraryDownloadReport(saved, skipped, it.sortedBy(LibraryDownloadFailure::name)) }
+            finishLibraryDownload(summary, report)
+        }
+    }
+
+    /** Закрывает лог ошибок последней загрузки. */
+    fun dismissLibraryReport() {
+        uiState = uiState.copy(libraryReport = null)
+    }
+
+    /**
+     * Выгружает всю библиотеку одним файлом — его можно передать другому человеку,
+     * чтобы ему не пришлось скачивать заклинания по одному.
+     */
+    fun exportLibraryJson(): String? {
+        val spells = uiState.librarySpells
+        if (spells.isEmpty()) {
+            uiState = uiState.copy(message = "Библиотека пуста")
+            return null
+        }
+        return SpellLssCodec.encodeList(spells)
+    }
+
+    /**
+     * Загружает библиотеку из файла: мгновенная альтернатива скачиванию с сайта.
+     * Собственные заклинания пользователя при этом не затираются.
+     */
+    fun importLibraryJson(json: String) {
+        val spells = runCatching { SpellLssCodec.decodeList(json) }.getOrNull()
+        if (spells.isNullOrEmpty()) {
+            uiState = uiState.copy(message = "Не удалось прочитать библиотеку из файла")
+            return
+        }
+        viewModelScope.launch {
+            var saved = 0
+            var skipped = 0
+            spells.forEach { spell ->
+                if (spell.name.isBlank()) return@forEach
+                if (repository.saveOfficialSpell(spell)) saved++ else skipped++
+            }
+            uiState = uiState.copy(
+                message = buildString {
+                    append("Добавлено заклинаний: $saved")
+                    if (skipped > 0) append(", своих сохранено: $skipped")
+                },
+            )
+        }
+    }
+
+    /** Прерывает массовую загрузку, сохраняя уже скачанное. */
+    fun cancelLibraryDownload() {
+        libraryDownload?.cancel()
+        libraryDownload = null
+        uiState = uiState.copy(libraryProgress = null, message = "Загрузка остановлена")
+    }
+
+    private fun finishLibraryDownload(message: String, report: LibraryDownloadReport? = null) {
+        libraryDownload = null
+        uiState = uiState.copy(libraryProgress = null, libraryReport = report, message = message)
+    }
+
+    /**
+     * Имя заклинания из адреса вида `/spells/291-prismatic_spray/` → `prismatic spray`.
+     * Используется в логе ошибок: при сбое русского названия ещё нет.
+     */
+    private fun spellNameFromUrl(url: String): String = url
+        .trimEnd('/')
+        .substringAfterLast('/')
+        .substringAfter('-')
+        .replace('_', ' ')
+        .ifBlank { url }
+
     // endregion
 
     // region Персонажи и связи
 
-    fun saveCharacter(character: Character) {
+    /**
+     * Сохраняет персонажа.
+     *
+     * @param addClassSpells если true, в список известных добавляются все заклинания
+     * классов, готовящих из полного списка, в пределах доступных кругов.
+     */
+    fun saveCharacter(character: Character, addClassSpells: Boolean = false) {
         // Редактирование (открыто с экрана заклинаний) — возвращаемся к ним, создание — к списку персонажей.
         val editing = (uiState.screen as? Screen.CharacterForm)?.characterId != null
         viewModelScope.launch {
             // Уровень и характеристики могли измениться — пересчитываем ресурсы на формулах.
             repository.upsertCharacter(character.withRecalculatedResources())
+            val added = if (addClassSpells) addClassSpellsToCharacter(character) else 0
             val target = if (editing) Screen.CharacterSpells(character.id) else Screen.Characters
-            uiState = uiState.copy(screen = target, message = "Персонаж сохранён")
+            uiState = uiState.copy(
+                screen = target,
+                message = if (added > 0) "Персонаж сохранён · заклинаний добавлено: $added"
+                else "Персонаж сохранён",
+            )
         }
+    }
+
+    /**
+     * Добавляет в набор персонажа все заклинания его классов, готовящих
+     * из полного списка, ограничивая их доступными кругами.
+     *
+     * Заговоры не добавляются: они не подготавливаются и ограничены отдельно.
+     *
+     * @return сколько заклинаний добавлено.
+     */
+    private suspend fun addClassSpellsToCharacter(character: Character): Int {
+        // Круг свой у каждого класса: друид 4 уровня готовит только до 2 круга,
+        // даже если суммарный уровень персонажа даёт ячейки выше.
+        val limits = classListPreparingLimits(character.classLevels)
+        if (limits.isEmpty()) return 0
+
+        var added = 0
+        uiState.librarySpells
+            .filter { spell ->
+                spell.level > 0 && spell.classes.any { code ->
+                    spell.level <= (limits[code] ?: 0)
+                }
+            }
+            .forEach { spell ->
+                val result = repository.tryAddSpellToCharacter(
+                    characterId = character.id,
+                    spellId = spell.id,
+                    spellLevel = spell.level,
+                    maxCantrips = character.maxCantrips,
+                )
+                if (result == AddSpellResult.ADDED) added++
+            }
+        return added
     }
 
     /** Выгружает лист персонажа в формате LSS; null — персонаж не найден. */

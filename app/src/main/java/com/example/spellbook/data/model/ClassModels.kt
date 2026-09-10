@@ -50,8 +50,36 @@ enum class CharacterClass(val label: String, val spellcaster: SpellcasterType) {
     val preparesSpells: Boolean
         get() = this in PREPARING_CLASSES
 
+    /**
+     * Готовит ли класс заклинания из полного списка своего класса.
+     *
+     * Волшебник сюда не входит: он готовит заклинания из личной книги,
+     * а не из всего списка, доступного классу.
+     */
+    val preparesFromClassList: Boolean
+        get() = this in CLASS_LIST_PREPARING_CLASSES
+
+    /** Код класса в списках заклинаний (`SpellOptions.classes`); null — у класса нет заклинаний. */
+    val spellListCode: String?
+        get() = SPELL_LIST_CODES[this]
+
     private companion object {
         val PREPARING_CLASSES = setOf(ARTIFICER, CLERIC, DRUID, PALADIN, WIZARD)
+
+        /** Классы, готовящие заклинания из списка всего класса. */
+        val CLASS_LIST_PREPARING_CLASSES = setOf(ARTIFICER, CLERIC, DRUID, PALADIN)
+
+        val SPELL_LIST_CODES = mapOf(
+            ARTIFICER to "artificer",
+            BARD to "bard",
+            CLERIC to "cleric",
+            DRUID to "druid",
+            PALADIN to "paladin",
+            RANGER to "ranger",
+            SORCERER to "sorcerer",
+            WARLOCK to "warlock",
+            WIZARD to "wizard",
+        )
     }
 }
 
@@ -176,3 +204,28 @@ fun hasSpellcaster(classes: List<CharacterClassLevel>): Boolean =
 /** Умеет ли персонаж переподготавливать заклинания хотя бы по одному классу. */
 fun preparesSpells(classes: List<CharacterClassLevel>): Boolean =
     classes.any { it.characterClass.preparesSpells }
+
+/**
+ * Максимальный круг заклинаний, доступный по одному классу.
+ *
+ * Считается из уровня именно этого класса, а не из суммарного уровня персонажа:
+ * друид 4 уровня в паре с чародеем 1 уровня готовит заклинания только до 2 круга.
+ */
+fun maxSpellCircleFor(entry: CharacterClassLevel): Int =
+    spellSlotsFor(listOf(entry)).keys.maxOrNull() ?: 0
+
+/**
+ * Классы, готовящие заклинания из полного списка класса, с доступным кругом.
+ *
+ * @return код класса из `SpellOptions.classes` → максимальный круг. При повторе класса
+ * берётся наибольший круг; классы без доступных кругов в результат не попадают.
+ */
+fun classListPreparingLimits(classes: List<CharacterClassLevel>): Map<String, Int> {
+    val limits = mutableMapOf<String, Int>()
+    classes.filter { it.characterClass.preparesFromClassList }.forEach { entry ->
+        val code = entry.characterClass.spellListCode ?: return@forEach
+        val circle = maxSpellCircleFor(entry)
+        if (circle > 0) limits[code] = maxOf(limits[code] ?: 0, circle)
+    }
+    return limits
+}

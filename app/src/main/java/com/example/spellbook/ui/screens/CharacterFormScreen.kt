@@ -70,6 +70,7 @@ import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterClass
 import com.example.spellbook.data.model.CharacterClassLevel
 import com.example.spellbook.data.model.MAX_CLASS_LEVEL
+import com.example.spellbook.data.model.maxSpellCircleFor
 import com.example.spellbook.data.model.SpellcasterType
 import com.example.spellbook.data.model.WeaponProficiency
 import com.example.spellbook.data.model.formatModifier
@@ -407,7 +408,11 @@ private fun ClassLevelCard(
 fun CharacterFormScreen(
     initial: Character,
     isNew: Boolean,
-    onSave: (Character) -> Unit,
+    /**
+     * @param addClassSpells нужно ли добавить в список известных все заклинания
+     * классов, готовящих из полного списка (жрец, друид, паладин, изобретатель).
+     */
+    onSave: (character: Character, addClassSpells: Boolean) -> Unit,
     onDelete: (() -> Unit)?,
     onBack: () -> Unit,
     /** Выгрузка и загрузка листа в формате LSS; null — действие недоступно. */
@@ -419,6 +424,11 @@ fun CharacterFormScreen(
     var imageUri by remember { mutableStateOf(initial.imageUri) }
 
     var canPrepare by remember { mutableStateOf(initial.canPrepareSpells) }
+    /*
+     * Предложение сразу добавить все заклинания класса в список для переподготовки.
+     * По умолчанию включено: таким классам доступен весь список, и перебирать его вручную долго.
+     */
+    var addClassSpells by remember { mutableStateOf(true) }
     var maxPrepared by remember { mutableStateOf(initial.maxPreparedSpells.takeIf { it > 0 }?.toString() ?: "") }
     var maxCantrips by remember { mutableStateOf(initial.maxCantrips.takeIf { it > 0 }?.toString() ?: "") }
     var maxAttunedItems by remember { mutableStateOf(initial.maxAttunedItems.toString()) }
@@ -472,6 +482,17 @@ fun CharacterFormScreen(
     /** Классы с корректно заполненными уровнем и названием. */
     val validClassLevels = classLevels.mapNotNull { it.toClassLevel() }
     val hasInvalidClassLevel = classLevels.any { !it.isValid }
+
+    /** Классы, готовящие заклинания из всего своего списка. */
+    val classListClasses = validClassLevels.filter { it.characterClass.preparesFromClassList }
+
+    /*
+     * Круг считается отдельно по уровню каждого класса, а не по сумме уровней:
+     * друид 4 уровня и чародей 1 уровня — это только 2 круг друида.
+     */
+    val classListSummary = classListClasses.joinToString { entry ->
+        "${entry.displayName.lowercase()} — до ${maxSpellCircleFor(entry)} круга"
+    }
 
     /** При создании уровень и ячейки подставляются из классов, если они указаны. */
     val autoFromClasses = isNew && validClassLevels.isNotEmpty()
@@ -549,10 +570,13 @@ fun CharacterFormScreen(
         )
     }
 
+    /** Нужно ли наполнить список заклинаниями класса при сохранении. */
+    val shouldAddClassSpells = canPrepare && addClassSpells && classListClasses.isNotEmpty()
+
     /** Сохраняет сразу либо спрашивает про пересчёт ячеек по изменённым классам. */
     fun requestSave() {
         val character = buildCharacter()
-        if (casterSetupChanged) pendingSave = character else onSave(character)
+        if (casterSetupChanged) pendingSave = character else onSave(character, shouldAddClassSpells)
     }
 
     pendingSave?.let { character ->
@@ -561,7 +585,7 @@ fun CharacterFormScreen(
             calculatedSlots = calculatedSlots,
             onKeep = {
                 pendingSave = null
-                onSave(character)
+                onSave(character, shouldAddClassSpells)
             },
             onRecalculate = {
                 pendingSave = null
@@ -571,7 +595,10 @@ fun CharacterFormScreen(
                     if (total > 0) level to minOf(used, total) else null
                 }.toMap()
                 applyCalculatedSlots()
-                onSave(character.copy(spellSlots = calculatedSlots, spellSlotsUsed = clampedUsed))
+                onSave(
+                    character.copy(spellSlots = calculatedSlots, spellSlotsUsed = clampedUsed),
+                    shouldAddClassSpells,
+                )
             },
             onDismiss = { pendingSave = null },
         )
@@ -684,6 +711,27 @@ fun CharacterFormScreen(
                     )
                 }
                 Switch(checked = canPrepare, onCheckedChange = { canPrepare = it })
+            }
+            // Жрец, друид, паладин и изобретатель готовят заклинания из всего списка класса,
+            // поэтому им предлагаем сразу наполнить список известных заклинаний.
+            if (canPrepare && classListClasses.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Добавить заклинания класса", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Доступные круги по уровню класса: $classListSummary",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = addClassSpells,
+                        onCheckedChange = { addClassSpells = it },
+                    )
+                }
             }
             if (canPrepare) {
                 OutlinedTextField(

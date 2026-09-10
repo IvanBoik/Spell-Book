@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Локальная библиотека заклинаний: большой файл с текстами со стороннего сайта.
+# Собирается на устройстве: «Скачать всё с dnd.su» → «Выгрузить библиотеку».
+app/src/main/assets/spellbook-library.json

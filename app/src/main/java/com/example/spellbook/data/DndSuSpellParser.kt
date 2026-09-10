@@ -24,7 +24,7 @@ object DndSuSpellParser {
             ?: throw IllegalArgumentException("Не найден блок параметров заклинания")
 
         val typeLine = params.selectFirst("li.size-type-alignment")?.text().orEmpty()
-        val (level, school) = parseLevelAndSchool(typeLine)
+        val (level, school, schoolNote) = parseLevelAndSchool(typeLine)
         val ritual = isRitual(typeLine)
         val fields = parseLabeledFields(doc)
 
@@ -35,13 +35,15 @@ object DndSuSpellParser {
         val components = parseComponents(componentsRaw, concentration, ritual)
         val materials = parseMaterials(componentsRaw)
         val classes = parseClasses(fields[LABEL_CLASSES].orEmpty())
+        val subclasses = parseSubclasses(fields[LABEL_SUBCLASSES].orEmpty())
 
         return Spell(
             name = parseName(doc),
             description = parseDescription(doc),
-            source = SOURCE_DND_SU,
+            source = parseSource(doc),
             level = level,
             school = school,
+            schoolNote = schoolNote,
             activationType = activationType,
             activationCost = activationCost,
             durationValue = durationValue,
@@ -51,6 +53,7 @@ object DndSuSpellParser {
             components = components,
             materials = materials,
             classes = classes,
+            subclasses = subclasses,
         )
     }
 
@@ -74,26 +77,31 @@ object DndSuSpellParser {
         desc.select("span[tooltip-for]").forEach { span ->
             span.text("[[ref ${span.text()}]]")
         }
-        return HtmlUtils.htmlToPlain(desc.html())
+        // Комментарии маскота сайта — не часть заклинания, поэтому в описание не попадают.
+        return HtmlUtils.removeMascotNotes(HtmlUtils.htmlToPlain(desc.html()))
     }
 
     /**
      * «2 уровень, преобразование» / «Заговор, воплощение» / «1 уровень, прорицание (ритуал)»
      * → (level, schoolCode). Пометка «(ритуал)» отбрасывается при определении школы.
      */
-    private fun parseLevelAndSchool(text: String): Pair<Int, String> {
+    private fun parseLevelAndSchool(text: String): Triple<Int, String, String> {
         val parts = text.split(',').map { it.trim() }
         val levelPart = parts.getOrNull(0).orEmpty().lowercase()
         val level = when {
             levelPart.startsWith("заговор") -> 0
             else -> Regex("\\d+").find(levelPart)?.value?.toIntOrNull() ?: 0
         }
-        // Убираем скобочные пометки вроде «(ритуал)», оставляя только название школы.
-        val schoolName = parts.getOrNull(1).orEmpty().substringBefore('(').trim()
+        val schoolPart = parts.getOrNull(1).orEmpty()
+        // Само название школы — до скобки: «воплощение (дюнамантия)» → «воплощение».
+        val schoolName = schoolPart.substringBefore('(').trim()
         val school = SpellOptions.schools.firstOrNull {
             it.second.equals(schoolName, ignoreCase = true)
         }?.first ?: "evo"
-        return level to school
+        // В скобках бывает либо пометка ритуала, либо уточнение вроде «дюнамантия: хронургия».
+        val note = schoolPart.substringAfter('(', "").substringBeforeLast(')', "").trim()
+        val schoolNote = note.takeUnless { it.isEmpty() || it.contains(RITUAL_MARK, ignoreCase = true) }.orEmpty()
+        return Triple(level, school, schoolNote)
     }
 
     /** «1 действие» / «1 бонусное действие» / «1 минута» / «10 минут» / «Реакция» → код и стоимость. */
@@ -176,8 +184,33 @@ object DndSuSpellParser {
             .distinct()
     }
 
+    /**
+     * Подклассы идут списком вида «домен магии (жрец), круг земли (друид)».
+     * Подписи сохраняем как есть: справочника подклассов в формате LSS нет.
+     * Запятая внутри скобок не встречается, поэтому достаточно простого разбиения.
+     */
+    private fun parseSubclasses(text: String): List<String> = text
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+
     /** Ритуал определяется по наличию слова «ритуал» в блоке параметров. */
-    private fun isRitual(paramsText: String): Boolean = paramsText.lowercase().contains("ритуал")
+    private fun isRitual(paramsText: String): Boolean = paramsText.contains(RITUAL_MARK, ignoreCase = true)
+
+    /**
+     * Книга-источник из заголовка карточки: `<span class="source-plaque" title="...">XGE</span>`.
+     * Берём первую плашку — она соответствует книге, где заклинание появилось впервые.
+     */
+    private fun parseSource(doc: Document): String {
+        val plaque = doc.selectFirst("h2.card-title .source-plaque") ?: return SOURCE_DND_SU
+        val code = plaque.text().trim()
+        val title = plaque.attr("title").trim()
+        return when {
+            code.isNotEmpty() -> code
+            title.isNotEmpty() -> title
+            else -> SOURCE_DND_SU
+        }
+    }
 
     /**
      * Собирает пары «метка → значение» из `<li><strong>Метка:</strong> значение</li>`.
@@ -202,4 +235,8 @@ object DndSuSpellParser {
     private const val LABEL_COMPONENTS = "Компоненты"
     private const val LABEL_DURATION = "Длительность"
     private const val LABEL_CLASSES = "Классы"
+    private const val LABEL_SUBCLASSES = "Подклассы"
+
+    /** Пометка ритуала в строке типа: её не путаем с уточнением школы. */
+    private const val RITUAL_MARK = "ритуал"
 }

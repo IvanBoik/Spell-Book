@@ -159,6 +159,57 @@ class HtmlUtilsTest {
     }
 
     @Test
+    fun `htmlToPlain merges nested emphasis into bold italic`() {
+        // Разметка встречается в «Радужных брызгах»: теги идут в обоих порядках.
+        assertEquals("***Зелёный***", HtmlUtils.htmlToPlain("<strong><em>Зелёный</em></strong>"))
+        assertEquals("***Голубой***", HtmlUtils.htmlToPlain("<em><strong>Голубой</strong></em>"))
+    }
+
+    @Test
+    fun `htmlToPlain leaves no stray asterisks on partial nesting`() {
+        // Точка стоит вне жирного, но внутри курсива — раньше это давало нечитаемое `***X**.*`.
+        val result = HtmlUtils.htmlToPlain("<em><strong>1. Красный</strong>.</em>")
+
+        assertEquals("**1. Красный**.", result)
+    }
+
+    @Test
+    fun `bold italic survives round trip through html`() {
+        val text = "***Жёлтый***"
+
+        assertEquals(text, HtmlUtils.htmlToPlain(HtmlUtils.plainToHtml(text)))
+    }
+
+    @Test
+    fun `removeMascotNotes drops callout signed by site mascot`() {
+        val text = "Основной текст\n:::\nПояснение сайта\n**— Господин Финик**\n:::"
+
+        assertEquals("Основной текст", HtmlUtils.removeMascotNotes(text))
+    }
+
+    @Test
+    fun `removeMascotNotes keeps useful callouts`() {
+        // Блок из Таши в «Телепортации» — часть правил, его убирать нельзя.
+        val text = "Основной текст\n::: Путешествие в другие миры\nСправочный текст\n:::"
+
+        assertEquals(text, HtmlUtils.removeMascotNotes(text))
+    }
+
+    @Test
+    fun `removeMascotNotes keeps text without callouts unchanged`() {
+        val text = "Простое описание\nБез врезок"
+
+        assertEquals(text, HtmlUtils.removeMascotNotes(text))
+    }
+
+    @Test
+    fun `removeMascotNotes drops only the signed block`() {
+        val text = "Начало\n::: Важно\nПравило\n:::\n:::\nКомментарий\n**— Господин Финик**\n:::\nКонец"
+
+        assertEquals("Начало\n::: Важно\nПравило\n:::\nКонец", HtmlUtils.removeMascotNotes(text))
+    }
+
+    @Test
     fun `htmlToPlain keeps bold and italic as markers`() {
         assertEquals(
             "**Жирный** и *курсив*",

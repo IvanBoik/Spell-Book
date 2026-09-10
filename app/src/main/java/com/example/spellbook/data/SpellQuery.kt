@@ -1,10 +1,11 @@
 package com.example.spellbook.data
 
 import com.example.spellbook.data.model.Spell
+import com.example.spellbook.data.model.SpellOrigin
 
 /**
  * Способ сортировки списка заклинаний.
- * [DATE_ADDED] — по дате добавления (используется по умолчанию, последние сверху).
+ * [LEVEL] — по уровню (используется по умолчанию).
  */
 enum class SpellSort(val label: String) {
     DATE_ADDED("По дате добавления"),
@@ -46,16 +47,40 @@ data class SpellFilters(
     val schools: Set<String> = emptySet(),
     val components: Set<SpellComponent> = emptySet(),
     val activationTypes: Set<String> = emptySet(),
+    /** Книги-источники: PHB, XGE, TCE и т. п. */
+    val sources: Set<String> = emptySet(),
+    /** Откуда запись появилась в библиотеке. */
+    val origins: Set<SpellOrigin> = emptySet(),
     val concentration: Boolean = false,
     val ritual: Boolean = false,
 ) {
     /** Количество активных условий — для отображения счётчика на кнопке фильтров. */
     val activeCount: Int
         get() = levels.size + classes.size + schools.size + components.size +
-            activationTypes.size + (if (concentration) 1 else 0) + (if (ritual) 1 else 0)
+            activationTypes.size + sources.size + origins.size +
+            (if (concentration) 1 else 0) + (if (ritual) 1 else 0)
 
     val isActive: Boolean get() = activeCount > 0
 }
+
+/** Подписи для фильтра по происхождению заклинания. */
+val spellOriginOptions: List<Pair<SpellOrigin, String>> = listOf(
+    SpellOrigin.OFFICIAL to "Официальные",
+    SpellOrigin.IMPORTED to "Загруженные",
+    SpellOrigin.USER to "Созданные вручную",
+)
+
+/**
+ * Собирает список книг-источников, встречающихся в библиотеке.
+ * Список динамический: зависит от того, что у пользователя загружено.
+ */
+fun List<Spell>.availableSources(): List<Pair<String, String>> = asSequence()
+    .map { it.source.trim() }
+    .filter { it.isNotEmpty() }
+    .distinct()
+    .sorted()
+    .map { it to it }
+    .toList()
 
 /** Варианты времени накладывания для фильтра (коды совпадают с [Spell.activationType]). */
 val castingTimeOptions: List<Pair<String, String>> = listOf(
@@ -84,6 +109,8 @@ fun List<Spell>.filterSortSearch(
             (filters.schools.isEmpty() || spell.school in filters.schools) &&
             (filters.components.isEmpty() || filters.components.any { it.presentIn(spell) }) &&
             (filters.activationTypes.isEmpty() || spell.activationType in filters.activationTypes) &&
+            (filters.sources.isEmpty() || spell.source.trim() in filters.sources) &&
+            (filters.origins.isEmpty() || spell.spellOrigin in filters.origins) &&
             (!filters.concentration || spell.components.concentration) &&
             (!filters.ritual || spell.components.ritual)
     }

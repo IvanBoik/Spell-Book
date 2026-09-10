@@ -17,8 +17,18 @@ class AppPreferences(context: Context) {
             if (value == null) remove(KEY_LAST_CHARACTER) else putString(KEY_LAST_CHARACTER, value)
         }.apply()
 
+    /**
+     * Был ли уже импортирован встроенный набор заклинаний.
+     * Импорт выполняется один раз, чтобы не возвращать удалённые пользователем заклинания
+     * при каждом запуске.
+     */
+    var bundledLibraryImported: Boolean
+        get() = prefs.getBoolean(KEY_BUNDLED_LIBRARY, false)
+        set(value) = prefs.edit().putBoolean(KEY_BUNDLED_LIBRARY, value).apply()
+
     private companion object {
         const val PREFS_NAME = "spellbook_prefs"
         const val KEY_LAST_CHARACTER = "last_character_id"
+        const val KEY_BUNDLED_LIBRARY = "bundled_library_imported"
     }
 }

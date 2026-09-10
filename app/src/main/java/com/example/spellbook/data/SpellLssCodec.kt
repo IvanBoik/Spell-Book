@@ -22,6 +22,12 @@ object SpellLssCodec {
 
     /** Внутренний ключ для хранения локального id; удаляется из чистого экспорта. */
     private const val LOCAL_ID_KEY = "_localId"
+
+    /** Подклассы — расширение приложения: в базовом формате LSS такого поля нет. */
+    private const val SUBCLASSES_KEY = "subclasses"
+
+    /** Уточнение школы — тоже расширение приложения. */
+    private const val SCHOOL_NOTE_KEY = "schoolNote"
     private const val TYPE_SPELL = "spell"
 
     // region Сериализация
@@ -131,6 +137,10 @@ object SpellLssCodec {
             put("type", TYPE_SPELL)
             put("system", system)
             put("classes", JSONArray(spell.classes))
+            // Подклассов в формате LSS нет, поэтому пишем их только при наличии,
+            // чтобы не засорять чистый экспорт лишними полями.
+            if (spell.subclasses.isNotEmpty()) put(SUBCLASSES_KEY, JSONArray(spell.subclasses))
+            if (spell.schoolNote.isNotBlank()) put(SCHOOL_NOTE_KEY, spell.schoolNote)
             if (includeLocalId) put(LOCAL_ID_KEY, spell.id)
         }
     }
@@ -211,6 +221,8 @@ object SpellLssCodec {
             scalingMode = scaling.optString("mode").ifEmpty { "none" },
             scalingFormula = scaling.optString("formula"),
             classes = parseStringArray(json.optJSONArray("classes")),
+            subclasses = parseStringArray(json.optJSONArray(SUBCLASSES_KEY)),
+            schoolNote = json.optString(SCHOOL_NOTE_KEY),
         )
     }
 

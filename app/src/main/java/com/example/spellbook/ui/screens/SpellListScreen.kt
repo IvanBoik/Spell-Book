@@ -92,8 +92,10 @@ import com.example.spellbook.data.SpellComponent
 import com.example.spellbook.data.SpellFilters
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.SpellSort
+import com.example.spellbook.data.availableSources
 import com.example.spellbook.data.castingTimeOptions
 import com.example.spellbook.data.filterSortSearch
+import com.example.spellbook.data.spellOriginOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
 
@@ -136,6 +138,8 @@ fun SpellListScreen(
     var showSortMenu by remember { mutableStateOf(false) }
 
     val visibleSpells = spells.filterSortSearch(query, filters, sort)
+    // Список книг зависит от содержимого библиотеки, поэтому считаем его по всем заклинаниям.
+    val sourceOptions = remember(spells) { spells.availableSources() }
 
     // Позиция прокрутки: восстанавливается из сохранённых значений и сообщается наружу.
     val listState = androidx.compose.foundation.lazy.rememberLazyListState(
@@ -269,6 +273,7 @@ fun SpellListScreen(
                         filters = filters,
                         onFiltersChange = onFiltersChange,
                         onCollapse = { showFilters = false },
+                        sourceOptions = sourceOptions,
                     )
                     HorizontalDivider()
                 }
@@ -481,6 +486,7 @@ private fun FilterPanel(
     filters: SpellFilters,
     onFiltersChange: (SpellFilters) -> Unit,
     onCollapse: () -> Unit,
+    sourceOptions: List<Pair<String, String>>,
 ) {
     Box(modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp)) {
         Column(
@@ -530,6 +536,21 @@ private fun FilterPanel(
                 options = castingTimeOptions,
                 selected = filters.activationTypes,
                 onToggle = { onFiltersChange(filters.copy(activationTypes = filters.activationTypes.toggle(it))) },
+            )
+            // Книги берём из самой библиотеки: список зависит от загруженных заклинаний.
+            if (sourceOptions.isNotEmpty()) {
+                FilterChipGroup(
+                    title = "Источник",
+                    options = sourceOptions,
+                    selected = filters.sources,
+                    onToggle = { onFiltersChange(filters.copy(sources = filters.sources.toggle(it))) },
+                )
+            }
+            FilterChipGroup(
+                title = "Происхождение",
+                options = spellOriginOptions,
+                selected = filters.origins,
+                onToggle = { onFiltersChange(filters.copy(origins = filters.origins.toggle(it))) },
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Дополнительно", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
@@ -666,7 +687,13 @@ private fun SpellCard(spell: Spell, onClick: () -> Unit) {
                 Text(spell.name, style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "${levelLabel(spell.level)} · ${SpellOptions.labelFor(SpellOptions.schools, spell.school)}",
+                    text = buildString {
+                        append(levelLabel(spell.level))
+                        append(" · ")
+                        append(SpellOptions.labelFor(SpellOptions.schools, spell.school))
+                        // Уточнение школы показываем и в списке: оно важно при выборе заклинания.
+                        if (spell.schoolNote.isNotBlank()) append(" (${spell.schoolNote})")
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,

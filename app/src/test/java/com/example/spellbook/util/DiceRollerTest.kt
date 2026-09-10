@@ -87,9 +87,53 @@ class DiceRollerTest {
 
     @Test
     fun `roll returns null for invalid formulas`() {
-        listOf("", "  ", "abc", "2к6", "0d6", "2d0", "1001d6", "2d6+1", "d").forEach { formula ->
+        listOf("", "  ", "abc", "0d6", "2d0", "1001d6", "d").forEach { formula ->
             assertNull("Formula '$formula' must be rejected", DiceRoller.roll(formula))
         }
+    }
+
+    @Test
+    fun `roll supports russian dice letter`() {
+        // В русских описаниях заклинаний кости записаны через «к».
+        val result = requireNotNull(DiceRoller.roll("6к10"))
+
+        assertEquals(6, result.rolls.size)
+        assertTrue(result.rolls.all { it in 1..10 })
+        assertEquals(result.rolls.sum(), result.total)
+    }
+
+    @Test
+    fun `roll adds positive modifier to total`() {
+        val result = requireNotNull(DiceRoller.roll("10к6 + 40"))
+
+        assertEquals(10, result.rolls.size)
+        assertEquals(40, result.modifier)
+        assertEquals(result.rolls.sum() + 40, result.total)
+    }
+
+    @Test
+    fun `roll subtracts negative modifier from total`() {
+        val result = requireNotNull(DiceRoller.roll("2d6-3"))
+
+        assertEquals(-3, result.modifier)
+        assertEquals(result.rolls.sum() - 3, result.total)
+    }
+
+    @Test
+    fun `plain dice regex finds dice written in text`() {
+        val found = DiceRoller.PLAIN_DICE_REGEX.findAll("Урон 6к10 и 10к6 + 40 огнём")
+            .map { it.value }
+            .toList()
+
+        assertEquals(listOf("6к10", "10к6 + 40"), found)
+    }
+
+    @Test
+    fun `plain dice regex does not capture unrelated numbers`() {
+        // Число после кости без знака модификатором не является.
+        val found = DiceRoller.PLAIN_DICE_REGEX.find("урон 2d6 в течение 10 минут")
+
+        assertEquals("2d6", found?.value)
     }
 
     // endregion

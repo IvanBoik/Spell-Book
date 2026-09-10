@@ -50,6 +50,48 @@ object HtmlUtils {
     /** Собирает строку таблицы из ячеек. */
     fun buildTableRow(cells: List<String>): String = cells.joinToString(" | ", "| ", " |")
 
+    /**
+     * Подпись маскота dnd.su. Его комментарии — пояснения сайта, а не текст заклинания,
+     * поэтому такие врезки в описание не попадают.
+     */
+    private const val MASCOT_SIGNATURE = "Господин Финик"
+
+    /**
+     * Убирает из описания врезки с комментариями маскота dnd.su.
+     *
+     * Блоки без подписи сохраняются: там лежит полезная справочная информация
+     * вроде блока из Таши в «Телепортации».
+     */
+    fun removeMascotNotes(text: String): String {
+        if (!text.contains(MASCOT_SIGNATURE)) return text
+        val result = mutableListOf<String>()
+        val block = mutableListOf<String>()
+        var insideCallout = false
+
+        text.split("\n").forEach { line ->
+            when {
+                isCalloutStart(line) || (isCalloutEnd(line) && !insideCallout) -> {
+                    insideCallout = true
+                    block += line
+                }
+
+                insideCallout && isCalloutEnd(line) -> {
+                    block += line
+                    // Врезка с подписью маскота целиком отбрасывается.
+                    if (block.none { it.contains(MASCOT_SIGNATURE) }) result += block
+                    block.clear()
+                    insideCallout = false
+                }
+
+                insideCallout -> block += line
+                else -> result += line
+            }
+        }
+        // Незакрытый блок возвращаем как есть, если в нём нет подписи.
+        if (block.isNotEmpty() && block.none { it.contains(MASCOT_SIGNATURE) }) result += block
+        return result.joinToString("\n").trim()
+    }
+
     /** Является ли строка заголовком. */
     fun isHeading(line: String): Boolean = line.startsWith(HEADING_PREFIX)
 
@@ -173,8 +215,10 @@ object HtmlUtils {
         return html.append("</tbody></table>").toString()
     }
 
-    /** Экранирует текст и превращает `**жирный**` и `*курсив*` в теги. */
+    /** Экранирует текст и превращает `***жирный курсив***`, `**жирный**` и `*курсив*` в теги. */
     private fun inlineToHtml(text: String): String = escape(text)
+        // Тройной маркер разбираем первым, иначе его съест регулярка жирного.
+        .replace(BOLD_ITALIC_REGEX) { "<strong><em>${it.groupValues[1]}</em></strong>" }
         .replace(BOLD_REGEX) { "<strong>${it.groupValues[1]}</strong>" }
         .replace(ITALIC_REGEX) { "<em>${it.groupValues[1]}</em>" }
 
@@ -196,13 +240,17 @@ object HtmlUtils {
      */
     val REF_TOKEN_REGEX = Regex("\\[\\[ref\\s+(.+?)\\]\\]")
 
-    /** Парные инлайновые выделения: `**жирный**` и `*курсив*`. */
+    /** Парные инлайновые выделения: `***жирный курсив***`, `**жирный**` и `*курсив*`. */
+    val BOLD_ITALIC_REGEX = Regex("\\*\\*\\*(.+?)\\*\\*\\*")
     val BOLD_REGEX = Regex("\\*\\*(.+?)\\*\\*")
     val ITALIC_REGEX = Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)")
 
     /** Врезка dnd.su со справочной информацией и её заголовок. */
     private val HTML_CALLOUT_REGEX = Regex("(?is)<div[^>]*class=\"[^\"]*additionalInfo[^\"]*\"[^>]*>(.*?)</div\\s*>")
     private val HTML_HEADING_REGEX = Regex("(?is)<h[1-6][^>]*>(.*?)</h[1-6]\\s*>")
+
+    /** Предел вложенности выделений — защита от бесконечного цикла на битой разметке. */
+    private const val MAX_INLINE_NESTING = 5
 
     /** Таблица целиком и её строки/ячейки — для разбора страниц dnd.su. */
     private val HTML_TABLE_REGEX = Regex("(?is)<table[^>]*>(.*?)</table\\s*>")
@@ -274,16 +322,46 @@ object HtmlUtils {
             .mapIndexed { index, item -> if (numbered) "${index + 1}. $item" else "$BULLET_PREFIX$item" }
             .joinToString("\n")
 
-    /** Заменяет `<strong>`/`<em>` на текстовые маркеры выделения. */
-    private fun applyInlineMarkup(html: String): String = html
-        .replace(HTML_BOLD_REGEX) { match ->
-            val text = stripTags(match.groupValues[2])
-            if (text.isBlank()) "" else "**$text**"
+    /**
+     * Заменяет `<strong>`/`<em>` на текстовые маркеры выделения.
+     *
+     * Выделения бывают вложенными — например `<em><strong>1. Красный</strong>.</em>`
+     * в «Радужных брызгах». Поэтому разбор идёт циклом от внутренних тегов к внешним,
+     * а маркеры объединяются, чтобы не получалась неразбираемая запись вроде `***текст**.*`,
+     * из-за которой на экране оставались звёздочки.
+     */
+    private fun applyInlineMarkup(html: String, depth: Int = 0): String {
+        // Защита от слишком глубокой или битой разметки.
+        if (depth >= MAX_INLINE_NESTING) return stripTags(html)
+        return html
+            .replace(HTML_BOLD_REGEX) { match -> wrapEmphasis(match.groupValues[2], bold = true, depth) }
+            .replace(HTML_ITALIC_REGEX) { match -> wrapEmphasis(match.groupValues[2], bold = false, depth) }
+    }
+
+    /**
+     * Оборачивает текст маркером выделения с учётом уже расставленных внутри маркеров.
+     * Знаки препинания вне выделения сохраняются, но сами не выделяются.
+     */
+    private fun wrapEmphasis(rawText: String, bold: Boolean, depth: Int): String {
+        // Сначала разбираем вложенные теги, иначе stripTags вырежет их вместе с выделением.
+        val text = stripTags(applyInlineMarkup(rawText, depth + 1))
+        if (text.isBlank()) return ""
+
+        // Внутри уже есть выделение: добавлять второй слой нельзя — запись станет нечитаемой.
+        val innerBoldItalic = BOLD_ITALIC_REGEX.matchEntire(text)
+        val innerBold = BOLD_REGEX.matchEntire(text)
+        val innerItalic = ITALIC_REGEX.matchEntire(text)
+        return when {
+            // Текст целиком выделен противоположным маркером — объединяем в жирный курсив.
+            bold && innerItalic != null -> "***${innerItalic.groupValues[1]}***"
+            !bold && innerBold != null -> "***${innerBold.groupValues[1]}***"
+            // Жирный курсив уже расставлен либо выделение частичное (как `<em><strong>X</strong>.</em>`):
+            // сохраняем то, что есть, без второго слоя маркеров.
+            innerBoldItalic != null || text.contains('*') -> text
+            bold -> "**$text**"
+            else -> "*$text*"
         }
-        .replace(HTML_ITALIC_REGEX) { match ->
-            val text = stripTags(match.groupValues[2])
-            if (text.isBlank()) "" else "*$text*"
-        }
+    }
 
     /** Убирает теги и лишние пробелы, оставляя чистый текст. */
     private fun stripTags(html: String): String = html

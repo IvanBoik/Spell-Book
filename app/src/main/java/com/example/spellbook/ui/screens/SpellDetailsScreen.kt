@@ -63,6 +63,7 @@ import com.example.spellbook.ui.components.DndTopBar
 import androidx.compose.ui.unit.sp
 import com.example.spellbook.util.DiceRoller
 import com.example.spellbook.util.HtmlUtils
+import com.example.spellbook.util.RussianPlurals
 
 /** Расстояние между блоками описания и пунктами списка. */
 private val DESCRIPTION_BLOCK_SPACING = 8.dp
@@ -143,13 +144,17 @@ fun SpellDetailsScreen(
                 if (spell.classes.isNotEmpty()) {
                     InfoRow("Классы", spell.classes.joinToString { SpellOptions.labelFor(SpellOptions.classes, it) })
                 }
+                // Часть заклинаний доступна только отдельным подклассам, а не классу целиком.
+                if (spell.subclasses.isNotEmpty()) {
+                    InfoRow("Подклассы", spell.subclasses.joinToString())
+                }
                 if (spell.source.isNotBlank()) {
                     InfoRow("Источник", spell.source)
                 }
 
                 if (spell.description.isNotBlank()) {
+                    // Заголовок не нужен: разделитель уже отделяет описание от характеристик.
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    Text("Описание", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     DescriptionText(
                         description = spell.description,
                         onDiceClick = { formula -> DiceRoller.roll(formula)?.let { rollResult = it } },
@@ -213,7 +218,10 @@ private fun InfoRow(label: String, value: String) {
  */
 @Composable
 internal fun DescriptionText(description: String, onDiceClick: (String) -> Unit) {
-    val blocks = remember(description) { splitDescriptionBlocks(description) }
+    // Очищаем при отображении: в уже сохранённых заклинаниях вставки маскота ещё есть.
+    val blocks = remember(description) {
+        splitDescriptionBlocks(HtmlUtils.removeMascotNotes(description))
+    }
     DescriptionBlocks(blocks, onDiceClick)
 }
 
@@ -317,9 +325,15 @@ private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit) = 
     val refStyle = SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
 
     // Собираем токены всех типов и сортируем по позиции, чтобы пройтись по тексту один раз.
+    // Жирный курсив идёт первым: его диапазон поглощает вложенные совпадения жирного и курсива.
+    // Кости ищем и в токенах `[[/r 2d6]]`, и прямо в тексте (`6к10`, `10к6 + 40`):
+    // в загруженных с dnd.su описаниях токенов нет.
     val tokens = (
         DiceRoller.DICE_TOKEN_REGEX.findAll(text).map { DescriptionToken.Dice(it.range, it.groupValues[1]) } +
+            DiceRoller.PLAIN_DICE_REGEX.findAll(text).map { DescriptionToken.Dice(it.range, it.value) } +
             HtmlUtils.REF_TOKEN_REGEX.findAll(text).map { DescriptionToken.Ref(it.range, it.groupValues[1]) } +
+            HtmlUtils.BOLD_ITALIC_REGEX.findAll(text)
+                .map { DescriptionToken.BoldItalic(it.range, it.groupValues[1]) } +
             HtmlUtils.BOLD_REGEX.findAll(text).map { DescriptionToken.Bold(it.range, it.groupValues[1]) } +
             HtmlUtils.ITALIC_REGEX.findAll(text).map { DescriptionToken.Italic(it.range, it.groupValues[1]) }
         ).sortedBy { it.range.first }
@@ -345,6 +359,12 @@ private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit) = 
             }
 
             is DescriptionToken.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                append(token.text)
+            }
+
+            is DescriptionToken.BoldItalic -> withStyle(
+                SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic),
+            ) {
                 append(token.text)
             }
         }
@@ -505,6 +525,7 @@ private sealed interface DescriptionToken {
     data class Ref(override val range: IntRange, override val text: String) : DescriptionToken
     data class Bold(override val range: IntRange, override val text: String) : DescriptionToken
     data class Italic(override val range: IntRange, override val text: String) : DescriptionToken
+    data class BoldItalic(override val range: IntRange, override val text: String) : DescriptionToken
 }
 
 /** Плавающее окно с результатом броска костей в левом нижнем углу. */
@@ -534,7 +555,12 @@ private fun DiceResultCard(
                 }
             }
             Text(
-                text = result.rolls.joinToString(" + "),
+                // Модификатор показываем отдельным слагаемым, чтобы было видно, из чего сложился итог.
+                text = buildString {
+                    append(result.rolls.joinToString(" + "))
+                    if (result.modifier > 0) append(" + ${result.modifier}")
+                    if (result.modifier < 0) append(" - ${-result.modifier}")
+                },
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -554,27 +580,37 @@ private fun headerLabel(spell: Spell): String = buildString {
     append(levelLabelDetails(spell.level))
     append(" · ")
     append(SpellOptions.labelFor(SpellOptions.schools, spell.school))
+    // Уточнение школы идёт сразу за ней в скобках, как в книгах.
+    if (spell.schoolNote.isNotBlank()) append(" (${spell.schoolNote})")
     if (spell.components.ritual) append(" · ритуал")
 }
 
-private fun activationLabel(spell: Spell): String {
-    val type = SpellOptions.labelFor(SpellOptions.activationTypes, spell.activationType)
-    val cost = spell.activationCost?.takeIf { it > 1 }?.let { "$it " }.orEmpty()
-    return (cost + type).trim()
+/**
+ * Подпись вида «1 минута» / «10 минут». Если для кода нет склоняемых форм
+ * («Мгновенная», «Касание» и т. п.), берётся готовая подпись из справочника.
+ */
+private fun measureLabel(
+    code: String,
+    value: Int?,
+    options: List<Pair<String, String>>,
+): String {
+    val fallback = SpellOptions.labelFor(options, code)
+    // Единица по умолчанию — одна: «1 действие» читается лучше, чем просто «Действие».
+    val count = value?.takeIf { it > 0 } ?: 1
+    val word = RussianPlurals.forCount(code, count) ?: return fallback
+    return "$count $word"
 }
+
+private fun activationLabel(spell: Spell): String =
+    measureLabel(spell.activationType, spell.activationCost, SpellOptions.activationTypes)
 
 private fun durationLabel(spell: Spell): String {
-    val units = SpellOptions.labelFor(SpellOptions.durationUnits, spell.durationUnits)
-    val value = spell.durationValue
     val concentration = if (spell.components.concentration) "Концентрация, " else ""
-    return concentration + if (value != null && value > 0) "$value $units" else units
+    return concentration + measureLabel(spell.durationUnits, spell.durationValue, SpellOptions.durationUnits)
 }
 
-private fun rangeLabel(spell: Spell): String {
-    val units = SpellOptions.labelFor(SpellOptions.rangeUnits, spell.rangeUnits)
-    val value = spell.rangeValue
-    return if (value != null && value > 0) "$value $units" else units
-}
+private fun rangeLabel(spell: Spell): String =
+    measureLabel(spell.rangeUnits, spell.rangeValue, SpellOptions.rangeUnits)
 
 private fun componentsLabel(spell: Spell): String {
     val parts = buildList {

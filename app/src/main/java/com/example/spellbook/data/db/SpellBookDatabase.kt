@@ -32,7 +32,7 @@ import com.example.spellbook.data.model.Spell
         Feat::class,
         CharacterFeatCrossRef::class,
     ],
-    version = 18,
+    version = 21,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -281,6 +281,35 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v18 → v19: происхождение заклинания. Уже сохранённые записи считаем
+         * загруженными, если у них проставлен внешний источник, иначе — созданными вручную.
+         * Это важно: собственные заклинания не должны затираться массовой загрузкой.
+         */
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE spells ADD COLUMN origin TEXT NOT NULL DEFAULT 'USER'")
+                db.execSQL(
+                    "UPDATE spells SET origin = 'IMPORTED' " +
+                        "WHERE source IS NOT NULL AND source <> '' AND source <> 'HB'",
+                )
+            }
+        }
+
+        /** v19 → v20: подклассы заклинания — некоторые доступны только им. */
+        private val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE spells ADD COLUMN subclasses TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        /** v20 → v21: уточнение школы, например «дюнамантия: гравитургия». */
+        private val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE spells ADD COLUMN schoolNote TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -308,6 +337,9 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_15_16,
                     MIGRATION_16_17,
                     MIGRATION_17_18,
+                    MIGRATION_18_19,
+                    MIGRATION_19_20,
+                    MIGRATION_20_21,
                 ).build()
             }
     }

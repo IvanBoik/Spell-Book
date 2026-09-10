@@ -30,6 +30,7 @@ class DndSuSpellParserTest {
         components: String = COMPONENTS,
         duration: String = DURATION,
         classes: String = CLASSES,
+        subclasses: String? = null,
         descriptionHtml: String = DESCRIPTION_HTML,
     ): String = """
         <html><body>
@@ -41,6 +42,7 @@ class DndSuSpellParserTest {
             <li><strong>Компоненты:</strong> $components</li>
             <li><strong>Длительность:</strong> $duration</li>
             <li><strong>Классы:</strong> $classes</li>
+            ${subclasses?.let { "<li><strong>Подклассы:</strong> $it</li>" } ?: ""}
             <li class="subsection desc">
               <div itemprop="description">$descriptionHtml</div>
             </li>
@@ -65,6 +67,55 @@ class DndSuSpellParserTest {
         assertEquals("inst", spell.durationUnits)
         assertNull(spell.durationValue)
         assertEquals(listOf("wizard", "sorcerer"), spell.classes)
+    }
+
+    @Test
+    fun `parses school note in parentheses`() {
+        // Формат Wildemount: «преобразование (дюнамантия: гравитургия)».
+        val spell = DndSuSpellParser.parse(
+            page(typeLine = "2 уровень, преобразование (дюнамантия: гравитургия)"),
+        )
+
+        assertEquals("trs", spell.school)
+        assertEquals("дюнамантия: гравитургия", spell.schoolNote)
+    }
+
+    @Test
+    fun `parses school note without subtype`() {
+        val spell = DndSuSpellParser.parse(page(typeLine = "7 уровень, некромантия (дюнамантия)"))
+
+        assertEquals("nec", spell.school)
+        assertEquals("дюнамантия", spell.schoolNote)
+    }
+
+    @Test
+    fun `ritual mark is not treated as school note`() {
+        // «(ритуал)» — пометка ритуала, а не уточнение школы.
+        val spell = DndSuSpellParser.parse(page(typeLine = "1 уровень, прорицание (ритуал)"))
+
+        assertEquals("div", spell.school)
+        assertEquals("", spell.schoolNote)
+        assertTrue(spell.components.ritual)
+    }
+
+    @Test
+    fun `school note is empty when there are no parentheses`() {
+        assertEquals("", DndSuSpellParser.parse(page()).schoolNote)
+    }
+
+    @Test
+    fun `parses subclasses when the page has them`() {
+        // Формат dnd.su: «подкласс (класс)» через запятую.
+        val spell = DndSuSpellParser.parse(
+            page(subclasses = "домен магии (жрец), круг земли (друид)"),
+        )
+
+        assertEquals(listOf("домен магии (жрец)", "круг земли (друид)"), spell.subclasses)
+    }
+
+    @Test
+    fun `subclasses are empty when the page has no such field`() {
+        assertEquals(emptyList<String>(), DndSuSpellParser.parse(page()).subclasses)
     }
 
     @Test
