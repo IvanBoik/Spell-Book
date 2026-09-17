@@ -95,9 +95,10 @@ object DndSuSpellParser {
         val schoolPart = parts.getOrNull(1).orEmpty()
         // Само название школы — до скобки: «воплощение (дюнамантия)» → «воплощение».
         val schoolName = schoolPart.substringBefore('(').trim()
+        // Сравниваем с каноническими именами источника: они не зависят от языка интерфейса.
         val school = SpellOptions.schools.firstOrNull {
-            it.second.equals(schoolName, ignoreCase = true)
-        }?.first ?: "evo"
+            it.canonical.equals(schoolName, ignoreCase = true)
+        }?.code ?: "evo"
         // В скобках бывает либо пометка ритуала, либо уточнение вроде «дюнамантия: хронургия».
         val note = schoolPart.substringAfter('(', "").substringBeforeLast(')', "").trim()
         val schoolNote = note.takeUnless { it.isEmpty() || it.contains(RITUAL_MARK, ignoreCase = true) }.orEmpty()
@@ -179,7 +180,7 @@ object DndSuSpellParser {
             .mapNotNull { name ->
                 // Отсекаем возможные буквенные пометки-источники после названия (TCE, XGE и т.п.).
                 val clean = name.substringBefore('(').trim().takeWhile { it.isLetter() || it == ' ' || it == '-' }.trim()
-                SpellOptions.classes.firstOrNull { it.second.equals(clean, ignoreCase = true) }?.first
+                SpellOptions.classes.firstOrNull { it.canonical.equals(clean, ignoreCase = true) }?.code
             }
             .distinct()
     }

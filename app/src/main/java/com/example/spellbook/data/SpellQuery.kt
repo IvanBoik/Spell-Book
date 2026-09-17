@@ -1,5 +1,7 @@
 package com.example.spellbook.data
 
+import androidx.annotation.StringRes
+import com.example.spellbook.R
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.data.model.SpellOrigin
 
@@ -7,32 +9,23 @@ import com.example.spellbook.data.model.SpellOrigin
  * Способ сортировки списка заклинаний.
  * [LEVEL] — по уровню (используется по умолчанию).
  */
-enum class SpellSort(val label: String) {
-    DATE_ADDED("По дате добавления"),
-    NAME("По названию"),
-    LEVEL("По уровню");
-
-    companion object {
-        /** Пары (имя enum, отображаемое название) для выпадающего списка. */
-        val options: List<Pair<String, String>> = entries.map { it.name to it.label }
-    }
+enum class SpellSort(@param:StringRes val labelRes: Int) {
+    DATE_ADDED(R.string.sort_date_added),
+    NAME(R.string.sort_name),
+    LEVEL(R.string.sort_level),
 }
 
 /** Компонент заклинания, по которому возможна фильтрация. */
-enum class SpellComponent(val label: String) {
-    VOCAL("Вербальный"),
-    SOMATIC("Соматический"),
-    MATERIAL("Материальный");
+enum class SpellComponent(@param:StringRes val labelRes: Int) {
+    VOCAL(R.string.component_vocal),
+    SOMATIC(R.string.component_somatic),
+    MATERIAL(R.string.component_material);
 
     /** Присутствует ли данный компонент у заклинания. */
     fun presentIn(spell: Spell): Boolean = when (this) {
         VOCAL -> spell.components.vocal
         SOMATIC -> spell.components.somatic
         MATERIAL -> spell.components.material
-    }
-
-    companion object {
-        val options: List<Pair<SpellComponent, String>> = entries.map { it to it.label }
     }
 }
 
@@ -64,10 +57,10 @@ data class SpellFilters(
 }
 
 /** Подписи для фильтра по происхождению заклинания. */
-val spellOriginOptions: List<Pair<SpellOrigin, String>> = listOf(
-    SpellOrigin.OFFICIAL to "Официальные",
-    SpellOrigin.IMPORTED to "Загруженные",
-    SpellOrigin.USER to "Созданные вручную",
+val spellOriginOptions: List<Pair<SpellOrigin, Int>> = listOf(
+    SpellOrigin.OFFICIAL to R.string.origin_official,
+    SpellOrigin.IMPORTED to R.string.origin_imported,
+    SpellOrigin.USER to R.string.origin_user,
 )
 
 /**
@@ -83,12 +76,12 @@ fun List<Spell>.availableSources(): List<Pair<String, String>> = asSequence()
     .toList()
 
 /** Варианты времени накладывания для фильтра (коды совпадают с [Spell.activationType]). */
-val castingTimeOptions: List<Pair<String, String>> = listOf(
-    "action" to "Основное действие",
-    "bonus" to "Бонусное действие",
-    "reaction" to "Реакция",
-    "minute" to "Минуты",
-    "hour" to "Часы",
+val castingTimeOptions: List<Pair<String, Int>> = listOf(
+    "action" to R.string.activation_action,
+    "bonus" to R.string.activation_bonus,
+    "reaction" to R.string.activation_reaction,
+    "minute" to R.string.unit_minutes,
+    "hour" to R.string.unit_hours,
 )
 
 /**

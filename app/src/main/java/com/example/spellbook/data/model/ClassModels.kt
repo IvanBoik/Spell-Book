@@ -1,5 +1,9 @@
 package com.example.spellbook.data.model
 
+import androidx.annotation.StringRes
+import com.example.spellbook.R
+
+
 /**
  * Насколько класс продвигает заклинательство при мультиклассировании.
  *
@@ -27,23 +31,26 @@ enum class SpellcasterType {
 }
 
 /** Классы D&D 5e с типом заклинательства. */
-enum class CharacterClass(val label: String, val spellcaster: SpellcasterType) {
-    ARTIFICER("Изобретатель", SpellcasterType.HALF_ROUNDED_UP),
-    BARBARIAN("Варвар", SpellcasterType.NONE),
-    BARD("Бард", SpellcasterType.FULL),
-    CLERIC("Жрец", SpellcasterType.FULL),
-    DRUID("Друид", SpellcasterType.FULL),
-    FIGHTER("Воин", SpellcasterType.NONE),
-    MONK("Монах", SpellcasterType.NONE),
-    PALADIN("Паладин", SpellcasterType.HALF),
-    RANGER("Следопыт", SpellcasterType.HALF),
-    ROGUE("Плут", SpellcasterType.NONE),
-    SORCERER("Чародей", SpellcasterType.FULL),
-    WARLOCK("Колдун", SpellcasterType.PACT),
-    WIZARD("Волшебник", SpellcasterType.FULL),
+enum class CharacterClass(
+    @param:StringRes val labelRes: Int,
+    val spellcaster: SpellcasterType,
+) {
+    ARTIFICER(R.string.class_artificer, SpellcasterType.HALF_ROUNDED_UP),
+    BARBARIAN(R.string.class_barbarian, SpellcasterType.NONE),
+    BARD(R.string.class_bard, SpellcasterType.FULL),
+    CLERIC(R.string.class_cleric, SpellcasterType.FULL),
+    DRUID(R.string.class_druid, SpellcasterType.FULL),
+    FIGHTER(R.string.class_fighter, SpellcasterType.NONE),
+    MONK(R.string.class_monk, SpellcasterType.NONE),
+    PALADIN(R.string.class_paladin, SpellcasterType.HALF),
+    RANGER(R.string.class_ranger, SpellcasterType.HALF),
+    ROGUE(R.string.class_rogue, SpellcasterType.NONE),
+    SORCERER(R.string.class_sorcerer, SpellcasterType.FULL),
+    WARLOCK(R.string.class_warlock, SpellcasterType.PACT),
+    WIZARD(R.string.class_wizard, SpellcasterType.FULL),
 
     /** Произвольный класс: название задаётся текстом, ячейки не считаются. */
-    OTHER("Другое", SpellcasterType.NONE),
+    OTHER(R.string.action_type_other, SpellcasterType.NONE),
     ;
 
     /** Умеет ли класс переподготавливать заклинания после отдыха. */
@@ -94,9 +101,12 @@ data class CharacterClassLevel(
     val level: Int,
     val customName: String = "",
 ) {
-    /** Название для отображения: своё для «Другого», иначе штатное. */
-    val displayName: String
-        get() = customName.ifBlank { characterClass.label }
+    /**
+     * Название класса, заданное пользователем; пусто — используется штатное
+     * название из ресурсов (см. [CharacterClass.labelRes]).
+     */
+    val displayName: String?
+        get() = customName.ifBlank { null }
 
     /** Формат хранения в базе: `WIZARD:5` или `OTHER:3:Кровомаг`. */
     fun serialize(): String = buildString {

@@ -40,12 +40,16 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.spellLevelLabel
+import com.example.spellbook.ui.spellOptionLabel
 import kotlin.math.roundToInt
 
 /** Что перетаскивается: заклинание и его текущее состояние (подготовлено/нет). */
@@ -65,6 +69,7 @@ fun PrepareSpellsScreen(
     onUnprepare: (spellId: String) -> Unit,
     onSpellClick: (spellId: String) -> Unit,
     onBack: () -> Unit,
+    sectionsBar: @Composable () -> Unit = {},
 ) {
     val preparedSpells = known.filter { it.id in preparedIds }
     val unpreparedSpells = known.filter { it.id !in preparedIds }
@@ -103,10 +108,13 @@ fun PrepareSpellsScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Переподготовка",
+                title = stringResource(R.string.prepare_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -119,13 +127,20 @@ fun PrepareSpellsScreen(
                 .onGloballyPositioned { rootOffset = it.boundsInWindow().topLeft },
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                // Панель разделов вне зон сброса: иначе она попадала бы в границы перетаскивания.
+                sectionsBar()
                 // Верхняя зона — подготовленные.
                 DropZone(
-                    title = "Подготовленные" + if (maxPrepared > 0) " (${preparedSpells.size}/$maxPrepared)" else " (${preparedSpells.size})",
+                    // Лимит показываем только если он задан у персонажа.
+                    title = if (maxPrepared > 0) {
+                        stringResource(R.string.prepare_prepared_limit, preparedSpells.size, maxPrepared)
+                    } else {
+                        stringResource(R.string.prepare_prepared, preparedSpells.size)
+                    },
                     spells = preparedSpells,
                     fromPrepared = true,
                     highlighted = dragItem?.fromPrepared == false,
-                    emptyHint = "Перетащите сюда заклинание, чтобы подготовить",
+                    emptyHint = stringResource(R.string.prepare_drop_hint),
                     modifier = Modifier
                         .weight(1f)
                         .onGloballyPositioned { preparedZone = it.boundsInWindow() },
@@ -137,11 +152,11 @@ fun PrepareSpellsScreen(
                 androidx.compose.material3.HorizontalDivider(thickness = 2.dp)
                 // Нижняя зона — известные (не подготовленные).
                 DropZone(
-                    title = "Известные",
+                    title = stringResource(R.string.prepare_known),
                     spells = unpreparedSpells,
                     fromPrepared = false,
                     highlighted = dragItem?.fromPrepared == true,
-                    emptyHint = "Нет неподготовленных заклинаний",
+                    emptyHint = stringResource(R.string.prepare_known_empty),
                     modifier = Modifier
                         .weight(1f)
                         .onGloballyPositioned { knownZone = it.boundsInWindow() },
@@ -265,8 +280,8 @@ private fun SpellRowContent(spell: Spell) {
     Column(modifier = Modifier.padding(12.dp)) {
         Text(spell.name, style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "${SpellOptions.levels.firstOrNull { it.first == spell.level }?.second ?: "${spell.level} круг"} · " +
-                SpellOptions.labelFor(SpellOptions.schools, spell.school),
+            text = spellLevelLabel(spell.level) + " · " +
+                spellOptionLabel(SpellOptions.schools, spell.school),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,

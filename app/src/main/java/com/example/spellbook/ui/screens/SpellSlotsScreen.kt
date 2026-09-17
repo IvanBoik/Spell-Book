@@ -64,6 +64,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterResource
@@ -119,22 +121,28 @@ fun SpellSlotsScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Ресурсы",
+                title = stringResource(R.string.resources_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = onRestoreAll) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Восполнить все ресурсы")
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.resources_restore_all),
+                        )
                     }
                 },
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить ресурс")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.resources_add))
             }
         },
     ) { padding ->
@@ -150,7 +158,7 @@ fun SpellSlotsScreen(
             if (levels.isNotEmpty()) {
                 item {
                     Text(
-                        "Ячейки заклинаний",
+                        stringResource(R.string.resources_spell_slots),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -173,7 +181,7 @@ fun SpellSlotsScreen(
             if (character.resources.isNotEmpty()) {
                 item {
                     Text(
-                        "Другие ресурсы",
+                        stringResource(R.string.resources_other),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -235,19 +243,22 @@ fun SpellSlotsScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                "Ресурсы пока не добавлены",
+                                stringResource(R.string.resources_empty_title),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "Добавьте очки, кости, заряды или настройте ячейки заклинаний.",
+                                stringResource(R.string.resources_empty_text),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             Spacer(Modifier.height(16.dp))
                             OutlinedButton(onClick = { showCreateDialog = true }) {
                                 Icon(Icons.Default.Add, contentDescription = null)
-                                Text("Добавить ресурс", modifier = Modifier.padding(start = 8.dp))
+                                Text(
+                                    stringResource(R.string.resources_add),
+                                    modifier = Modifier.padding(start = 8.dp),
+                                )
                             }
                         }
                     }
@@ -333,14 +344,14 @@ private fun SwipeableResourceRow(
             ) {
                 ResourceSwipeAction(
                     icon = Icons.Default.Edit,
-                    description = "Редактировать ${resource.name}",
+                    description = stringResource(R.string.resources_edit_named, resource.name),
                     background = RESOURCE_EDIT_COLOR,
                     contentColor = Color.Black,
                     onClick = { animateTo(0f); onEdit() },
                 )
                 ResourceSwipeAction(
                     icon = Icons.Default.Delete,
-                    description = "Удалить ${resource.name}",
+                    description = stringResource(R.string.resources_delete_named, resource.name),
                     background = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError,
                     onClick = { animateTo(0f); onDelete() },
@@ -405,7 +416,10 @@ private fun SwipeableResourceRow(
                         )
                     }
                     IconButton(onClick = onRestore, enabled = resource.current < resource.maximum) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Восполнить ${resource.name}")
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.resources_restore, resource.name),
+                )
                     }
                 }
                 Row(
@@ -415,12 +429,12 @@ private fun SwipeableResourceRow(
                 ) {
                     OutlinedButton(onClick = onUse, enabled = resource.current > 0) {
                         Icon(Icons.Default.Remove, contentDescription = null)
-                        Text("Потратить")
+                        Text(stringResource(R.string.resources_spend_action))
                     }
                     Spacer(Modifier.size(8.dp))
                     OutlinedButton(onClick = onRestoreUnit, enabled = resource.current < resource.maximum) {
                         Icon(Icons.Default.Add, contentDescription = null)
-                        Text("Вернуть")
+                        Text(stringResource(R.string.resources_return_action))
                     }
                 }
             }
@@ -474,29 +488,35 @@ private fun ResourceEditorDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        title = { Text(if (initial == null) "Новый ресурс" else "Редактировать ресурс") },
+        title = {
+            Text(
+                stringResource(
+                    if (initial == null) R.string.resources_new else R.string.resources_edit,
+                ),
+            )
+        },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Название") },
-                    placeholder = { Text("Например, очки чародейства") },
+                label = { Text(stringResource(R.string.form_name)) },
+                placeholder = { Text(stringResource(R.string.resources_name_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Описание") },
-                    placeholder = { Text("Что делает и когда восстанавливается ресурс") },
+                    label = { Text(stringResource(R.string.field_description)) },
+                    placeholder = { Text(stringResource(R.string.resources_description_hint)) },
                     minLines = 3,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 FormulaTextField(
                     value = maximum,
                     onValueChange = { maximum = it },
-                    label = "Максимум",
+                label = stringResource(R.string.resources_maximum),
                     placeholder = "[pb] + 1",
                     isError = hasDice,
                     modifier = Modifier.fillMaxWidth(),
@@ -514,9 +534,11 @@ private fun ResourceEditorDialog(
                     )
                 },
                 enabled = valid,
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -539,7 +561,7 @@ private fun ResourceDescriptionDialog(
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    resource.description.ifBlank { "Описание не указано." },
+                resource.description.ifBlank { stringResource(R.string.resources_no_description) },
                     color = if (resource.description.isBlank()) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
@@ -548,7 +570,9 @@ private fun ResourceDescriptionDialog(
                 )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+        },
     )
 }
 
@@ -564,7 +588,7 @@ private fun SlotLevelRow(
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "$level уровень",
+            stringResource(R.string.spell_slot_level, level),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),

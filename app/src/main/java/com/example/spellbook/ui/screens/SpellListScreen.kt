@@ -38,11 +38,13 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
@@ -97,7 +99,13 @@ import com.example.spellbook.data.castingTimeOptions
 import com.example.spellbook.data.filterSortSearch
 import com.example.spellbook.data.spellOriginOptions
 import com.example.spellbook.data.model.Spell
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.spellLevelLabel
+import com.example.spellbook.ui.spellLevelPairs
+import com.example.spellbook.ui.spellOptionLabel
+import com.example.spellbook.ui.spellOptionPairs
 
 /** Длительности мягкого скрытия/появления панелей списка. */
 private const val CHROME_ENTER_MS = 320
@@ -121,6 +129,13 @@ fun SpellListScreen(
     filters: SpellFilters,
     onFiltersChange: (SpellFilters) -> Unit,
     onSpellClick: (String) -> Unit,
+    /**
+     * Удаление заклинания из списка (например, из набора персонажа).
+     * null — удаление недоступно (библиотека удаляется с экрана деталей).
+     */
+    onSpellRemove: ((Spell) -> Unit)? = null,
+    /** Ресурс текста подтверждения; первым аргументом подставляется название заклинания. */
+    removeConfirmTextRes: Int = R.string.spell_remove_default,
     navigationIcon: @Composable () -> Unit = {},
     extraActions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
     headerContent: @Composable () -> Unit = {},
@@ -136,6 +151,8 @@ fun SpellListScreen(
     var autoFocusSearch by remember { mutableStateOf(false) }
     var showFilters by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    // Заклинание, для которого запрошено удаление: убираем только после подтверждения.
+    var spellPendingRemoval by remember { mutableStateOf<Spell?>(null) }
 
     val visibleSpells = spells.filterSortSearch(query, filters, sort)
     // Список книг зависит от содержимого библиотеки, поэтому считаем его по всем заклинаниям.
@@ -299,13 +316,38 @@ fun SpellListScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             items(visibleSpells, key = { it.id }) { spell ->
-                                SpellCard(spell = spell, onClick = { onSpellClick(spell.id) })
+                                SpellCard(
+                                    spell = spell,
+                                    onClick = { onSpellClick(spell.id) },
+                                    onRemove = onSpellRemove?.let { { spellPendingRemoval = spell } },
+                                )
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    spellPendingRemoval?.let { spell ->
+        AlertDialog(
+            onDismissRequest = { spellPendingRemoval = null },
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            title = { Text(stringResource(R.string.spell_remove_title)) },
+            text = { Text(stringResource(removeConfirmTextRes, spell.name)) },
+            confirmButton = {
+                Button(onClick = {
+                    spellPendingRemoval = null
+                    onSpellRemove?.invoke(spell)
+                }) { Text(stringResource(R.string.action_remove)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { spellPendingRemoval = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -356,19 +398,27 @@ private fun SpellListTopBar(
             IconButton(onClick = onToggleSearch) {
                 Icon(
                     imageVector = if (searchActive) Icons.Default.Close else Icons.Default.Search,
-                    contentDescription = if (searchActive) "Закрыть поиск" else "Поиск",
+                    contentDescription = stringResource(
+                        if (searchActive) R.string.search_close else R.string.search_open,
+                    ),
                 )
             }
             IconButton(onClick = onToggleFilters) {
                 BadgedBox(
                     badge = { if (filtersCount > 0) Badge { Text("$filtersCount") } },
                 ) {
-                    Icon(Icons.Default.FilterList, contentDescription = "Фильтры")
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = stringResource(R.string.filter_title),
+                    )
                 }
             }
             Box {
                 IconButton(onClick = { onToggleSortMenu(true) }) {
-                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Сортировка")
+                    Icon(
+                        Icons.AutoMirrored.Filled.Sort,
+                        contentDescription = stringResource(R.string.sort_title),
+                    )
                 }
                 DropdownMenu(
                     expanded = showSortMenu,
@@ -376,7 +426,7 @@ private fun SpellListTopBar(
                 ) {
                     SpellSort.entries.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option.label) },
+                            text = { Text(stringResource(option.labelRes)) },
                             leadingIcon = {
                                 if (option == sort) {
                                     Icon(Icons.Default.Check, contentDescription = null)
@@ -420,7 +470,9 @@ private fun SearchField(
     TextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("Название", color = onColor.copy(alpha = 0.6f)) },
+        placeholder = {
+            Text(stringResource(R.string.search_placeholder), color = onColor.copy(alpha = 0.6f))
+        },
         singleLine = true,
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
@@ -474,7 +526,9 @@ internal fun AddSpellFab(
         ) {
             Icon(
                 imageVector = if (expanded) Icons.Default.Close else Icons.Default.Add,
-                contentDescription = if (expanded) "Закрыть" else "Добавить",
+                contentDescription = stringResource(
+                    if (expanded) R.string.action_close else R.string.action_add,
+                ),
             )
         }
     }
@@ -504,67 +558,71 @@ private fun FilterPanel(
                 }) {
                     Icon(Icons.Default.Close, contentDescription = null)
                     Spacer(Modifier.width(4.dp))
-                    Text("Очистить фильтры")
+                    Text(stringResource(R.string.filter_clear))
                 }
             }
             FilterChipGroup(
-                title = "Уровень",
-                options = SpellOptions.levels,
+                title = stringResource(R.string.filter_level),
+                options = spellLevelPairs(),
                 selected = filters.levels,
                 onToggle = { onFiltersChange(filters.copy(levels = filters.levels.toggle(it))) },
             )
             FilterChipGroup(
-                title = "Класс",
-                options = SpellOptions.classes,
+                title = stringResource(R.string.filter_class),
+                options = spellOptionPairs(SpellOptions.classes),
                 selected = filters.classes,
                 onToggle = { onFiltersChange(filters.copy(classes = filters.classes.toggle(it))) },
             )
             FilterChipGroup(
-                title = "Школа",
-                options = SpellOptions.schools,
+                title = stringResource(R.string.filter_school),
+                options = spellOptionPairs(SpellOptions.schools),
                 selected = filters.schools,
                 onToggle = { onFiltersChange(filters.copy(schools = filters.schools.toggle(it))) },
             )
             FilterChipGroup(
-                title = "Компоненты",
-                options = SpellComponent.options,
+                title = stringResource(R.string.filter_components),
+                options = SpellComponent.entries.map { it to stringResource(it.labelRes) },
                 selected = filters.components,
                 onToggle = { onFiltersChange(filters.copy(components = filters.components.toggle(it))) },
             )
             FilterChipGroup(
-                title = "Время накладывания",
-                options = castingTimeOptions,
+                title = stringResource(R.string.filter_casting_time),
+                options = castingTimeOptions.map { (code, labelRes) -> code to stringResource(labelRes) },
                 selected = filters.activationTypes,
                 onToggle = { onFiltersChange(filters.copy(activationTypes = filters.activationTypes.toggle(it))) },
             )
             // Книги берём из самой библиотеки: список зависит от загруженных заклинаний.
             if (sourceOptions.isNotEmpty()) {
                 FilterChipGroup(
-                    title = "Источник",
+                    title = stringResource(R.string.filter_source),
                     options = sourceOptions,
                     selected = filters.sources,
                     onToggle = { onFiltersChange(filters.copy(sources = filters.sources.toggle(it))) },
                 )
             }
             FilterChipGroup(
-                title = "Происхождение",
-                options = spellOriginOptions,
+                title = stringResource(R.string.filter_origin),
+                options = spellOriginOptions.map { (origin, labelRes) -> origin to stringResource(labelRes) },
                 selected = filters.origins,
                 onToggle = { onFiltersChange(filters.copy(origins = filters.origins.toggle(it))) },
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Дополнительно", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    stringResource(R.string.filter_additional),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = filters.concentration,
                         onClick = { onFiltersChange(filters.copy(concentration = !filters.concentration)) },
-                        label = { Text("Концентрация") },
+                        label = { Text(stringResource(R.string.filter_concentration)) },
                         colors = burgundyFilterChipColors(),
                     )
                     FilterChip(
                         selected = filters.ritual,
                         onClick = { onFiltersChange(filters.copy(ritual = !filters.ritual)) },
-                        label = { Text("Ритуал") },
+                        label = { Text(stringResource(R.string.filter_ritual)) },
                         colors = burgundyFilterChipColors(),
                     )
                 }
@@ -584,7 +642,10 @@ private fun FilterPanel(
                 .align(Alignment.BottomEnd)
                 .padding(12.dp),
         ) {
-            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Скрыть фильтры")
+            Icon(
+                Icons.Default.KeyboardArrowUp,
+                contentDescription = stringResource(R.string.filter_hide),
+            )
         }
     }
 }
@@ -627,11 +688,15 @@ private fun NoResults(onReset: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Ничего не найдено", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(R.string.list_no_results),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
             Spacer(Modifier.height(8.dp))
-            Text("Попробуйте изменить поиск или фильтры.")
+            Text(stringResource(R.string.list_no_results_hint))
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onReset) { Text("Сбросить") }
+            Button(onClick = onReset) { Text(stringResource(R.string.action_reset)) }
         }
     }
 }
@@ -648,23 +713,23 @@ internal fun EmptySpellList(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Пока нет заклинаний",
+                text = stringResource(R.string.spells_empty_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text("Создайте своё первое заклинание или загрузите JSON LSS.")
+            Text(stringResource(R.string.spells_empty_text))
             Spacer(modifier = Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onAddClick) { Text("Создать") }
-                Button(onClick = onImportClick) { Text("Загрузить JSON") }
+                Button(onClick = onAddClick) { Text(stringResource(R.string.action_create)) }
+                Button(onClick = onImportClick) { Text(stringResource(R.string.library_import_json)) }
             }
         }
     }
 }
 
 @Composable
-private fun SpellCard(spell: Spell, onClick: () -> Unit) {
+private fun SpellCard(spell: Spell, onClick: () -> Unit, onRemove: (() -> Unit)? = null) {
     val shape = RoundedCornerShape(8.dp)
     Card(
         modifier = Modifier
@@ -683,14 +748,14 @@ private fun SpellCard(spell: Spell, onClick: () -> Unit) {
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary),
             )
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(16.dp)) {
                 Text(spell.name, style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = buildString {
-                        append(levelLabel(spell.level))
+                        append(spellLevelLabel(spell.level))
                         append(" · ")
-                        append(SpellOptions.labelFor(SpellOptions.schools, spell.school))
+                        append(spellOptionLabel(SpellOptions.schools, spell.school))
                         // Уточнение школы показываем и в списке: оно важно при выборе заклинания.
                         if (spell.schoolNote.isNotBlank()) append(" (${spell.schoolNote})")
                     },
@@ -707,11 +772,20 @@ private fun SpellCard(spell: Spell, onClick: () -> Unit) {
                     )
                 }
             }
+            if (onRemove != null) {
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                ) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.spell_remove_action),
+                    )
+                }
+            }
         }
     }
 }
 
 /** Добавляет или убирает элемент из множества (для переключения чипов фильтра). */
 private fun <T> Set<T>.toggle(item: T): Set<T> = if (item in this) this - item else this + item
-
-private fun levelLabel(level: Int): String = SpellOptions.levels.firstOrNull { it.first == level }?.second ?: "$level круг"

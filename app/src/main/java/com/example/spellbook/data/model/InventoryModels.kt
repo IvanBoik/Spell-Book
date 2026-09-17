@@ -1,28 +1,43 @@
 package com.example.spellbook.data.model
 
+import androidx.annotation.StringRes
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.spellbook.R
 import java.util.UUID
 
-/** Стандартные категории; предмет также может хранить произвольные категории. */
+/**
+ * Стандартные категории; предмет также может хранить произвольные категории.
+ *
+ * Значения хранятся в базе строками и принадлежат пользователю, поэтому,
+ * как и остальной пользовательский контент, при смене языка не переводятся.
+ */
 val INVENTORY_CATEGORIES = listOf(
     "Оружие", "Доспех", "Щит", "Инструмент", "Снаряжение",
     "Расходник", "Зелье", "Боеприпасы", "Сокровище", "Контейнер", "Квестовый",
 )
 
+/** Редкости предметов; также хранятся строками в карточке предмета. */
 val ITEM_RARITIES = listOf(
-    "Без редкости", "Обычный", "Необычный", "Редкий",
+    DEFAULT_ITEM_RARITY, "Обычный", "Необычный", "Редкий",
     "Очень редкий", "Легендарный", "Артефакт",
 )
 
-enum class CoinType(val code: String, val label: String, val shortLabel: String) {
-    PLATINUM("pp", "Платина", "ПМ"),
-    GOLD("gp", "Золото", "ЗМ"),
-    ELECTRUM("ep", "Электрум", "ЭМ"),
-    SILVER("sp", "Серебро", "СМ"),
-    COPPER("cp", "Медь", "ММ"),
+/** Редкость по умолчанию для новых и незаполненных предметов. */
+const val DEFAULT_ITEM_RARITY = "Без редкости"
+
+enum class CoinType(
+    val code: String,
+    @param:StringRes val labelRes: Int,
+    @param:StringRes val shortLabelRes: Int,
+) {
+    PLATINUM("pp", R.string.coin_platinum, R.string.coin_platinum_short),
+    GOLD("gp", R.string.coin_gold, R.string.coin_gold_short),
+    ELECTRUM("ep", R.string.coin_electrum, R.string.coin_electrum_short),
+    SILVER("sp", R.string.coin_silver, R.string.coin_silver_short),
+    COPPER("cp", R.string.coin_copper, R.string.coin_copper_short),
 }
 
 @Entity(
@@ -43,7 +58,7 @@ data class InventoryItem(
     val description: String = "",
     val categories: List<String> = emptyList(),
     val isMagic: Boolean = false,
-    val rarity: String = "Без редкости",
+    val rarity: String = DEFAULT_ITEM_RARITY,
     val requiresAttunement: Boolean = false,
     val attuned: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
@@ -55,7 +70,7 @@ data class InventoryItem(
         quantity = quantity.coerceAtLeast(1),
         description = description.trim(),
         categories = categories.map(String::trim).filter(String::isNotBlank).distinct(),
-        rarity = rarity.ifBlank { "Без редкости" },
+        rarity = rarity.ifBlank { DEFAULT_ITEM_RARITY },
         requiresAttunement = isMagic && requiresAttunement,
         attuned = isMagic && requiresAttunement && attuned,
     )

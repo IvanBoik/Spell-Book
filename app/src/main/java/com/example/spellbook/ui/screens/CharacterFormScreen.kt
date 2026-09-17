@@ -66,6 +66,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.KeyboardOptions
 import com.example.spellbook.data.model.ArmorProficiency
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterClass
 import com.example.spellbook.data.model.CharacterClassLevel
@@ -95,7 +97,8 @@ private val PROFICIENCY_MARK_SIZE = 18.dp
 private fun <T> ProficiencyToggleRow(
     title: String,
     options: List<T>,
-    label: (T) -> String,
+    // @Composable: подписи берутся из ресурсов и зависят от языка интерфейса.
+    label: @Composable (T) -> String,
     isSelected: (T) -> Boolean,
     onToggle: (T) -> Unit,
 ) {
@@ -171,9 +174,9 @@ private fun ClassLevelsSection(
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Column {
-            Text("Классы", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_classes), fontWeight = FontWeight.Bold)
             Text(
-                "Уровень и ячейки считаются по классам",
+                stringResource(R.string.cform_classes_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -190,7 +193,7 @@ private fun ClassLevelsSection(
 
         if (classLevels.isEmpty()) {
             Text(
-                "Классы не выбраны — уровень и ячейки придётся задать вручную.",
+                stringResource(R.string.cform_classes_locked),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -204,7 +207,11 @@ private fun ClassLevelsSection(
             ) {
                 Icon(Icons.Default.Add, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text(if (classLevels.isEmpty()) "Выбрать класс" else "Добавить класс")
+                Text(
+                    stringResource(
+                        if (classLevels.isEmpty()) R.string.cform_add_class else R.string.cform_add_another_class,
+                    ),
+                )
             }
             DropdownMenu(
                 expanded = menuExpanded,
@@ -213,7 +220,7 @@ private fun ClassLevelsSection(
             ) {
                 available.forEach { characterClass ->
                     DropdownMenuItem(
-                        text = { Text(characterClass.label) },
+                        text = { Text(stringResource(characterClass.labelRes)) },
                         onClick = {
                             onAdd(characterClass)
                             menuExpanded = false
@@ -249,11 +256,11 @@ private fun RecalculateSlotsDialog(
                 tint = MaterialTheme.colorScheme.primary,
             )
         },
-        title = { Text("Пересчитать ячейки?") },
+        title = { Text(stringResource(R.string.cform_recalc_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Состав классов-заклинателей изменился. Можно обновить ячейки по правилам мультикласса.",
+                    stringResource(R.string.cform_recalc_text),
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Surface(
@@ -267,19 +274,19 @@ private fun RecalculateSlotsDialog(
                     ) {
                         Row {
                             Text(
-                                "Уровень",
+                        stringResource(R.string.cform_level_column),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             )
                             Text(
-                                "Сейчас",
+                        stringResource(R.string.cform_now_column),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.width(64.dp),
                             )
                             Text(
-                                "Станет",
+                        stringResource(R.string.cform_becomes_column),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.width(64.dp),
@@ -289,7 +296,10 @@ private fun RecalculateSlotsDialog(
                             val before = currentSlots[level] ?: 0
                             val after = calculatedSlots[level] ?: 0
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("$level уровень", modifier = Modifier.weight(1f))
+                                Text(
+                                    stringResource(R.string.cform_level_row, level),
+                                    modifier = Modifier.weight(1f),
+                                )
                                 Text(before.toString(), modifier = Modifier.width(64.dp))
                                 Text(
                                     after.toString(),
@@ -306,10 +316,10 @@ private fun RecalculateSlotsDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onRecalculate) { Text("Пересчитать") }
+            Button(onClick = onRecalculate) { Text(stringResource(R.string.cform_recalc)) }
         },
         dismissButton = {
-            TextButton(onClick = onKeep) { Text("Оставить") }
+            TextButton(onClick = onKeep) { Text(stringResource(R.string.cform_keep)) }
         },
     )
 }
@@ -345,7 +355,7 @@ private fun ClassLevelCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        entry.customName.ifBlank { entry.characterClass.label },
+                        entry.customName.ifBlank { stringResource(entry.characterClass.labelRes) },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -355,7 +365,7 @@ private fun ClassLevelCard(
                             color = MaterialTheme.colorScheme.primaryContainer,
                         ) {
                             Text(
-                                "Заклинатель",
+                                stringResource(R.string.cform_spellcaster),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
@@ -366,7 +376,7 @@ private fun ClassLevelCard(
                 OutlinedTextField(
                     value = entry.levelText,
                     onValueChange = { new -> onLevelChange(new.filter { it.isDigit() }.take(2)) },
-                    label = { Text("Уровень") },
+                    label = { Text(stringResource(R.string.cform_level)) },
                     // Пустое или неверное значение подсвечивается и блокирует сохранение.
                     isError = entry.level == null,
                     singleLine = true,
@@ -374,14 +384,17 @@ private fun ClassLevelCard(
                     modifier = Modifier.width(104.dp),
                 )
                 IconButton(onClick = onRemove) {
-                    Icon(Icons.Default.Delete, contentDescription = "Убрать класс")
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.cform_remove_class),
+                    )
                 }
             }
             if (isCustom) {
                 OutlinedTextField(
                     value = entry.customName,
                     onValueChange = onCustomNameChange,
-                    label = { Text("Название класса") },
+                    label = { Text(stringResource(R.string.cform_class_name)) },
                     isError = entry.customName.isBlank(),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -389,8 +402,11 @@ private fun ClassLevelCard(
             }
             if (!entry.isValid) {
                 Text(
-                    if (entry.level == null) "Уровень от 1 до $MAX_CLASS_LEVEL"
-                    else "Укажите название класса",
+                        if (entry.level == null) {
+                            stringResource(R.string.cform_level_range, MAX_CLASS_LEVEL)
+                        } else {
+                            stringResource(R.string.cform_enter_class_name)
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -490,9 +506,11 @@ fun CharacterFormScreen(
      * Круг считается отдельно по уровню каждого класса, а не по сумме уровней:
      * друид 4 уровня и чародей 1 уровня — это только 2 круг друида.
      */
-    val classListSummary = classListClasses.joinToString { entry ->
-        "${entry.displayName.lowercase()} — до ${maxSpellCircleFor(entry)} круга"
-    }
+    // map — inline, поэтому внутри доступны @Composable-вызовы за строками ресурсов.
+    val classListSummary = classListClasses.map { entry ->
+        val name = entry.displayName ?: stringResource(entry.characterClass.labelRes)
+        stringResource(R.string.form_class_list_entry, name.lowercase(), maxSpellCircleFor(entry))
+    }.joinToString()
 
     /** При создании уровень и ячейки подставляются из классов, если они указаны. */
     val autoFromClasses = isNew && validClassLevels.isNotEmpty()
@@ -607,10 +625,13 @@ fun CharacterFormScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = if (isNew) "Новый персонаж" else "Настройки персонажа",
+                title = stringResource(if (isNew) R.string.cform_new else R.string.cform_edit),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
                 actions = {
@@ -618,7 +639,10 @@ fun CharacterFormScreen(
                         onClick = { requestSave() },
                         enabled = name.isNotBlank() && !hasInvalidClassLevel,
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Сохранить")
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = stringResource(R.string.action_save),
+                        )
                     }
                 },
             )
@@ -652,14 +676,18 @@ fun CharacterFormScreen(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 }) {
-                    Text(if (imageUri.isNullOrBlank()) "Выбрать фото" else "Изменить фото")
+                Text(
+                    stringResource(
+                        if (imageUri.isNullOrBlank()) R.string.cform_pick_photo else R.string.cform_change_photo,
+                    ),
+                )
                 }
             }
 
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Имя персонажа") },
+                label = { Text(stringResource(R.string.cform_character_name)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -690,7 +718,11 @@ fun CharacterFormScreen(
                 initial.level
             }
             Text(
-                "Уровень: $effectiveLevel · бонус мастерства ${formatModifier(proficiencyBonusFor(effectiveLevel))}",
+                    stringResource(
+                        R.string.cform_level_summary,
+                        effectiveLevel,
+                        formatModifier(proficiencyBonusFor(effectiveLevel)),
+                    ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -704,9 +736,9 @@ fun CharacterFormScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Переподготовка заклинаний", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_prepares), fontWeight = FontWeight.Bold)
                     Text(
-                        "Разделять известные и подготовленные заклинания",
+                        stringResource(R.string.cform_prepares_hint),
                         style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -720,9 +752,9 @@ fun CharacterFormScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Добавить заклинания класса", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_add_class_spells), fontWeight = FontWeight.Bold)
                         Text(
-                            "Доступные круги по уровню класса: $classListSummary",
+                            stringResource(R.string.cform_add_class_spells_hint, classListSummary),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -737,7 +769,7 @@ fun CharacterFormScreen(
                 OutlinedTextField(
                     value = maxPrepared,
                     onValueChange = { new -> maxPrepared = new.filter { it.isDigit() } },
-                    label = { Text("Максимум подготовленных (без заговоров)") },
+                label = { Text(stringResource(R.string.cform_max_prepared)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -747,7 +779,7 @@ fun CharacterFormScreen(
             OutlinedTextField(
                 value = maxCantrips,
                 onValueChange = { new -> maxCantrips = new.filter { it.isDigit() } },
-                label = { Text("Доступно заговоров") },
+                label = { Text(stringResource(R.string.cform_max_cantrips)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
@@ -755,11 +787,11 @@ fun CharacterFormScreen(
 
             HorizontalDivider()
 
-            Text("Владения", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_proficiencies), fontWeight = FontWeight.Bold)
             ProficiencyToggleRow(
-                title = "Доспехи",
+                title = stringResource(R.string.cform_armor),
                 options = ArmorProficiency.entries,
-                label = { it.label },
+                label = { stringResource(it.labelRes) },
                 isSelected = { it in armorProficiencies },
                 onToggle = { armor ->
                     if (armor in armorProficiencies) armorProficiencies.remove(armor)
@@ -767,9 +799,9 @@ fun CharacterFormScreen(
                 },
             )
             ProficiencyToggleRow(
-                title = "Оружие",
+                title = stringResource(R.string.cform_weapons),
                 options = WeaponProficiency.entries,
-                label = { it.label },
+                label = { stringResource(it.labelRes) },
                 isSelected = { it in weaponProficiencies },
                 onToggle = { weapon ->
                     if (weapon in weaponProficiencies) weaponProficiencies.remove(weapon)
@@ -781,31 +813,31 @@ fun CharacterFormScreen(
                 OutlinedTextField(
                     value = otherWeaponProficiencies,
                     onValueChange = { otherWeaponProficiencies = it },
-                    label = { Text("Другое оружие") },
+                    label = { Text(stringResource(R.string.cform_other_weapons)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
             OutlinedTextField(
                 value = toolProficiencies,
                 onValueChange = { toolProficiencies = it },
-                label = { Text("Инструменты") },
+                label = { Text(stringResource(R.string.cform_tools)) },
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = languages,
                 onValueChange = { languages = it },
-                label = { Text("Языки") },
+                label = { Text(stringResource(R.string.cform_languages)) },
                 modifier = Modifier.fillMaxWidth(),
             )
 
             HorizontalDivider()
 
-            Text("Магические предметы", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_magic_items), fontWeight = FontWeight.Bold)
             OutlinedTextField(
                 value = maxAttunedItems,
                 onValueChange = { new -> maxAttunedItems = new.filter { it.isDigit() } },
-                label = { Text("Лимит настроенных предметов") },
-                supportingText = { Text("Обычно персонаж может настроиться на 3 предмета") },
+                label = { Text(stringResource(R.string.cform_attunement_limit)) },
+                supportingText = { Text(stringResource(R.string.cform_attunement_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
@@ -814,18 +846,21 @@ fun CharacterFormScreen(
             HorizontalDivider()
 
             // Ячейки заклинаний по уровням.
-            Text("Ячейки заклинаний", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_spell_slots), fontWeight = FontWeight.Bold)
             if (autoFromClasses) {
                 // Значения подставлены по правилам мультикласса, но остаются редактируемыми.
                 Text(
-                    "Заполнены на основе классов — можно изменить вручную.",
+                    stringResource(R.string.cform_slots_auto),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             SLOT_LEVELS.forEach { level ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("$level уровень", modifier = Modifier.weight(1f))
+                    Text(
+                        stringResource(R.string.cform_level_row, level),
+                        modifier = Modifier.weight(1f),
+                    )
                     OutlinedTextField(
                         value = slots[level].orEmpty(),
                         onValueChange = { new -> slots[level] = new.filter { it.isDigit() } },
@@ -840,9 +875,9 @@ fun CharacterFormScreen(
             // Обмен листом персонажа в формате LSS — только для созданного персонажа.
             if (!isNew && (onExportSheet != null || onImportSheet != null)) {
                 HorizontalDivider()
-                Text("Лист персонажа", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cform_sheet), fontWeight = FontWeight.Bold)
                 Text(
-                    "Формат LSS (Long Story Short).",
+                stringResource(R.string.cform_sheet_format),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -850,14 +885,14 @@ fun CharacterFormScreen(
                     OutlinedButton(onClick = export, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.FileUpload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Выгрузить JSON")
+                Text(stringResource(R.string.cform_export_json))
                     }
                 }
                 onImportSheet?.let { import ->
                     OutlinedButton(onClick = import, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.FileDownload, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("Загрузить JSON")
+                Text(stringResource(R.string.cform_import_json))
                     }
                 }
             }
@@ -868,14 +903,14 @@ fun CharacterFormScreen(
                 enabled = name.isNotBlank() && !hasInvalidClassLevel,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Сохранить")
+                Text(stringResource(R.string.action_save))
             }
 
             if (onDelete != null) {
                 OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Delete, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Удалить персонажа")
+                Text(stringResource(R.string.cform_delete_character))
                 }
             }
         }

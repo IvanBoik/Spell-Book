@@ -1,9 +1,11 @@
 package com.example.spellbook.data.model
 
+import androidx.annotation.StringRes
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.spellbook.R
 import java.util.UUID
 
 /** Доступные размеры шрифта в заметках, в sp. */
@@ -13,10 +15,10 @@ val NOTE_FONT_SIZES = listOf(12, 14, 16, 20, 24)
 const val NOTE_DEFAULT_FONT_SIZE = 16
 
 /** Тип списка строки, в которой стоит каретка. */
-enum class NoteListStyle(val label: String) {
-    NONE("Обычный"),
-    BULLET("Маркированный"),
-    NUMBERED("Нумерованный"),
+enum class NoteListStyle(@param:StringRes val labelRes: Int) {
+    NONE(R.string.note_list_none),
+    BULLET(R.string.note_list_bullet),
+    NUMBERED(R.string.note_list_numbered),
 }
 
 /**

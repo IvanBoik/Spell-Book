@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import com.example.spellbook.data.AppTheme
 
 private val LightColorScheme = lightColorScheme(
     primary = DndRed,
@@ -76,11 +77,17 @@ private val DarkColorScheme = darkColorScheme(
     scrim = DarkBackground,
 )
 
+/**
+ * Тема приложения.
+ *
+ * @param appTheme выбранное пользователем оформление; по умолчанию следует системному.
+ */
 @Composable
 fun SpellBookTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    appTheme: AppTheme = AppTheme.SYSTEM,
     content: @Composable () -> Unit
 ) {
+    val darkTheme = appTheme.isDark(isSystemInDarkTheme())
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(

@@ -1,5 +1,6 @@
 package com.example.spellbook.data
 
+import com.example.spellbook.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
@@ -35,7 +36,7 @@ object DndSuCatalog {
                 .ignoreContentType(true)
                 .execute()
                 .body()
-        }.getOrElse { throw DndSuException("Не удалось получить список заклинаний с dnd.su", it) }
+        }.getOrElse { throw DndSuException(R.string.msg_spell_list_failed, cause = it) }
 
         val urls = SPELL_URL_REGEX.findAll(xml)
             .map { it.value.trimEnd('<') }
@@ -44,7 +45,7 @@ object DndSuCatalog {
             .sorted()
             .toList()
 
-        if (urls.isEmpty()) throw DndSuException("Список заклинаний оказался пустым")
+        if (urls.isEmpty()) throw DndSuException(R.string.msg_spell_list_failed)
         urls
     }
 }

@@ -32,11 +32,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.spellLevelLabel
+import com.example.spellbook.ui.spellOptionLabel
 
 /**
  * Экран выбора заклинаний из общей библиотеки для добавления в набор персонажа.
@@ -60,10 +64,13 @@ fun AddSpellsScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Добавить заклинания",
+                title = stringResource(R.string.add_spells_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -73,7 +80,7 @@ fun AddSpellsScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Поиск по названию") },
+                label = { Text(stringResource(R.string.search_hint)) },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -81,7 +88,7 @@ fun AddSpellsScreen(
             )
             if (librarySpells.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Text("В библиотеке пока нет заклинаний.")
+                    Text(stringResource(R.string.library_empty_title))
                 }
             } else {
                 LazyColumn(
@@ -117,8 +124,8 @@ private fun SelectableSpellRow(spell: Spell, checked: Boolean, onCheckedChange: 
             Column(modifier = Modifier.padding(start = 8.dp)) {
                 Text(spell.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "${SpellOptions.levels.firstOrNull { it.first == spell.level }?.second ?: "${spell.level} круг"} · " +
-                        SpellOptions.labelFor(SpellOptions.schools, spell.school),
+                    text = spellLevelLabel(spell.level) + " · " +
+                        spellOptionLabel(SpellOptions.schools, spell.school),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,

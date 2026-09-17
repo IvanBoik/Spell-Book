@@ -89,7 +89,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
+import com.example.spellbook.ui.humanizeFormula
+import com.example.spellbook.ui.spellOptionLabel
+import com.example.spellbook.ui.spellOptionPairs
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboRollMode
@@ -127,18 +132,24 @@ fun ComboListScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Комбинации",
+                title = stringResource(R.string.combos_title),
                 navigationIcon = { BackButton(onBack) },
                 actions = {
                     IconButton(onClick = onOpenLibrary) {
-                        Icon(Icons.Default.LibraryBooks, contentDescription = "Библиотека шагов")
+                    Icon(
+                        Icons.Default.LibraryBooks,
+                        contentDescription = stringResource(R.string.combos_step_library),
+                    )
                     }
                 },
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onCreate) {
-                Icon(Icons.Default.Add, contentDescription = "Создать комбинацию")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.combos_create),
+                )
             }
         },
     ) { padding ->
@@ -146,9 +157,9 @@ fun ComboListScreen(
             Column(Modifier.padding(padding).fillMaxSize()) {
                 sectionsBar()
                 EmptyState(
-                    title = "Комбинаций пока нет",
-                    message = "Соберите последовательность атак, заклинаний и дополнительных эффектов.",
-                    button = "Создать комбинацию",
+                title = stringResource(R.string.combos_empty_title),
+                message = stringResource(R.string.combos_empty_text),
+                button = stringResource(R.string.combos_create),
                     onClick = onCreate,
                 )
             }
@@ -264,7 +275,7 @@ private fun SwipeableComboCard(
             ) {
                 SwipeActionButton(
                     icon = Icons.Default.Edit,
-                    description = "Редактировать комбинацию",
+                    description = stringResource(R.string.combos_edit_named),
                     background = EDIT_ACTION_COLOR,
                     contentColor = Color.Black,
                     onClick = {
@@ -274,7 +285,7 @@ private fun SwipeableComboCard(
                 )
                 SwipeActionButton(
                     icon = Icons.Default.Delete,
-                    description = "Удалить комбинацию",
+                    description = stringResource(R.string.combos_delete_named),
                     background = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError,
                     onClick = {
@@ -334,7 +345,7 @@ private fun SwipeableComboCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    combo.name.ifBlank { "Без названия" },
+                combo.name.ifBlank { stringResource(R.string.combos_untitled) },
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f).padding(vertical = 8.dp),
                 )
@@ -345,7 +356,10 @@ private fun SwipeableComboCard(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Запустить комбинацию")
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = stringResource(R.string.combos_roll),
+                    )
                 }
                 SpecialRollMenu(onRun = onRun)
             }
@@ -378,7 +392,10 @@ private fun SpecialRollMenu(onRun: (ComboRollMode) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Особые запуски")
+            Icon(
+                Icons.Default.MoreVert,
+                contentDescription = stringResource(R.string.combos_special_rolls),
+            )
         }
         DropdownMenu(
             expanded = expanded,
@@ -392,7 +409,7 @@ private fun SpecialRollMenu(onRun: (ComboRollMode) -> Unit) {
                 ComboRollMode.CRITICAL_HOMEBREW,
             ).forEach { mode ->
                 DropdownMenuItem(
-                    text = { Text(mode.label) },
+                    text = { Text(stringResource(mode.labelRes)) },
                     onClick = {
                         expanded = false
                         onRun(mode)
@@ -423,11 +440,16 @@ fun ComboEditorScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = if (onDelete == null) "Новая комбинация" else "Редактор комбинации",
+                title = stringResource(
+                    if (onDelete == null) R.string.combos_new else R.string.combos_edit,
+                ),
                 navigationIcon = { BackButton(onBack) },
                 actions = {
                     IconButton(onClick = onSave, enabled = combo.name.isNotBlank()) {
-                        Icon(Icons.Default.Check, contentDescription = "Сохранить")
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = stringResource(R.string.action_save),
+                    )
                     }
                 },
             )
@@ -442,7 +464,7 @@ fun ComboEditorScreen(
                 OutlinedTextField(
                     value = combo.name,
                     onValueChange = onNameChange,
-                    label = { Text("Название комбинации") },
+                    label = { Text(stringResource(R.string.combos_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -451,50 +473,82 @@ fun ComboEditorScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showStepPicker = true }, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Default.LibraryBooks, contentDescription = null)
-                        Text("Из библиотеки", modifier = Modifier.padding(start = 6.dp))
+                    Text(
+                        stringResource(R.string.combos_from_library),
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
                     }
                     OutlinedButton(
                         onClick = { editingStep = ComboStep(characterId = combo.characterId, name = "") },
                         modifier = Modifier.weight(1f),
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null)
-                        Text("Новый шаг", modifier = Modifier.padding(start = 6.dp))
+                    Text(
+                        stringResource(R.string.combos_new_step),
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
                     }
                 }
             }
-            item { Text("Шаги комбинации", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            item {
+                Text(
+                    stringResource(R.string.combos_steps),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
             if (selected.isEmpty()) {
-                item { Text("Добавьте хотя бы один шаг.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                item {
+                    Text(
+                        stringResource(R.string.combos_add_step),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             items(selected, key = { it.id }) { step ->
                 StepCard(
                     step = step,
                     actions = {
                         IconButton(onClick = { onMoveStep(step.id, -1) }) {
-                            Icon(Icons.Default.ArrowUpward, contentDescription = "Выше")
+                            Icon(
+                                Icons.Default.ArrowUpward,
+                                contentDescription = stringResource(R.string.combos_move_up),
+                            )
                         }
                         IconButton(onClick = { onMoveStep(step.id, 1) }) {
-                            Icon(Icons.Default.ArrowDownward, contentDescription = "Ниже")
+                            Icon(
+                                Icons.Default.ArrowDownward,
+                                contentDescription = stringResource(R.string.combos_move_down),
+                            )
                         }
                         IconButton(onClick = { editingStep = step }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Редактировать общий шаг")
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = stringResource(R.string.combos_edit_shared_step),
+                            )
                         }
                         IconButton(onClick = { onToggleStep(step.id) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Убрать из комбинации")
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.combos_remove_step),
+                            )
                         }
                     },
                 )
             }
             item {
                 Button(onClick = onSave, enabled = combo.name.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                    Text("Сохранить комбинацию")
+                    Text(stringResource(R.string.combos_save))
                 }
             }
             if (onDelete != null) {
                 item {
                     OutlinedButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Delete, contentDescription = null)
-                        Text("Удалить комбинацию", modifier = Modifier.padding(start = 8.dp))
+                        Text(
+                            stringResource(R.string.combos_delete),
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
                     }
                 }
             }
@@ -531,18 +585,26 @@ fun StepLibraryScreen(
 ) {
     var editing by remember { mutableStateOf<ComboStep?>(null) }
     Scaffold(
-        topBar = { DndTopBar("Библиотека шагов", navigationIcon = { BackButton(onBack) }) },
+        topBar = {
+            DndTopBar(
+                stringResource(R.string.combos_library_title),
+                navigationIcon = { BackButton(onBack) },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { editing = ComboStep(characterId = characterId, name = "") }) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить шаг")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.combos_library_add),
+                )
             }
         },
     ) { padding ->
         if (steps.isEmpty()) {
             EmptyState(
-                title = "Шагов пока нет",
-                message = "Созданные шаги можно использовать сразу в нескольких комбинациях.",
-                button = "Добавить шаг",
+                title = stringResource(R.string.combos_library_empty_title),
+                message = stringResource(R.string.combos_library_empty_text),
+                button = stringResource(R.string.combos_library_add),
                 onClick = { editing = ComboStep(characterId = characterId, name = "") },
                 modifier = Modifier.padding(padding),
             )
@@ -555,10 +617,16 @@ fun StepLibraryScreen(
                 items(steps, key = { it.id }) { step ->
                     StepCard(step) {
                         IconButton(onClick = { editing = step }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.action_edit),
+                        )
                         }
                         IconButton(onClick = { onDelete(step.id) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.action_delete),
+                        )
                         }
                     }
                 }
@@ -586,7 +654,7 @@ fun ComboResultScreen(
                 title = {
                     Column {
                         Text(result.combo.name)
-                        Text(result.mode.label, style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(result.mode.labelRes), style = MaterialTheme.typography.labelSmall)
                     }
                 },
                 navigationIcon = { BackButton(onBack) },
@@ -629,7 +697,7 @@ fun ComboResultScreen(
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.fillMaxWidth().padding(20.dp)) {
-                        Text("Итог", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.combos_total), style = MaterialTheme.typography.titleMedium)
                         Text(result.total.toString(), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -648,13 +716,13 @@ fun ComboResultScreen(
                             )
                             // Исходная запись шага с читаемыми названиями переменных.
                             Text(
-                                StatFormula.humanize(stepResult.step.formula),
+                                humanizeFormula(stepResult.step.formula),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             if (stepResult.step.damageType.isNotBlank()) {
                                 Text(
-                                    SpellOptions.labelFor(SpellOptions.damageTypes, stepResult.step.damageType),
+                                    spellOptionLabel(SpellOptions.damageTypes, stepResult.step.damageType),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
@@ -668,7 +736,13 @@ fun ComboResultScreen(
                 }
             }
             if (result.effects.isNotEmpty()) {
-                item { Text("Дополнительные эффекты", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                item {
+                    Text(
+                        stringResource(R.string.combos_extra_effects),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
                 items(result.effects) { effect ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -717,7 +791,10 @@ private fun RerollButton(mode: ComboRollMode, onReroll: (ComboRollMode) -> Unit)
         modifier = Modifier.fillMaxWidth().height(REROLL_BUTTON_HEIGHT),
     ) {
         Icon(Icons.Default.Refresh, contentDescription = null)
-        Text("Перебросить (${mode.label})", modifier = Modifier.padding(start = 8.dp))
+        Text(
+            stringResource(R.string.combo_reroll, stringResource(mode.labelRes)),
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
 
@@ -728,7 +805,7 @@ private fun StepCard(step: ComboStep, actions: @Composable RowScope.() -> Unit) 
             Column(Modifier.weight(1f)) {
                 Text(step.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(step.formula, color = MaterialTheme.colorScheme.primary)
-                val damageLabel = SpellOptions.labelFor(SpellOptions.damageTypes, step.damageType)
+                val damageLabel = spellOptionLabel(SpellOptions.damageTypes, step.damageType)
                 if (step.damageType.isNotBlank()) {
                     Text(damageLabel, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                 }
@@ -750,9 +827,9 @@ private fun StepPickerDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Шаги из библиотеки") },
+        title = { Text(stringResource(R.string.combos_pick_steps)) },
         text = {
-            if (steps.isEmpty()) Text("Библиотека пуста. Создайте новый шаг.")
+            if (steps.isEmpty()) Text(stringResource(R.string.combos_pick_empty))
             else LazyColumn(Modifier.heightIn(max = 420.dp)) {
                 items(steps, key = { it.id }) { step ->
                     Row(
@@ -768,7 +845,9 @@ private fun StepPickerDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Готово") } },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.combos_done)) }
+        },
     )
 }
 
@@ -794,20 +873,20 @@ fun ComboStepEditorDialog(
         tonalElevation = 0.dp,
         titleContentColor = MaterialTheme.colorScheme.onSurface,
         textContentColor = MaterialTheme.colorScheme.onSurface,
-        title = { Text("Шаг комбинации") },
+        title = { Text(stringResource(R.string.combos_step_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Название") },
+                    label = { Text(stringResource(R.string.form_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 FormulaTextField(
                     value = expression,
                     onValueChange = { expression = it },
-                    label = "Значение",
+                    label = stringResource(R.string.combos_step_value),
                     placeholder = "1d8 + [str]",
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -816,10 +895,14 @@ fun ComboStepEditorDialog(
                     onExpandedChange = { damageExpanded = it },
                 ) {
                     OutlinedTextField(
-                        value = if (damageType.isBlank()) "Без типа" else SpellOptions.labelFor(SpellOptions.damageTypes, damageType),
+                        value = if (damageType.isBlank()) {
+                            stringResource(R.string.combo_no_damage_type)
+                        } else {
+                            spellOptionLabel(SpellOptions.damageTypes, damageType)
+                        },
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Тип урона") },
+                        label = { Text(stringResource(R.string.combo_damage_type)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(damageExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth(),
                     )
@@ -830,13 +913,13 @@ fun ComboStepEditorDialog(
                         tonalElevation = 0.dp,
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Без типа") },
+                            text = { Text(stringResource(R.string.combo_no_damage_type)) },
                             onClick = {
                                 damageType = ""
                                 damageExpanded = false
                             },
                         )
-                        SpellOptions.damageTypes.forEach { (code, label) ->
+                        spellOptionPairs(SpellOptions.damageTypes).forEach { (code, label) ->
                             DropdownMenuItem(
                                 text = { Text(label) },
                                 onClick = {
@@ -850,7 +933,7 @@ fun ComboStepEditorDialog(
                 OutlinedTextField(
                     value = effect,
                     onValueChange = { effect = it },
-                    label = { Text("Дополнительный эффект") },
+                    label = { Text(stringResource(R.string.combos_step_effect)) },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -869,9 +952,11 @@ fun ComboStepEditorDialog(
                         ),
                     )
                 },
-            ) { Text("Сохранить") }
+        ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -912,7 +997,10 @@ private fun StepNumberField(
 @Composable
 private fun BackButton(onBack: () -> Unit) {
     IconButton(onClick = onBack) {
-        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = stringResource(R.string.action_back),
+        )
     }
 }
 

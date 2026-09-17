@@ -1,148 +1,159 @@
 package com.example.spellbook.data
 
+import androidx.annotation.StringRes
+import com.example.spellbook.R
+
 /**
- * Справочники кодов формата LSS и их русских названий для выпадающих списков формы.
- * Каждый список — пары (код LSS, отображаемое название).
+ * Справочники кодов формата LSS.
+ *
+ * У каждого значения две подписи:
+ * - [SpellOption.canonical] — русское название из источника dnd.su. Оно не переводится:
+ *   по нему парсер сопоставляет загруженные страницы с кодами LSS.
+ * - [SpellOption.labelRes] — подпись для интерфейса, зависящая от языка приложения.
  */
 object SpellOptions {
 
+    /** Вариант справочника: код LSS, каноническое имя источника и подпись для UI. */
+    data class SpellOption(
+        val code: String,
+        val canonical: String,
+        @param:StringRes val labelRes: Int,
+    )
+
     /** Школы магии. */
-    val schools: List<Pair<String, String>> = listOf(
-        "abj" to "Ограждение",
-        "con" to "Вызов",
-        "div" to "Прорицание",
-        "enc" to "Очарование",
-        "evo" to "Воплощение",
-        "ill" to "Иллюзия",
-        "nec" to "Некромантия",
-        "trs" to "Преобразование",
+    val schools: List<SpellOption> = listOf(
+        SpellOption("abj", "Ограждение", R.string.school_abjuration),
+        SpellOption("con", "Вызов", R.string.school_conjuration),
+        SpellOption("div", "Прорицание", R.string.school_divination),
+        SpellOption("enc", "Очарование", R.string.school_enchantment),
+        SpellOption("evo", "Воплощение", R.string.school_evocation),
+        SpellOption("ill", "Иллюзия", R.string.school_illusion),
+        SpellOption("nec", "Некромантия", R.string.school_necromancy),
+        SpellOption("trs", "Преобразование", R.string.school_transmutation),
     )
 
     /** Тип активации (как накладывается заклинание). */
-    val activationTypes: List<Pair<String, String>> = listOf(
-        "action" to "Действие",
-        "bonus" to "Бонусное действие",
-        "reaction" to "Реакция",
-        "minute" to "Минуты",
-        "hour" to "Часы",
-        "day" to "Дни",
-        "special" to "Особая",
+    val activationTypes: List<SpellOption> = listOf(
+        SpellOption("action", "Действие", R.string.activation_action),
+        SpellOption("bonus", "Бонусное действие", R.string.activation_bonus),
+        SpellOption("reaction", "Реакция", R.string.activation_reaction),
+        SpellOption("minute", "Минуты", R.string.unit_minutes),
+        SpellOption("hour", "Часы", R.string.unit_hours),
+        SpellOption("day", "Дни", R.string.unit_days),
+        SpellOption("special", "Особая", R.string.unit_special),
     )
 
     /** Единицы длительности. */
-    val durationUnits: List<Pair<String, String>> = listOf(
-        "inst" to "Мгновенная",
-        "turn" to "Ход",
-        "round" to "Раунд",
-        "minute" to "Минуты",
-        "hour" to "Часы",
-        "day" to "Дни",
-        "perm" to "Постоянная",
-        "spec" to "Особая",
+    val durationUnits: List<SpellOption> = listOf(
+        SpellOption("inst", "Мгновенная", R.string.duration_instant),
+        SpellOption("turn", "Ход", R.string.duration_turn),
+        SpellOption("round", "Раунд", R.string.duration_round),
+        SpellOption("minute", "Минуты", R.string.unit_minutes),
+        SpellOption("hour", "Часы", R.string.unit_hours),
+        SpellOption("day", "Дни", R.string.unit_days),
+        SpellOption("perm", "Постоянная", R.string.duration_permanent),
+        SpellOption("spec", "Особая", R.string.unit_special),
     )
 
     /** Единицы дистанции. */
-    val rangeUnits: List<Pair<String, String>> = listOf(
-        "self" to "На себя",
-        "touch" to "Касание",
-        "ft" to "Футы",
-        "mi" to "Мили",
-        "spec" to "Особая",
-        "any" to "Любая",
+    val rangeUnits: List<SpellOption> = listOf(
+        SpellOption("self", "На себя", R.string.range_self),
+        SpellOption("touch", "Касание", R.string.range_touch),
+        SpellOption("ft", "Футы", R.string.unit_feet),
+        SpellOption("mi", "Мили", R.string.unit_miles),
+        SpellOption("spec", "Особая", R.string.unit_special),
+        SpellOption("any", "Любая", R.string.range_any),
     )
 
     /** Тип цели или области воздействия. Пустой код — «не задано». */
-    val targetTypes: List<Pair<String, String>> = listOf(
-        "" to "Не задано",
-        "self" to "На себя",
-        "creature" to "Существо",
-        "ally" to "Союзник",
-        "enemy" to "Противник",
-        "object" to "Объект",
-        "space" to "Пространство",
-        "radius" to "Радиус",
-        "sphere" to "Сфера",
-        "cylinder" to "Цилиндр",
-        "cone" to "Конус",
-        "cube" to "Куб",
-        "line" to "Линия",
-        "wall" to "Стена",
+    val targetTypes: List<SpellOption> = listOf(
+        SpellOption("", "Не задано", R.string.value_unset),
+        SpellOption("self", "На себя", R.string.range_self),
+        SpellOption("creature", "Существо", R.string.target_creature),
+        SpellOption("ally", "Союзник", R.string.target_ally),
+        SpellOption("enemy", "Противник", R.string.target_enemy),
+        SpellOption("object", "Объект", R.string.target_object),
+        SpellOption("space", "Пространство", R.string.target_space),
+        SpellOption("radius", "Радиус", R.string.target_radius),
+        SpellOption("sphere", "Сфера", R.string.target_sphere),
+        SpellOption("cylinder", "Цилиндр", R.string.target_cylinder),
+        SpellOption("cone", "Конус", R.string.target_cone),
+        SpellOption("cube", "Куб", R.string.target_cube),
+        SpellOption("line", "Линия", R.string.target_line),
+        SpellOption("wall", "Стена", R.string.target_wall),
     )
 
     /** Единицы размера цели/области. Пустой код — «не задано». */
-    val targetUnits: List<Pair<String, String>> = listOf(
-        "" to "Не задано",
-        "ft" to "Футы",
-        "mi" to "Мили",
-        "spec" to "Специальная",
+    val targetUnits: List<SpellOption> = listOf(
+        SpellOption("", "Не задано", R.string.value_unset),
+        SpellOption("ft", "Футы", R.string.unit_feet),
+        SpellOption("mi", "Мили", R.string.unit_miles),
+        SpellOption("spec", "Специальная", R.string.unit_special),
     )
 
     /** Тип действия (механика применения). */
-    val actionTypes: List<Pair<String, String>> = listOf(
-        "util" to "Вспомогательное",
-        "msak" to "Атака ближнего заклинания",
-        "rsak" to "Атака дальнего заклинания",
-        "save" to "Спасбросок",
-        "heal" to "Лечение",
-        "other" to "Другое",
+    val actionTypes: List<SpellOption> = listOf(
+        SpellOption("util", "Вспомогательное", R.string.action_type_utility),
+        SpellOption("msak", "Атака ближнего заклинания", R.string.action_type_melee),
+        SpellOption("rsak", "Атака дальнего заклинания", R.string.action_type_ranged),
+        SpellOption("save", "Спасбросок", R.string.action_type_save),
+        SpellOption("heal", "Лечение", R.string.damage_healing),
+        SpellOption("other", "Другое", R.string.action_type_other),
     )
 
     /** Характеристики (для спасброска / базовой хар-ки). Пустой код — «не задано». */
-    val abilities: List<Pair<String, String>> = listOf(
-        "" to "Не задано",
-        "str" to "Сила",
-        "dex" to "Ловкость",
-        "con" to "Телосложение",
-        "int" to "Интеллект",
-        "wis" to "Мудрость",
-        "cha" to "Харизма",
+    val abilities: List<SpellOption> = listOf(
+        SpellOption("", "Не задано", R.string.value_unset),
+        SpellOption("str", "Сила", R.string.ability_strength),
+        SpellOption("dex", "Ловкость", R.string.ability_dexterity),
+        SpellOption("con", "Телосложение", R.string.ability_constitution),
+        SpellOption("int", "Интеллект", R.string.ability_intelligence),
+        SpellOption("wis", "Мудрость", R.string.ability_wisdom),
+        SpellOption("cha", "Харизма", R.string.ability_charisma),
     )
 
     /** Типы урона и лечения. */
-    val damageTypes: List<Pair<String, String>> = listOf(
-        "bludgeoning" to "Дробящий",
-        "piercing" to "Колющий",
-        "slashing" to "Рубящий",
-        "fire" to "Огонь",
-        "cold" to "Холод",
-        "poison" to "Яд",
-        "acid" to "Кислота",
-        "lightning" to "Электричество",
-        "thunder" to "Звук",
-        "necrotic" to "Некротический",
-        "radiant" to "Излучение",
-        "psychic" to "Психический",
-        "force" to "Силовое поле",
-        "healing" to "Лечение",
+    val damageTypes: List<SpellOption> = listOf(
+        SpellOption("bludgeoning", "Дробящий", R.string.damage_bludgeoning),
+        SpellOption("piercing", "Колющий", R.string.damage_piercing),
+        SpellOption("slashing", "Рубящий", R.string.damage_slashing),
+        SpellOption("fire", "Огонь", R.string.damage_fire),
+        SpellOption("cold", "Холод", R.string.damage_cold),
+        SpellOption("poison", "Яд", R.string.damage_poison),
+        SpellOption("acid", "Кислота", R.string.damage_acid),
+        SpellOption("lightning", "Электричество", R.string.damage_lightning),
+        SpellOption("thunder", "Звук", R.string.damage_thunder),
+        SpellOption("necrotic", "Некротический", R.string.damage_necrotic),
+        SpellOption("radiant", "Излучение", R.string.damage_radiant),
+        SpellOption("psychic", "Психический", R.string.damage_psychic),
+        SpellOption("force", "Силовое поле", R.string.damage_force),
+        SpellOption("healing", "Лечение", R.string.damage_healing),
     )
 
     /** Классы, которым может быть доступно заклинание. */
-    val classes: List<Pair<String, String>> = listOf(
-        "bard" to "Бард",
-        "wizard" to "Волшебник",
-        "druid" to "Друид",
-        "cleric" to "Жрец",
-        "artificer" to "Изобретатель",
-        "warlock" to "Колдун",
-        "paladin" to "Паладин",
-        "ranger" to "Следопыт",
-        "sorcerer" to "Чародей",
+    val classes: List<SpellOption> = listOf(
+        SpellOption("bard", "Бард", R.string.class_bard),
+        SpellOption("wizard", "Волшебник", R.string.class_wizard),
+        SpellOption("druid", "Друид", R.string.class_druid),
+        SpellOption("cleric", "Жрец", R.string.class_cleric),
+        SpellOption("artificer", "Изобретатель", R.string.class_artificer),
+        SpellOption("warlock", "Колдун", R.string.class_warlock),
+        SpellOption("paladin", "Паладин", R.string.class_paladin),
+        SpellOption("ranger", "Следопыт", R.string.class_ranger),
+        SpellOption("sorcerer", "Чародей", R.string.class_sorcerer),
     )
 
     /** Круги заклинаний: 0 — заговор. */
-    val levels: List<Pair<Int, String>> = listOf(
-        0 to "Заговор",
-        1 to "1 круг",
-        2 to "2 круг",
-        3 to "3 круг",
-        4 to "4 круг",
-        5 to "5 круг",
-        6 to "6 круг",
-        7 to "7 круг",
-        8 to "8 круг",
-        9 to "9 круг",
-    )
+    val levels: List<Int> = (0..MAX_SPELL_LEVEL).toList()
 
-    fun labelFor(options: List<Pair<String, String>>, code: String): String =
-        options.firstOrNull { it.first == code }?.second ?: code
+    /** Находит вариант по коду LSS. */
+    fun optionFor(options: List<SpellOption>, code: String): SpellOption? =
+        options.firstOrNull { it.code == code }
+
+    /** Каноническое (непереводимое) название — используется при разборе страниц dnd.su. */
+    fun canonicalLabel(options: List<SpellOption>, code: String): String =
+        optionFor(options, code)?.canonical ?: code
 }
+
+/** Максимальный круг заклинаний в игре. */
+const val MAX_SPELL_LEVEL = 9

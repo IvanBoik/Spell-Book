@@ -60,6 +60,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.data.model.AbilityType
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.D20RollResult
 import com.example.spellbook.data.model.ProficiencyLevel
@@ -110,10 +112,13 @@ fun StatsScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Характеристики",
+                title = stringResource(R.string.stats_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -171,7 +176,7 @@ fun StatsScreen(
     }
     if (editingArmor) {
         NumberDialog(
-            title = "Класс защиты",
+            title = stringResource(R.string.stats_armor_class),
             initial = character.armorClass,
             onDismiss = { editingArmor = false },
             onSave = { onSetArmorClass(it); editingArmor = false },
@@ -179,7 +184,7 @@ fun StatsScreen(
     }
     if (editingSpeed) {
         NumberDialog(
-            title = "Скорость, футы",
+            title = stringResource(R.string.stats_speed_dialog),
             initial = character.speed,
             onDismiss = { editingSpeed = false },
             onSave = { onSetSpeed(it); editingSpeed = false },
@@ -187,7 +192,7 @@ fun StatsScreen(
     }
     editingAbility?.let { ability ->
         NumberDialog(
-            title = ability.label,
+            title = stringResource(ability.labelRes),
             initial = character.abilityScore(ability),
             onDismiss = { editingAbility = null },
             onSave = { onSetAbilityScore(ability, it); editingAbility = null },
@@ -216,7 +221,11 @@ private fun VitalsCard(
                     .padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Text("Хиты", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    stringResource(R.string.stats_hp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
                         text = "${character.currentHp} / ${character.maxHp}",
@@ -234,7 +243,11 @@ private fun VitalsCard(
                     }
                 }
                 Text(
-                    text = if (character.tempHp > 0) "временных хитов: ${character.tempHp}" else "без временных хитов",
+                    text = if (character.tempHp > 0) {
+                        stringResource(R.string.stats_temp_hp_value, character.tempHp)
+                    } else {
+                        stringResource(R.string.stats_no_temp_hp)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -244,19 +257,19 @@ private fun VitalsCard(
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 VitalValue(
-                    label = "Защита",
+                    label = stringResource(R.string.stats_defense),
                     value = character.armorClass.toString(),
                     modifier = Modifier.weight(1f),
                     onClick = onArmorClick,
                 )
                 VitalValue(
-                    label = "Скорость",
-                    value = "${character.speed} фт",
+                    label = stringResource(R.string.stats_speed),
+                    value = stringResource(R.string.stats_speed_value, character.speed),
                     modifier = Modifier.weight(1f),
                     onClick = onSpeedClick,
                 )
                 VitalValue(
-                    label = "Мастерство",
+                    label = stringResource(R.string.stats_proficiency),
                     value = formatModifier(character.proficiencyBonus),
                     modifier = Modifier.weight(1f),
                     onClick = null,
@@ -301,6 +314,8 @@ private fun AbilityBlock(
     val saveBonus = character.saveBonus(ability)
     val saveProficient = character.saveProficiency(ability) != ProficiencyLevel.NONE
     val skills = SkillType.entries.filter { it.ability == ability }
+    val saveTitle = stringResource(R.string.action_type_save)
+    val abilityLabel = stringResource(ability.labelRes)
 
     Card(
         shape = STATS_CARD_SHAPE,
@@ -313,24 +328,28 @@ private fun AbilityBlock(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .clickable { onRoll(ability.label, RollKind.ABILITY, abilityModifier) },
+                        .clickable { onRoll(abilityLabel, RollKind.ABILITY, abilityModifier) },
                 ) {
-                    Text(ability.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(abilityLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        "${character.abilityScore(ability)} · проверка ${formatModifier(abilityModifier)}",
+                        stringResource(
+                            R.string.stats_ability_check,
+                            character.abilityScore(ability),
+                            formatModifier(abilityModifier),
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                TextButton(onClick = onEditScore) { Text("Значение") }
+                TextButton(onClick = onEditScore) { Text(stringResource(R.string.stats_edit_value)) }
             }
 
             // Спасбросок той же характеристики.
             StatChip(
-                title = "Спасбросок",
+                title = saveTitle,
                 bonus = saveBonus,
                 proficiencyMark = if (saveProficient) ProficiencyLevel.PROFICIENT else ProficiencyLevel.NONE,
-                onClick = { onRoll("Спасбросок · ${ability.label}", RollKind.SAVE, saveBonus) },
+                onClick = { onRoll("$saveTitle · $abilityLabel", RollKind.SAVE, saveBonus) },
                 onToggle = onToggleSave,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -338,11 +357,12 @@ private fun AbilityBlock(
             // По одному навыку в строке: длинные названия помещаются без переноса.
             skills.forEach { skill ->
                 val bonus = character.skillBonus(skill)
+                val skillLabel = stringResource(skill.labelRes)
                 StatChip(
-                    title = skill.label,
+                    title = skillLabel,
                     bonus = bonus,
                     proficiencyMark = character.skillProficiency(skill),
-                    onClick = { onRoll(skill.label, RollKind.SKILL, bonus) },
+                    onClick = { onRoll(skillLabel, RollKind.SKILL, bonus) },
                     onToggle = { onCycleSkill(skill) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -550,9 +570,9 @@ private fun RollToast(
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                         Text(
-                            text = "к20: ${result.roll} ${formatModifier(result.bonus)}" + when {
-                                result.isCriticalSuccess -> " · крит!"
-                                result.isCriticalFailure -> " · провал"
+            text = stringResource(R.string.stats_roll_result, result.roll, formatModifier(result.bonus)) + when {
+                result.isCriticalSuccess -> stringResource(R.string.stats_crit_success)
+                result.isCriticalFailure -> stringResource(R.string.stats_crit_failure)
                                 else -> ""
                             },
                             style = MaterialTheme.typography.bodySmall,
@@ -562,7 +582,7 @@ private fun RollToast(
                     IconButton(onClick = onDismiss) {
                         Icon(
                             Icons.Default.Close,
-                            contentDescription = "Скрыть результат",
+                            contentDescription = stringResource(R.string.stats_close_result),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
@@ -589,18 +609,22 @@ private fun HpDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        title = { Text("Хиты") },
+        title = { Text(stringResource(R.string.stats_hp)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "Сейчас ${character.currentHp} / ${character.maxHp}" +
-                        if (character.tempHp > 0) " (+${character.tempHp} временных)" else "",
+                stringResource(R.string.stats_current_hp, character.currentHp, character.maxHp) +
+                    if (character.tempHp > 0) {
+                        stringResource(R.string.stats_temp_suffix, character.tempHp)
+                    } else {
+                        ""
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 OutlinedTextField(
                     value = amount,
                     onValueChange = { new -> amount = new.filter { it.isDigit() } },
-                    label = { Text("Количество") },
+                label = { Text(stringResource(R.string.stats_amount)) },
                     placeholder = { Text("0") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -611,18 +635,18 @@ private fun HpDialog(
                         onClick = { onChangeHp(-parsedAmount); amount = "" },
                         enabled = parsedAmount > 0,
                         modifier = Modifier.weight(1f),
-                    ) { Text("Урон") }
+                ) { Text(stringResource(R.string.stats_damage)) }
                     Button(
                         onClick = { onChangeHp(parsedAmount); amount = "" },
                         enabled = parsedAmount > 0,
                         modifier = Modifier.weight(1f),
-                    ) { Text("Лечение") }
+                ) { Text(stringResource(R.string.stats_heal)) }
                 }
                 HorizontalDivider()
                 OutlinedTextField(
                     value = tempHp,
                     onValueChange = { new -> tempHp = new.filter { it.isDigit() } },
-                    label = { Text("Временные хиты") },
+                label = { Text(stringResource(R.string.stats_temp_hp)) },
                     placeholder = { Text("0") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -631,7 +655,7 @@ private fun HpDialog(
                 OutlinedTextField(
                     value = maxHp,
                     onValueChange = { new -> maxHp = new.filter { it.isDigit() } },
-                    label = { Text("Максимум хитов") },
+                label = { Text(stringResource(R.string.stats_max_hp)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -642,8 +666,8 @@ private fun HpDialog(
             Button(onClick = {
                 onSetHpValues(tempHp.toIntOrNull() ?: 0, maxHp.toIntOrNull() ?: character.maxHp)
                 onDismiss()
-            }) { Text("Сохранить") }
+            }) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
     )
 }

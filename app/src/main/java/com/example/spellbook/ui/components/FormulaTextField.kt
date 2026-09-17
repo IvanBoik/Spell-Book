@@ -15,8 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
 import com.example.spellbook.data.StatFormula
+import com.example.spellbook.ui.formulaVariableLabel
 
 /**
  * Поле для числа или формулы от характеристик персонажа.
@@ -57,7 +60,7 @@ fun FormulaTextField(
             isError = isError || !valid,
             // Подсказка показывается только при ошибке: формат виден из плейсхолдера.
             supportingText = if (valid) null else {
-                { Text("Не удалось разобрать формулу") }
+                { Text(stringResource(R.string.formula_invalid)) }
             },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -72,7 +75,15 @@ fun FormulaTextField(
         ) {
             StatFormula.SUGGESTIONS.forEach { variable ->
                 DropdownMenuItem(
-                    text = { Text("[${variable.code}] — ${variable.label}") },
+                    text = {
+                        Text(
+                            stringResource(
+                                R.string.formula_variable_hint,
+                                variable.code,
+                                formulaVariableLabel(variable),
+                            ),
+                        )
+                    },
                     onClick = {
                         val (text, cursor) = StatFormula.insertVariable(fieldValue.text, caret, variable)
                         fieldValue = TextFieldValue(text, TextRange(cursor))

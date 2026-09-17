@@ -3,7 +3,6 @@ package com.example.spellbook.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,23 +41,20 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.model.CharacterFeat
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.ui.components.DndTopBar
-import kotlin.math.roundToInt
+import com.example.spellbook.ui.components.dragToReorder
+import com.example.spellbook.ui.components.rememberDragReorderState
 
 private val FEAT_CARD_SHAPE = RoundedCornerShape(12.dp)
 
@@ -91,24 +86,20 @@ fun FeatsScreen(
     var editingFeat by remember { mutableStateOf<CharacterFeat?>(null) }
     var featPendingDeletion by remember { mutableStateOf<CharacterFeat?>(null) }
 
-    var draggingFeatId by remember { mutableStateOf<String?>(null) }
-    var dragDistance by remember { mutableFloatStateOf(0f) }
-    /** Оптимистичный порядок: список не откатывается, пока Room Flow не обновился. */
-    var localOrder by remember { mutableStateOf<List<String>>(emptyList()) }
-    val density = LocalDensity.current
-
-    val featIds = feats.mapTo(mutableSetOf()) { it.id }
-    val effectiveOrder = localOrder.filter { it in featIds } +
-        feats.map { it.id }.filterNot { it in localOrder }
-    val orderedFeats = effectiveOrder.mapNotNull { id -> feats.firstOrNull { it.id == id } }
+    val dragState = rememberDragReorderState<String>(step = FEAT_DRAG_STEP)
+    val orderedFeats = dragState.order(feats.map { it.id })
+        .mapNotNull { id -> feats.firstOrNull { it.id == id } }
 
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Черты",
+                title = stringResource(R.string.feats_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -119,21 +110,21 @@ fun FeatsScreen(
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; onAddFromLibrary() },
                         icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
-                        text = { Text("Добавить из библиотеки") },
+                        text = { Text(stringResource(R.string.feats_add_from_library)) },
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                     )
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; showUrlDialog = true },
                         icon = { Icon(Icons.Default.Link, contentDescription = null) },
-                        text = { Text("Загрузить с dnd.su") },
+                        text = { Text(stringResource(R.string.library_load_dndsu)) },
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                     )
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; showManualDialog = true },
                         icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        text = { Text("Добавить вручную") },
+                        text = { Text(stringResource(R.string.feats_add_manually)) },
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                     )
@@ -141,7 +132,9 @@ fun FeatsScreen(
                 FloatingActionButton(onClick = { menuExpanded = !menuExpanded }) {
                     Icon(
                         imageVector = if (menuExpanded) Icons.Default.Close else Icons.Default.Add,
-                        contentDescription = if (menuExpanded) "Закрыть меню" else "Добавить черту",
+                        contentDescription = stringResource(
+                            if (menuExpanded) R.string.action_close_menu else R.string.feats_add,
+                        ),
                     )
                 }
             }
@@ -155,9 +148,13 @@ fun FeatsScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Черт пока нет", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            "Добавьте черту из библиотеки, вручную или по ссылке с dnd.su.",
+                            stringResource(R.string.feats_empty_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            stringResource(R.string.feats_empty_text),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -174,42 +171,19 @@ fun FeatsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(orderedFeats, key = { it.id }) { feat ->
-                    val isDragged = draggingFeatId == feat.id
                     FeatCard(
                         feat = feat,
                         onDiceClick = onDiceClick,
-                        isDragging = isDragged,
-                        dragTranslationY = if (isDragged) dragDistance else 0f,
+                        isDragging = dragState.draggingId == feat.id,
+                        dragModifier = Modifier.dragToReorder(
+                            state = dragState,
+                            id = feat.id,
+                            currentOrder = orderedFeats.map { it.id },
+                            onReorder = onReorder,
+                        ),
                         onToggle = { onToggleCollapsed(feat.id, !feat.collapsed) },
                         onEdit = { editingFeat = feat },
                         onDelete = { featPendingDeletion = feat },
-                        onDragStart = {
-                            localOrder = orderedFeats.map { it.id }
-                            draggingFeatId = feat.id
-                            dragDistance = 0f
-                        },
-                        onDrag = { delta ->
-                            dragDistance += delta
-                            val stepPx = with(density) { FEAT_DRAG_STEP.toPx() }
-                            // Соседи освобождают место сразу, карточка остаётся под пальцем.
-                            while (dragDistance >= stepPx) {
-                                val index = localOrder.indexOf(feat.id)
-                                if (index < 0 || index >= localOrder.lastIndex) break
-                                localOrder = localOrder.toMutableList().apply { add(index + 1, removeAt(index)) }
-                                dragDistance -= stepPx
-                            }
-                            while (dragDistance <= -stepPx) {
-                                val index = localOrder.indexOf(feat.id)
-                                if (index <= 0) break
-                                localOrder = localOrder.toMutableList().apply { add(index - 1, removeAt(index)) }
-                                dragDistance += stepPx
-                            }
-                        },
-                        onDragEnd = {
-                            onReorder(localOrder)
-                            draggingFeatId = null
-                            dragDistance = 0f
-                        },
                     )
                 }
             }
@@ -219,7 +193,7 @@ fun FeatsScreen(
 
     if (showManualDialog) {
         FeatEditorDialog(
-            title = "Новая черта",
+            title = stringResource(R.string.feats_new),
             initialName = "",
             initialDescription = "",
             onDismiss = { showManualDialog = false },
@@ -231,7 +205,7 @@ fun FeatsScreen(
     }
     editingFeat?.let { feat ->
         FeatEditorDialog(
-            title = "Редактирование черты",
+            title = stringResource(R.string.feats_edit),
             initialName = feat.name,
             initialDescription = feat.description,
             onDismiss = { editingFeat = null },
@@ -264,16 +238,18 @@ fun FeatsScreen(
             onDismissRequest = { featPendingDeletion = null },
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp,
-            title = { Text("Убрать черту?") },
-            text = { Text("Черта «${feat.name}» будет убрана у персонажа, но останется в библиотеке.") },
+            title = { Text(stringResource(R.string.feats_remove_title)) },
+            text = { Text(stringResource(R.string.feats_remove_text, feat.name)) },
             confirmButton = {
                 Button(onClick = {
                     onRemoveFromCharacter(feat.id)
                     featPendingDeletion = null
-                }) { Text("Убрать") }
+                }) { Text(stringResource(R.string.action_remove)) }
             },
             dismissButton = {
-                TextButton(onClick = { featPendingDeletion = null }) { Text("Отмена") }
+                TextButton(onClick = { featPendingDeletion = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             },
         )
     }
@@ -285,39 +261,16 @@ private fun FeatCard(
     feat: CharacterFeat,
     onDiceClick: (String) -> Unit,
     isDragging: Boolean,
-    dragTranslationY: Float,
+    /** Модификатор перетаскивания для смены порядка черт. */
+    dragModifier: Modifier,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onDragStart: () -> Unit,
-    onDrag: (Float) -> Unit,
-    onDragEnd: () -> Unit,
 ) {
-    // pointerInput живёт дольше рекомпозиции: без rememberUpdatedState он вызывал бы
-    // callback-и, захватившие устаревший порядок черт.
-    val currentOnDragStart by rememberUpdatedState(onDragStart)
-    val currentOnDrag by rememberUpdatedState(onDrag)
-    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
-
     Card(
         shape = FEAT_CARD_SHAPE,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier
-            .fillMaxWidth()
-            .offset { IntOffset(0, if (isDragging) dragTranslationY.roundToInt() else 0) }
-            .zIndex(if (isDragging) 1f else 0f)
-            // Ключ не зависит от isDragging: иначе рекомпозиция отменит активный жест.
-            .pointerInput(feat.id) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { currentOnDragStart() },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        currentOnDrag(dragAmount.y)
-                    },
-                    onDragEnd = { currentOnDragEnd() },
-                    onDragCancel = { currentOnDragEnd() },
-                )
-            },
+        modifier = Modifier.fillMaxWidth().then(dragModifier),
     ) {
         Column(Modifier.fillMaxWidth()) {
             Row(
@@ -329,7 +282,7 @@ private fun FeatCard(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        feat.name.ifBlank { "Без названия" },
+                        feat.name.ifBlank { stringResource(R.string.feats_untitled) },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -343,14 +296,22 @@ private fun FeatCard(
                     }
                 }
                 IconButton(onClick = onEdit) {
-                    Icon(Icons.Default.Edit, contentDescription = "Редактировать черту")
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.feats_edit_action),
+                    )
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Убрать черту")
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = stringResource(R.string.feats_remove_action),
+                    )
                 }
                 Icon(
                     imageVector = if (feat.collapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                    contentDescription = if (feat.collapsed) "Развернуть" else "Свернуть",
+                    contentDescription = stringResource(
+                        if (feat.collapsed) R.string.action_expand else R.string.action_collapse,
+                    ),
                     modifier = Modifier.padding(end = 12.dp),
                 )
             }
@@ -387,14 +348,14 @@ private fun FeatEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Название") },
+            label = { Text(stringResource(R.string.form_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Описание") },
+            label = { Text(stringResource(R.string.field_description)) },
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -402,10 +363,12 @@ private fun FeatEditorDialog(
         },
         confirmButton = {
             Button(onClick = { onConfirm(name, description) }, enabled = name.isNotBlank()) {
-                Text("Сохранить")
+                Text(stringResource(R.string.action_save))
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -416,26 +379,30 @@ private fun FeatUrlDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        title = { Text("Загрузка с dnd.su") },
+        title = { Text(stringResource(R.string.dndsu_dialog_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("Ссылка на черту") },
+            label = { Text(stringResource(R.string.feats_url_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "Например: https://dnd.su/feats/103-alert/",
+                stringResource(R.string.feats_url_example),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(url) }, enabled = url.isNotBlank()) { Text("Загрузить") }
+            Button(onClick = { onConfirm(url) }, enabled = url.isNotBlank()) {
+                Text(stringResource(R.string.action_load))
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }

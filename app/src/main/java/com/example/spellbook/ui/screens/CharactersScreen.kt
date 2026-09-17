@@ -42,9 +42,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.spellbook.R
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.ui.components.DndTopBar
 
@@ -62,7 +65,7 @@ fun CharactersScreen(
     var menuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = { DndTopBar(title = "Персонажи") },
+        topBar = { DndTopBar(title = stringResource(R.string.tab_characters)) },
         bottomBar = bottomBar,
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -70,14 +73,14 @@ fun CharactersScreen(
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; onImportSheet() },
                         icon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
-                        text = { Text("Загрузить лист") },
+                        text = { Text(stringResource(R.string.characters_import_sheet)) },
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                     )
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; onAddCharacter() },
                         icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        text = { Text("Создать вручную") },
+                        text = { Text(stringResource(R.string.characters_create_manually)) },
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                     )
@@ -89,7 +92,9 @@ fun CharactersScreen(
                 ) {
                     Icon(
                         imageVector = if (menuExpanded) Icons.Default.Close else Icons.Default.Add,
-                        contentDescription = if (menuExpanded) "Закрыть меню" else "Добавить персонажа",
+                        contentDescription = stringResource(
+                            if (menuExpanded) R.string.action_close_menu else R.string.characters_add,
+                        ),
                     )
                 }
             }
@@ -137,11 +142,12 @@ private fun CharacterCard(character: Character, spellCount: Int, onClick: () -> 
             Spacer(Modifier.height(0.dp))
             Column(modifier = Modifier.padding(start = 16.dp)) {
                 Text(
-                    text = character.name.ifBlank { "Без имени" },
+                    text = character.name.ifBlank { stringResource(R.string.character_unnamed) },
                     style = MaterialTheme.typography.titleLarge,
                 )
                 Text(
-                    text = "$spellCount ${spellsWord(spellCount)}",
+                    // Склонением занимаются ресурсы: в разных языках разное число форм.
+                    text = pluralStringResource(R.plurals.spell_count, spellCount, spellCount),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
@@ -204,26 +210,20 @@ private fun EmptyCharacters(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Пока нет персонажей",
+                text = stringResource(R.string.characters_empty_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
-            Text("Создайте персонажа или загрузите готовый лист в формате LSS.")
+            Text(stringResource(R.string.characters_empty_text))
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onAddCharacter) { Text("Создать персонажа") }
+            Button(onClick = onAddCharacter) { Text(stringResource(R.string.characters_create)) }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onImportSheet) { Text("Загрузить лист") }
+            OutlinedButton(onClick = onImportSheet) {
+                Text(stringResource(R.string.characters_import_sheet))
+            }
         }
     }
 }
 
-private fun spellsWord(count: Int): String {
-    val mod10 = count % 10
-    val mod100 = count % 100
-    return when {
-        mod10 == 1 && mod100 != 11 -> "заклинание"
-        mod10 in 2..4 && mod100 !in 12..14 -> "заклинания"
-        else -> "заклинаний"
-    }
-}
+

@@ -1,3 +1,705 @@
 <resources>
-    <string name="app_name">Spell Book</string>
+    <string name="app_name" translatable="false">Spell Book</string>
+
+    <!-- Character sections bar -->
+    <string name="section_settings">Settings</string>
+    <string name="section_spells">Spells</string>
+    <string name="section_stats">Stats</string>
+    <string name="section_resources">Resources</string>
+    <string name="section_combos">Combos</string>
+    <string name="section_inventory">Inventory</string>
+    <string name="section_feats">Feats</string>
+    <string name="section_notes">Notes</string>
+    <string name="section_prepare">Preparation</string>
+
+    <!-- Bottom navigation -->
+    <string name="tab_characters">Characters</string>
+    <string name="tab_library">Library</string>
+
+    <!-- Common actions -->
+    <string name="action_back">Back</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_remove">Remove</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_share">Share</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_close_menu">Close menu</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_general">General</string>
+    <string name="settings_language">Interface language</string>
+    <string name="settings_language_note">Only the interface is translated. Characters, spells, feats and other content you created or imported stay in their original language.</string>
+    <string name="settings_language_system">System language</string>
+    <string name="settings_language_ru">Русский</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system">Follow system</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_sections">Character sections bar</string>
+    <string name="settings_sections_hint">Turn off sections you don\'t use, and hold and drag a section to reorder them.</string>
+    <string name="settings_sections_scope">Applies to</string>
+    <string name="settings_sections_scope_all">All characters</string>
+    <string name="settings_sections_locked">Always shown</string>
+    <string name="settings_sections_inherited">This character uses the shared settings.</string>
+    <string name="settings_sections_customize">Customize for this character</string>
+    <string name="settings_sections_reset_character">Use shared settings</string>
+    <string name="settings_sections_reset_all">Reset to default order</string>
+    <string name="settings_sections_drag">Hold and drag to reorder</string>
+    <string name="settings_sections_home">Character home page</string>
+
+    <string name="settings_sections_prepare_note">The preparation section is shown only for characters that prepare spells.</string>
+    <string name="settings_no_characters">You have no characters yet.</string>
+
+    <!-- Schools of magic -->
+    <string name="school_abjuration">Abjuration</string>
+    <string name="school_conjuration">Conjuration</string>
+    <string name="school_divination">Divination</string>
+    <string name="school_enchantment">Enchantment</string>
+    <string name="school_evocation">Evocation</string>
+    <string name="school_illusion">Illusion</string>
+    <string name="school_necromancy">Necromancy</string>
+    <string name="school_transmutation">Transmutation</string>
+
+    <!-- Casting time, duration, range -->
+    <string name="activation_action">Action</string>
+    <string name="activation_bonus">Bonus action</string>
+    <string name="activation_reaction">Reaction</string>
+    <string name="unit_minutes">Minutes</string>
+    <string name="unit_hours">Hours</string>
+    <string name="unit_days">Days</string>
+    <string name="unit_special">Special</string>
+    <string name="unit_feet">Feet</string>
+    <string name="unit_miles">Miles</string>
+    <string name="duration_instant">Instantaneous</string>
+    <string name="duration_turn">Turn</string>
+    <string name="duration_round">Round</string>
+    <string name="duration_permanent">Permanent</string>
+    <string name="range_self">Self</string>
+    <string name="range_touch">Touch</string>
+    <string name="range_any">Any</string>
+    <string name="value_unset">Not set</string>
+
+    <!-- Targets -->
+    <string name="target_creature">Creature</string>
+    <string name="target_ally">Ally</string>
+    <string name="target_enemy">Enemy</string>
+    <string name="target_object">Object</string>
+    <string name="target_space">Space</string>
+    <string name="target_radius">Radius</string>
+    <string name="target_sphere">Sphere</string>
+    <string name="target_cylinder">Cylinder</string>
+    <string name="target_cone">Cone</string>
+    <string name="target_cube">Cube</string>
+    <string name="target_line">Line</string>
+    <string name="target_wall">Wall</string>
+
+    <!-- Action types -->
+    <string name="action_type_utility">Utility</string>
+    <string name="action_type_melee">Melee spell attack</string>
+    <string name="action_type_ranged">Ranged spell attack</string>
+    <string name="action_type_save">Saving throw</string>
+    <string name="action_type_other">Other</string>
+
+    <!-- Abilities -->
+    <string name="ability_strength">Strength</string>
+    <string name="ability_dexterity">Dexterity</string>
+    <string name="ability_constitution">Constitution</string>
+    <string name="ability_intelligence">Intelligence</string>
+    <string name="ability_wisdom">Wisdom</string>
+    <string name="ability_charisma">Charisma</string>
+
+    <!-- Damage types -->
+    <string name="damage_bludgeoning">Bludgeoning</string>
+    <string name="damage_piercing">Piercing</string>
+    <string name="damage_slashing">Slashing</string>
+    <string name="damage_fire">Fire</string>
+    <string name="damage_cold">Cold</string>
+    <string name="damage_poison">Poison</string>
+    <string name="damage_acid">Acid</string>
+    <string name="damage_lightning">Lightning</string>
+    <string name="damage_thunder">Thunder</string>
+    <string name="damage_necrotic">Necrotic</string>
+    <string name="damage_radiant">Radiant</string>
+    <string name="damage_psychic">Psychic</string>
+    <string name="damage_force">Force</string>
+    <string name="damage_healing">Healing</string>
+
+    <!-- Classes -->
+    <string name="class_bard">Bard</string>
+    <string name="class_wizard">Wizard</string>
+    <string name="class_druid">Druid</string>
+    <string name="class_cleric">Cleric</string>
+    <string name="class_artificer">Artificer</string>
+    <string name="class_warlock">Warlock</string>
+    <string name="class_paladin">Paladin</string>
+    <string name="class_ranger">Ranger</string>
+    <string name="class_sorcerer">Sorcerer</string>
+    <string name="class_barbarian">Barbarian</string>
+    <string name="class_fighter">Fighter</string>
+    <string name="class_monk">Monk</string>
+    <string name="class_rogue">Rogue</string>
+
+    <!-- Spell levels -->
+    <string name="spell_level_cantrip">Cantrip</string>
+    <string name="spell_level_n">Level %1$d</string>
+
+    <!-- Sorting and filters -->
+    <string name="sort_date_added">By date added</string>
+    <string name="sort_name">By name</string>
+    <string name="sort_level">By level</string>
+    <string name="component_vocal">Verbal</string>
+    <string name="component_somatic">Somatic</string>
+    <string name="component_material">Material</string>
+    <string name="origin_official">Official</string>
+    <string name="origin_imported">Imported</string>
+    <string name="origin_user">Created manually</string>
+    <string name="filter_level">Level</string>
+    <string name="filter_class">Class</string>
+    <string name="filter_school">School</string>
+    <string name="filter_components">Components</string>
+    <string name="filter_casting_time">Casting time</string>
+    <string name="filter_source">Source book</string>
+    <string name="filter_origin">Origin</string>
+    <string name="filter_concentration">Concentration</string>
+    <string name="filter_ritual">Ritual</string>
+    <string name="filter_clear">Clear filters</string>
+    <string name="filter_title">Filters</string>
+    <string name="sort_title">Sorting</string>
+    <string name="search_hint">Search by name</string>
+    <string name="search_open">Search</string>
+    <string name="search_clear">Clear search</string>
+    <string name="list_no_results">Nothing found</string>
+    <string name="list_no_results_hint">Try changing the search query or filters.</string>
+    <string name="list_reset_search">Reset search and filters</string>
+    <string name="filter_additional">Additional</string>
+    <string name="filter_hide">Hide filters</string>
+    <string name="search_close">Close search</string>
+    <string name="search_placeholder">Name</string>
+    <string name="action_add">Add</string>
+    <string name="action_close">Close</string>
+    <string name="action_create">Create</string>
+    <string name="spells_empty_title">No spells yet</string>
+    <string name="spells_empty_text">Create your first spell or import an LSS JSON file.</string>
+
+    <!-- Spell list and details -->
+    <string name="spell_ritual">ritual</string>
+    <string name="spell_concentration_prefix">Concentration, </string>
+    <string name="spell_casting_time">Casting time</string>
+    <string name="spell_duration">Duration</string>
+    <string name="spell_range">Range</string>
+    <string name="spell_components">Components</string>
+    <string name="spell_classes">Classes</string>
+    <string name="spell_subclasses">Subclasses</string>
+    <string name="spell_source">Source</string>
+    <string name="spell_export_json">Export JSON</string>
+    <string name="spell_delete_title">Delete spell?</string>
+    <string name="spell_delete_text">\"%1$s\" will be deleted permanently.</string>
+    <string name="spell_remove_title">Remove spell?</string>
+    <string name="spell_remove_from_character">\"%1$s\" will be removed from the character but stays in the library.</string>
+    <string name="spell_remove_default">\"%1$s\" will be removed from the list.</string>
+    <string name="spell_remove_action">Remove spell</string>
+    <string name="roll_total">Total: %1$d</string>
+
+    <!-- Empty states and library -->
+    <string name="library_empty_title">The library is empty</string>
+    <string name="library_add_manually">Add manually</string>
+    <string name="library_import_json">Import JSON</string>
+    <string name="library_load_dndsu">Load from dnd.su</string>
+    <string name="library_download_all">Download everything from dnd.su</string>
+    <string name="library_export">Export library</string>
+    <string name="library_add_from">Add from library</string>
+    <string name="library_report_title">Download finished</string>
+    <string name="library_report_failed">Failed to download: %1$d</string>
+    <string name="library_downloading">Downloading spells: %1$d of %2$d</string>
+    <string name="library_fetching_list">Fetching the spell list…</string>
+    <string name="library_progress_saved">Saved: %1$d</string>
+    <string name="library_progress_own"> · own: %1$d</string>
+    <string name="library_progress_errors"> · errors: %1$d</string>
+    <string name="library_stop">Stop</string>
+    <string name="action_ok">OK</string>
+    <string name="dndsu_dialog_title">Load from dnd.su</string>
+    <string name="dndsu_dialog_hint">Paste a link to a spell or a feat</string>
+    <string name="action_load">Load</string>
+    <string name="file_read_failed">Could not read the file</string>
+    <string name="file_save_failed">Could not save the file</string>
+    <string name="export_spell_done">Spell exported</string>
+    <string name="export_character_done">Character sheet exported</string>
+    <string name="export_library_done">Library exported</string>
+    <string name="exit_confirm">Press again to exit</string>
+    <string name="character_spells_empty">This character has no spells yet.</string>
+    <string name="character_create_spell">Create a spell</string>
+    <string name="characters_empty_title">No characters yet</string>
+    <string name="characters_empty_text">Create a character or import a character sheet in LSS format.</string>
+    <string name="characters_create">Create a character</string>
+    <string name="characters_import_sheet">Import sheet</string>
+    <string name="characters_create_manually">Create manually</string>
+    <string name="characters_add">Add a character</string>
+    <string name="character_unnamed">Unnamed</string>
+    <string name="character_fallback_title">Character</string>
+    <string name="character_back_to_list">Back to characters</string>
+    <string name="tab_prepared">Prepared</string>
+    <string name="tab_all_known">All known</string>
+
+    <!-- Add spells and preparation screens -->
+    <string name="add_spells_title">Add spells</string>
+    <string name="prepare_title">Preparation</string>
+    <string name="prepare_prepared">Prepared (%1$d)</string>
+    <string name="prepare_prepared_limit">Prepared (%1$d/%2$d)</string>
+    <string name="prepare_drop_hint">Drag a spell here to prepare it</string>
+    <string name="prepare_known">Known</string>
+    <string name="prepare_known_empty">No unprepared spells</string>
+
+    <!-- Spell form -->
+    <string name="form_new_spell">New spell</string>
+    <string name="form_edit_spell">Edit spell</string>
+    <string name="form_name">Name</string>
+    <string name="form_name_required">Enter the spell name</string>
+    <string name="form_level">Level</string>
+    <string name="form_school">School</string>
+    <string name="form_description">Description</string>
+    <string name="form_markup_hint">**bold**, *italic*, ## heading, lists with - or 1.</string>
+    <string name="form_insert_table">Insert table</string>
+    <string name="form_table_header">Header</string>
+    <string name="form_table_cell">Cell</string>
+    <string name="form_casting_time">Casting time</string>
+    <string name="form_value">Value</string>
+    <string name="form_units">Units</string>
+    <string name="form_casting_condition">Casting condition</string>
+    <string name="form_duration">Duration</string>
+    <string name="form_range">Range</string>
+    <string name="form_target">Target / area</string>
+    <string name="form_target_size">Size</string>
+    <string name="form_target_unit">Unit</string>
+    <string name="form_components">Components</string>
+    <string name="form_component_vocal">Verbal (V)</string>
+    <string name="form_component_somatic">Somatic (S)</string>
+    <string name="form_component_material">Material (M)</string>
+    <string name="form_materials">Materials</string>
+    <string name="form_mechanics">Mechanics</string>
+    <string name="form_action_type">Action type</string>
+    <string name="form_save">Saving throw</string>
+    <string name="form_damage">Damage / healing</string>
+    <string name="form_formula">Formula</string>
+    <string name="form_type">Type</string>
+    <string name="form_delete_damage">Delete damage entry</string>
+    <string name="form_add_damage">Add damage type</string>
+    <string name="form_classes">Classes</string>
+    <string name="form_class_list_entry">%1$s — up to level %2$d</string>
+
+    <!-- Character form -->
+    <string name="cform_new">New character</string>
+    <string name="cform_edit">Character settings</string>
+    <string name="cform_classes">Classes</string>
+    <string name="cform_classes_hint">Level and slots are calculated from the classes</string>
+    <string name="cform_classes_locked">Classes are picked when the character is created — level and slots can be edited manually later.</string>
+    <string name="cform_add_class">Add a class</string>
+    <string name="cform_add_another_class">Add another class</string>
+    <string name="cform_recalc_title">Recalculate the slots?</string>
+    <string name="cform_recalc_text">The set of spellcasting classes has changed. The new slots are compared to the current ones below.</string>
+    <string name="cform_level_column">Level</string>
+    <string name="cform_now_column">Now</string>
+    <string name="cform_becomes_column">Becomes</string>
+    <string name="cform_level_row">Level %1$d</string>
+    <string name="cform_recalc">Recalculate</string>
+    <string name="cform_keep">Keep</string>
+    <string name="cform_spellcaster">Spellcaster</string>
+    <string name="cform_level">Level</string>
+    <string name="cform_remove_class">Remove the class</string>
+    <string name="cform_class_name">Class name</string>
+    <string name="cform_level_range">Level from 1 to %1$d</string>
+    <string name="cform_enter_class_name">Enter the class name</string>
+    <string name="cform_pick_photo">Pick a photo</string>
+    <string name="cform_change_photo">Change the photo</string>
+    <string name="cform_character_name">Character name</string>
+    <string name="cform_level_summary">Level: %1$d · proficiency bonus %2$s</string>
+    <string name="cform_prepares">Spell preparation</string>
+    <string name="cform_prepares_hint">The character prepares spells after a rest</string>
+    <string name="cform_add_class_spells">Add class spells</string>
+    <string name="cform_add_class_spells_hint">Available levels by class: %1$s</string>
+    <string name="cform_max_prepared">Max prepared (without cantrips)</string>
+    <string name="cform_max_cantrips">Cantrips available</string>
+    <string name="cform_proficiencies">Proficiencies</string>
+    <string name="cform_armor">Armor</string>
+    <string name="cform_weapons">Weapons</string>
+    <string name="cform_other_weapons">Other weapons</string>
+    <string name="cform_tools">Tools</string>
+    <string name="cform_languages">Languages</string>
+    <string name="cform_magic_items">Magic items</string>
+    <string name="cform_attunement_limit">Attunement limit</string>
+    <string name="cform_attunement_hint">Usually a character can attune to 3 items</string>
+    <string name="cform_spell_slots">Spell slots</string>
+    <string name="cform_slots_auto">Calculated from the classes — the values can be edited.</string>
+    <string name="cform_sheet">Character sheet</string>
+    <string name="cform_sheet_format">LSS (Long Story Short) format.</string>
+    <string name="cform_export_json">Export JSON</string>
+    <string name="cform_import_json">Import JSON</string>
+    <string name="cform_delete_character">Delete the character</string>
+
+    <!-- Combos -->
+    <string name="combo_damage_type">Damage type</string>
+    <string name="combo_no_damage_type">No type</string>
+
+    <!-- Ability short labels -->
+    <string name="ability_short_str">STR</string>
+    <string name="ability_short_dex">DEX</string>
+    <string name="ability_short_con">CON</string>
+    <string name="ability_short_int">INT</string>
+    <string name="ability_short_wis">WIS</string>
+    <string name="ability_short_cha">CHA</string>
+
+    <!-- Skills -->
+    <string name="skill_acrobatics">Acrobatics</string>
+    <string name="skill_animal_handling">Animal Handling</string>
+    <string name="skill_arcana">Arcana</string>
+    <string name="skill_athletics">Athletics</string>
+    <string name="skill_deception">Deception</string>
+    <string name="skill_history">History</string>
+    <string name="skill_insight">Insight</string>
+    <string name="skill_intimidation">Intimidation</string>
+    <string name="skill_investigation">Investigation</string>
+    <string name="skill_medicine">Medicine</string>
+    <string name="skill_nature">Nature</string>
+    <string name="skill_perception">Perception</string>
+    <string name="skill_performance">Performance</string>
+    <string name="skill_persuasion">Persuasion</string>
+    <string name="skill_religion">Religion</string>
+    <string name="skill_sleight_of_hand">Sleight of Hand</string>
+    <string name="skill_stealth">Stealth</string>
+    <string name="skill_survival">Survival</string>
+
+    <!-- Proficiencies -->
+    <string name="armor_light">Light</string>
+    <string name="armor_medium">Medium</string>
+    <string name="armor_heavy">Heavy</string>
+    <string name="armor_shields">Shields</string>
+    <string name="weapon_simple">Simple</string>
+    <string name="weapon_martial">Martial</string>
+    <string name="proficiency_none">No proficiency</string>
+    <string name="proficiency_proficient">Proficiency</string>
+    <string name="proficiency_expertise">Expertise</string>
+    <string name="roll_kind_ability">Check</string>
+    <string name="roll_kind_skill">Skill</string>
+
+    <!-- Formula variables -->
+    <string name="formula_proficiency_bonus">Proficiency bonus</string>
+    <string name="formula_character_level">Character level</string>
+    <string name="formula_level">Level</string>
+    <string name="formula_ability_modifier">Modifier: %1$s</string>
+    <string name="formula_variable_hint">[%1$s] — %2$s</string>
+    <string name="formula_invalid">Could not parse the formula</string>
+
+    <!-- Coins -->
+    <string name="coin_platinum">Platinum</string>
+    <string name="coin_gold">Gold</string>
+    <string name="coin_electrum">Electrum</string>
+    <string name="coin_silver">Silver</string>
+    <string name="coin_copper">Copper</string>
+    <string name="coin_platinum_short">PP</string>
+    <string name="coin_gold_short">GP</string>
+    <string name="coin_electrum_short">EP</string>
+    <string name="coin_silver_short">SP</string>
+    <string name="coin_copper_short">CP</string>
+
+    <!-- Combo steps and roll modes -->
+    <string name="combo_step_dice">Dice</string>
+    <string name="combo_step_constant">Number</string>
+    <string name="combo_mode_normal">Normal roll</string>
+    <string name="combo_mode_maximum">Maximum damage</string>
+    <string name="combo_mode_crit_classic">Classic crit</string>
+    <string name="combo_mode_crit_homebrew">Homebrew crit</string>
+    <string name="combo_reroll">Reroll (%1$s)</string>
+
+    <!-- Inventory -->
+    <string name="inventory_coin_exact">%1$s: exact amount</string>
+
+    <!-- Status messages -->
+    <string name="msg_spell_removed_from_character">Spell removed from the character</string>
+    <string name="msg_feat_name_required">Enter the feat name</string>
+    <string name="msg_feat_loading">Loading the feat…</string>
+    <string name="msg_feat_load_failed">Could not load the feat: %1$s</string>
+    <string name="msg_error_generic">error</string>
+    <string name="msg_error_unknown">unknown error</string>
+    <string name="msg_error_format">format error</string>
+    <string name="msg_feat_added_to_character">Feat \"%1$s\" added to the character</string>
+    <string name="msg_feat_added_to_library">Feat \"%1$s\" added to the library</string>
+    <string name="msg_feat_updated">Feat \"%1$s\" updated</string>
+    <string name="msg_spell_already_in_library">Spell \"%1$s\" is already in the library</string>
+    <string name="msg_spell_saved">Spell saved</string>
+    <string name="msg_cantrip_limit">Spell saved to the library, but the cantrip limit is reached (%1$d)</string>
+    <string name="msg_cantrip_limit_short">Cantrip limit reached (%1$d)</string>
+    <string name="msg_spell_deleted">Spell deleted</string>
+    <string name="msg_json_read_failed">Could not read the JSON: %1$s</string>
+    <string name="msg_json_no_spell">The JSON contains no spell data</string>
+    <string name="msg_spell_imported">Spell imported</string>
+    <string name="msg_spell_exists_limited">The spell is already there. %1$s</string>
+    <string name="msg_spell_added_to_character">The spell was already in the library — added to the character</string>
+    <string name="msg_spell_exists_in_library">Spell \"%1$s\" is already in the library</string>
+    <string name="msg_link_must_be_dndsu">The link must point to a spell on dnd.su</string>
+    <string name="msg_spell_loading">Loading the spell…</string>
+    <string name="msg_spell_load_failed">Could not load the spell: %1$s</string>
+    <string name="msg_spell_parse_failed">Could not parse the spell from the page</string>
+    <string name="msg_spell_loaded_dndsu">Spell loaded from dnd.su</string>
+    <string name="msg_spell_list_failed">Could not fetch the spell list</string>
+    <string name="msg_library_downloaded">Spells downloaded: %1$d</string>
+    <string name="msg_library_downloaded_own">Spells downloaded: %1$d, own saved: %2$d</string>
+    <string name="msg_library_downloaded_errors">Spells downloaded: %1$d, errors: %2$d</string>
+    <string name="msg_library_is_empty">The library is empty</string>
+    <string name="msg_library_export_failed">Could not prepare the library file</string>
+    <string name="msg_library_imported">Spells imported: %1$d</string>
+    <string name="msg_library_imported_own">Spells imported: %1$d, own kept: %2$d</string>
+    <string name="msg_download_stopped">Download stopped</string>
+    <string name="msg_character_saved">Character saved</string>
+    <string name="msg_character_saved_spells">Character saved, spells added: %1$d</string>
+    <string name="msg_sheet_read_failed">Could not read the sheet: %1$s</string>
+    <string name="msg_sheet_updated">Character sheet updated</string>
+    <string name="msg_character_imported">Character imported</string>
+    <string name="msg_character_deleted">Character deleted</string>
+    <string name="msg_prepared_limit">Prepared spells limit reached (%1$d)</string>
+    <string name="msg_enter_positive_number">Enter a positive number</string>
+    <string name="msg_enter_combo_name">Enter the combo name</string>
+    <string name="msg_combo_saved">Combo saved</string>
+    <string name="msg_enter_step_name">Enter the step name</string>
+    <string name="msg_step_saved">Step saved</string>
+    <string name="msg_step_deleted">Step deleted</string>
+    <string name="msg_combo_deleted">Combo deleted</string>
+    <string name="msg_combo_needs_step">Add at least one step to the combo</string>
+    <string name="msg_enter_nonnegative">Enter a non-negative number</string>
+    <string name="msg_attunement_limit">Attunement limit reached (%1$d)</string>
+    <string name="msg_item_saved">Item saved</string>
+    <string name="msg_item_deleted">Item deleted</string>
+    <string name="msg_attunement_limit_low">Cannot set the limit to %1$d: %2$d items are attuned right now</string>
+    <string name="msg_not_enough_coins">Not enough coins for this operation</string>
+    <string name="msg_note_default_title">New block</string>
+
+    <!-- dnd.su loading errors -->
+    <string name="dndsu_link_must_be_feat">The link must point to a feat on dnd.su</string>
+    <string name="dndsu_feat_parse_failed">Could not parse the feat. Make sure the link points to a dnd.su feat.</string>
+    <string name="dndsu_spell_parse_failed">Could not parse the spell. Make sure the link points to a dnd.su spell.</string>
+    <string name="dndsu_not_found">Page not found (404). Check the link.</string>
+    <string name="dndsu_http_error">The site returned error %1$d.</string>
+    <string name="dndsu_no_connection">No internet connection or the site is unavailable.</string>
+    <string name="dndsu_timeout">Request timed out. Please try again.</string>
+    <string name="dndsu_page_load_failed">Could not load the page.</string>
+
+    <!-- Notes -->
+    <string name="notes_title">Notes</string>
+    <string name="notes_add_block">Add a block</string>
+    <string name="notes_empty_title">No notes yet</string>
+    <string name="notes_empty_text">Add your first note: an NPC, a plan, a quest hook.</string>
+    <string name="notes_new_block">New block</string>
+    <string name="notes_delete_title">Delete the block?</string>
+    <string name="notes_delete_text">Block \"%1$s\" and all its content will be deleted.</string>
+    <string name="notes_untitled">Untitled</string>
+    <string name="notes_rename_block">Rename the block</string>
+    <string name="notes_delete_block">Delete the block</string>
+    <string name="notes_text_hint">Note text</string>
+    <string name="notes_title_label">Title</string>
+    <string name="note_list_none">Normal</string>
+    <string name="note_list_bullet">Bulleted</string>
+    <string name="note_list_numbered">Numbered</string>
+    <string name="format_bold">Bold</string>
+    <string name="format_italic">Italic</string>
+    <string name="format_underline">Underline</string>
+    <string name="format_font_size">Font size</string>
+    <string name="format_bullet_list">Bulleted list</string>
+    <string name="format_numbered_list">Numbered list</string>
+    <string name="action_expand">Expand</string>
+    <string name="action_collapse">Collapse</string>
+
+    <!-- Resources and spell slots -->
+    <string name="resources_title">Resources</string>
+    <string name="resources_restore_all">Restore everything after a rest</string>
+    <string name="resources_add">Add a resource</string>
+    <string name="resources_spell_slots">Spell slots</string>
+    <string name="resources_other">Other resources</string>
+    <string name="resources_empty_title">There is nothing to track yet</string>
+    <string name="resources_empty_text">Add charges, dice, points or configure spell slots.</string>
+    <string name="resources_spend">Spend %1$s</string>
+    <string name="resources_restore_one">Restore %1$s</string>
+    <string name="resources_restore">Restore %1$s</string>
+    <string name="resources_new">New resource</string>
+    <string name="resources_edit">Edit the resource</string>
+    <string name="resources_name_hint">For example, Ki points</string>
+    <string name="resources_description_hint">What it is spent on and when it is restored</string>
+    <string name="resources_maximum">Maximum</string>
+    <string name="resources_no_description">No description provided.</string>
+    <string name="resources_edit_named">Edit %1$s</string>
+    <string name="resources_delete_named">Delete %1$s</string>
+    <string name="resources_spend_action">Spend</string>
+    <string name="resources_return_action">Return</string>
+    <string name="spell_slot_level">Level %1$d</string>
+
+    <!-- Feats -->
+    <string name="feats_title">Feats</string>
+    <string name="feats_add_from_library">Add from the library</string>
+    <string name="feats_add_manually">Add manually</string>
+    <string name="feats_add">Add a feat</string>
+    <string name="feats_empty_title">No feats yet</string>
+    <string name="feats_empty_text">Add a feat from the library, manually or by a dnd.su link.</string>
+    <string name="feats_new">New feat</string>
+    <string name="feats_edit">Edit the feat</string>
+    <string name="feats_remove_title">Remove the feat?</string>
+    <string name="feats_remove_text">Feat \"%1$s\" will be removed from the character but stays in the library.</string>
+    <string name="feats_untitled">Untitled</string>
+    <string name="feats_edit_action">Edit the feat</string>
+    <string name="feats_remove_action">Remove the feat</string>
+    <string name="feats_url_label">Feat link</string>
+    <string name="feats_url_example">For example: https://dnd.su/feats/103-alert/</string>
+    <string name="feats_add_title">Add feats</string>
+    <string name="feats_search_hint">Search by name</string>
+    <string name="feats_library_empty">The library has no feats yet. Load one by a dnd.su link or create it manually.</string>
+    <string name="feats_delete_from_library">Delete from the library</string>
+    <string name="field_description">Description</string>
+
+    <!-- Stats -->
+    <string name="stats_title">Stats</string>
+    <string name="stats_armor_class">Armor class</string>
+    <string name="stats_speed_dialog">Speed, feet</string>
+    <string name="stats_hp">Hit points</string>
+    <string name="stats_temp_hp_value">temporary HP: %1$d</string>
+    <string name="stats_no_temp_hp">no temporary HP</string>
+    <string name="stats_defense">Defense</string>
+    <string name="stats_speed">Speed</string>
+    <string name="stats_speed_value">%1$d ft</string>
+    <string name="stats_proficiency">Proficiency</string>
+    <string name="stats_ability_check">%1$d · check %2$s</string>
+    <string name="stats_edit_value">Value</string>
+    <string name="stats_roll_result">d20: %1$d %2$s</string>
+    <string name="stats_crit_success"> · crit!</string>
+    <string name="stats_crit_failure"> · miss</string>
+    <string name="stats_close_result">Close the result</string>
+    <string name="stats_current_hp">Current %1$d / %2$d</string>
+    <string name="stats_temp_suffix"> (+%1$d temporary)</string>
+    <string name="stats_amount">Amount</string>
+    <string name="stats_damage">Damage</string>
+    <string name="stats_heal">Heal</string>
+    <string name="stats_temp_hp">Temporary HP</string>
+    <string name="stats_max_hp">Maximum HP</string>
+
+    <!-- Inventory -->
+    <string name="inventory_title">Inventory</string>
+    <string name="inventory_sort_manual">Custom order</string>
+    <string name="inventory_sort_date">By date</string>
+    <string name="inventory_sort_name">By name</string>
+    <string name="inventory_sort_quantity">By quantity</string>
+    <string name="inventory_sort_rarity">By rarity</string>
+    <string name="inventory_tab_items">Items</string>
+    <string name="inventory_tab_magic">Magic</string>
+    <string name="inventory_add_item">Add an item</string>
+    <string name="inventory_items_empty">No items yet</string>
+    <string name="inventory_magic_empty">No magic items yet</string>
+    <string name="inventory_delete_title">Delete the item?</string>
+    <string name="inventory_delete_text">The quantity of \"%1$s\" will drop to zero. Remove the item from the list?</string>
+    <string name="inventory_attunement_title">Attuned items limit</string>
+    <string name="inventory_name_hint">Name</string>
+    <string name="inventory_attunement">Attunement</string>
+    <string name="inventory_attunement_progress">%1$d of %2$d</string>
+    <string name="inventory_edit_limit">Change the limit</string>
+    <string name="inventory_edit_item">Edit</string>
+    <string name="inventory_delete_item">Delete</string>
+    <string name="inventory_decrease">Decrease</string>
+    <string name="inventory_increase">Increase</string>
+    <string name="inventory_no_attunement">Attunement not required</string>
+    <string name="inventory_attuned">Attuned</string>
+    <string name="inventory_not_attuned">Not attuned</string>
+    <string name="inventory_new_item">New item</string>
+    <string name="inventory_edit_item_title">Edit the item</string>
+    <string name="inventory_quantity">Quantity</string>
+    <string name="inventory_categories">Categories (optional)</string>
+    <string name="inventory_rarity">Rarity: %1$s</string>
+    <string name="inventory_requires_attunement">Requires attunement</string>
+    <string name="inventory_is_attuned">Attuned</string>
+    <string name="inventory_quantity_value">Quantity: %1$d</string>
+    <string name="inventory_rarity_value">Rarity: %1$s</string>
+    <string name="inventory_no_description">No description provided</string>
+    <!-- Suffix for compact coin amounts: 1200 → 1.2k -->
+    <string name="inventory_thousand_suffix">k</string>
+
+    <!-- Combos -->
+    <string name="combos_title">Combos</string>
+    <string name="combos_step_library">Step library</string>
+    <string name="combos_create">Create a combo</string>
+    <string name="combos_empty_title">No combos yet</string>
+    <string name="combos_empty_text">Collect sequences of attacks, spells and extra effects.</string>
+    <string name="combos_edit_named">Edit the combo</string>
+    <string name="combos_delete_named">Delete the combo</string>
+    <string name="combos_untitled">Untitled</string>
+    <string name="combos_roll">Roll the combo</string>
+    <string name="combos_special_rolls">Special rolls</string>
+    <string name="combos_new">New combo</string>
+    <string name="combos_edit">Edit the combo</string>
+    <string name="combos_name">Combo name</string>
+    <string name="combos_from_library">From the library</string>
+    <string name="combos_new_step">New step</string>
+    <string name="combos_steps">Combo steps</string>
+    <string name="combos_add_step">Add at least one step.</string>
+    <string name="combos_move_up">Up</string>
+    <string name="combos_move_down">Down</string>
+    <string name="combos_edit_shared_step">Edit the shared step</string>
+    <string name="combos_remove_step">Remove from the combo</string>
+    <string name="combos_save">Save the combo</string>
+    <string name="combos_delete">Delete the combo</string>
+    <string name="combos_library_title">Step library</string>
+    <string name="combos_library_empty_title">No steps yet</string>
+    <string name="combos_library_empty_text">Shared steps can be reused across several combos.</string>
+    <string name="combos_library_add">Add a step</string>
+    <string name="combos_total">Total</string>
+    <string name="combos_extra_effects">Extra effects</string>
+    <string name="combos_pick_steps">Steps from the library</string>
+    <string name="combos_pick_empty">The library is empty. Create a new step.</string>
+    <string name="combos_done">Done</string>
+    <string name="combos_step_title">Combo step</string>
+    <string name="combos_step_value">Value</string>
+    <string name="combos_step_effect">Extra effect</string>
+
+    <!-- Countable nouns: needed because Russian has several plural forms -->
+    <plurals name="spell_count">
+        <item quantity="one">%1$d spell</item>
+        <item quantity="other">%1$d spells</item>
+    </plurals>
+    <plurals name="measure_minute">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="measure_hour">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="measure_day">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="measure_round">
+        <item quantity="one">%1$d round</item>
+        <item quantity="other">%1$d rounds</item>
+    </plurals>
+    <plurals name="measure_turn">
+        <item quantity="one">%1$d turn</item>
+        <item quantity="other">%1$d turns</item>
+    </plurals>
+    <plurals name="measure_feet">
+        <item quantity="one">%1$d foot</item>
+        <item quantity="other">%1$d feet</item>
+    </plurals>
+    <plurals name="measure_mile">
+        <item quantity="one">%1$d mile</item>
+        <item quantity="other">%1$d miles</item>
+    </plurals>
+    <plurals name="measure_action">
+        <item quantity="one">%1$d action</item>
+        <item quantity="other">%1$d actions</item>
+    </plurals>
+    <plurals name="measure_bonus_action">
+        <item quantity="one">%1$d bonus action</item>
+        <item quantity="other">%1$d bonus actions</item>
+    </plurals>
+    <plurals name="measure_reaction">
+        <item quantity="one">%1$d reaction</item>
+        <item quantity="other">%1$d reactions</item>
+    </plurals>
 </resources>

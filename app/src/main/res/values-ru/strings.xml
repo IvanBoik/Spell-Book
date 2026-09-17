@@ -1,0 +1,725 @@
+<resources>
+    <!-- Панель разделов персонажа -->
+    <string name="section_settings">Настройки</string>
+    <string name="section_spells">Заклинания</string>
+    <string name="section_stats">Характеристики</string>
+    <string name="section_resources">Ресурсы</string>
+    <string name="section_combos">Комбинации</string>
+    <string name="section_inventory">Инвентарь</string>
+    <string name="section_feats">Черты</string>
+    <string name="section_notes">Заметки</string>
+    <string name="section_prepare">Подготовка</string>
+
+    <!-- Нижняя навигация -->
+    <string name="tab_characters">Персонажи</string>
+    <string name="tab_library">Библиотека</string>
+
+    <!-- Общие действия -->
+    <string name="action_back">Назад</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_remove">Убрать</string>
+    <string name="action_edit">Редактировать</string>
+    <string name="action_share">Поделиться</string>
+    <string name="action_settings">Настройки</string>
+    <string name="action_reset">Сбросить</string>
+    <string name="action_close_menu">Закрыть меню</string>
+
+    <!-- Экран настроек -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_general">Общие</string>
+    <string name="settings_language">Язык интерфейса</string>
+    <string name="settings_language_note">Переводится только интерфейс. Персонажи, заклинания, черты и другие созданные или загруженные вами материалы остаются на языке оригинала.</string>
+    <string name="settings_language_system">Язык системы</string>
+    <string name="settings_language_ru">Русский</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_theme_system">Как в системе</string>
+    <string name="settings_theme_light">Светлая</string>
+    <string name="settings_theme_dark">Тёмная</string>
+    <string name="settings_sections">Панель разделов персонажа</string>
+    <string name="settings_sections_hint">Отключите ненужные разделы, а чтобы изменить порядок — удерживайте раздел и перетащите.</string>
+    <string name="settings_sections_scope">Применяется к</string>
+    <string name="settings_sections_scope_all">Всем персонажам</string>
+    <string name="settings_sections_locked">Всегда показывается</string>
+    <string name="settings_sections_inherited">Персонаж использует общие настройки.</string>
+    <string name="settings_sections_customize">Настроить для этого персонажа</string>
+    <string name="settings_sections_reset_character">Вернуть общие настройки</string>
+    <string name="settings_sections_reset_all">Вернуть порядок по умолчанию</string>
+    <string name="settings_sections_drag">Удерживайте и перетащите, чтобы изменить порядок</string>
+    <string name="settings_sections_home">Главная страница персонажа</string>
+
+    <string name="settings_sections_prepare_note">Раздел подготовки показывается только у персонажей, которые подготавливают заклинания.</string>
+    <string name="settings_no_characters">Персонажей пока нет.</string>
+
+    <!-- Школы магии -->
+    <string name="school_abjuration">Ограждение</string>
+    <string name="school_conjuration">Вызов</string>
+    <string name="school_divination">Прорицание</string>
+    <string name="school_enchantment">Очарование</string>
+    <string name="school_evocation">Воплощение</string>
+    <string name="school_illusion">Иллюзия</string>
+    <string name="school_necromancy">Некромантия</string>
+    <string name="school_transmutation">Преобразование</string>
+
+    <!-- Время, длительность, дистанция -->
+    <string name="activation_action">Действие</string>
+    <string name="activation_bonus">Бонусное действие</string>
+    <string name="activation_reaction">Реакция</string>
+    <string name="unit_minutes">Минуты</string>
+    <string name="unit_hours">Часы</string>
+    <string name="unit_days">Дни</string>
+    <string name="unit_special">Особая</string>
+    <string name="unit_feet">Футы</string>
+    <string name="unit_miles">Мили</string>
+    <string name="duration_instant">Мгновенная</string>
+    <string name="duration_turn">Ход</string>
+    <string name="duration_round">Раунд</string>
+    <string name="duration_permanent">Постоянная</string>
+    <string name="range_self">На себя</string>
+    <string name="range_touch">Касание</string>
+    <string name="range_any">Любая</string>
+    <string name="value_unset">Не задано</string>
+
+    <!-- Цели и области -->
+    <string name="target_creature">Существо</string>
+    <string name="target_ally">Союзник</string>
+    <string name="target_enemy">Противник</string>
+    <string name="target_object">Объект</string>
+    <string name="target_space">Пространство</string>
+    <string name="target_radius">Радиус</string>
+    <string name="target_sphere">Сфера</string>
+    <string name="target_cylinder">Цилиндр</string>
+    <string name="target_cone">Конус</string>
+    <string name="target_cube">Куб</string>
+    <string name="target_line">Линия</string>
+    <string name="target_wall">Стена</string>
+
+    <!-- Типы действия -->
+    <string name="action_type_utility">Вспомогательное</string>
+    <string name="action_type_melee">Атака ближнего заклинания</string>
+    <string name="action_type_ranged">Атака дальнего заклинания</string>
+    <string name="action_type_save">Спасбросок</string>
+    <string name="action_type_other">Другое</string>
+
+    <!-- Характеристики -->
+    <string name="ability_strength">Сила</string>
+    <string name="ability_dexterity">Ловкость</string>
+    <string name="ability_constitution">Телосложение</string>
+    <string name="ability_intelligence">Интеллект</string>
+    <string name="ability_wisdom">Мудрость</string>
+    <string name="ability_charisma">Харизма</string>
+
+    <!-- Типы урона -->
+    <string name="damage_bludgeoning">Дробящий</string>
+    <string name="damage_piercing">Колющий</string>
+    <string name="damage_slashing">Рубящий</string>
+    <string name="damage_fire">Огонь</string>
+    <string name="damage_cold">Холод</string>
+    <string name="damage_poison">Яд</string>
+    <string name="damage_acid">Кислота</string>
+    <string name="damage_lightning">Электричество</string>
+    <string name="damage_thunder">Звук</string>
+    <string name="damage_necrotic">Некротический</string>
+    <string name="damage_radiant">Излучение</string>
+    <string name="damage_psychic">Психический</string>
+    <string name="damage_force">Силовое поле</string>
+    <string name="damage_healing">Лечение</string>
+
+    <!-- Классы -->
+    <string name="class_bard">Бард</string>
+    <string name="class_wizard">Волшебник</string>
+    <string name="class_druid">Друид</string>
+    <string name="class_cleric">Жрец</string>
+    <string name="class_artificer">Изобретатель</string>
+    <string name="class_warlock">Колдун</string>
+    <string name="class_paladin">Паладин</string>
+    <string name="class_ranger">Следопыт</string>
+    <string name="class_sorcerer">Чародей</string>
+    <string name="class_barbarian">Варвар</string>
+    <string name="class_fighter">Воин</string>
+    <string name="class_monk">Монах</string>
+    <string name="class_rogue">Плут</string>
+
+    <!-- Круги заклинаний -->
+    <string name="spell_level_cantrip">Заговор</string>
+    <string name="spell_level_n">%1$d круг</string>
+
+    <!-- Сортировка и фильтры -->
+    <string name="sort_date_added">По дате добавления</string>
+    <string name="sort_name">По названию</string>
+    <string name="sort_level">По уровню</string>
+    <string name="component_vocal">Вербальный</string>
+    <string name="component_somatic">Соматический</string>
+    <string name="component_material">Материальный</string>
+    <string name="origin_official">Официальные</string>
+    <string name="origin_imported">Загруженные</string>
+    <string name="origin_user">Созданные вручную</string>
+    <string name="filter_level">Уровень</string>
+    <string name="filter_class">Класс</string>
+    <string name="filter_school">Школа</string>
+    <string name="filter_components">Компоненты</string>
+    <string name="filter_casting_time">Время накладывания</string>
+    <string name="filter_source">Книга-источник</string>
+    <string name="filter_origin">Происхождение</string>
+    <string name="filter_concentration">Концентрация</string>
+    <string name="filter_ritual">Ритуал</string>
+    <string name="filter_clear">Очистить фильтры</string>
+    <string name="filter_title">Фильтры</string>
+    <string name="sort_title">Сортировка</string>
+    <string name="search_hint">Поиск по названию</string>
+    <string name="search_open">Поиск</string>
+    <string name="search_clear">Очистить поиск</string>
+    <string name="list_no_results">Ничего не найдено</string>
+    <string name="list_no_results_hint">Попробуйте изменить поиск или фильтры.</string>
+    <string name="list_reset_search">Сбросить поиск и фильтры</string>
+    <string name="filter_additional">Дополнительно</string>
+    <string name="filter_hide">Скрыть фильтры</string>
+    <string name="search_close">Закрыть поиск</string>
+    <string name="search_placeholder">Название</string>
+    <string name="action_add">Добавить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_create">Создать</string>
+    <string name="spells_empty_title">Пока нет заклинаний</string>
+    <string name="spells_empty_text">Создайте своё первое заклинание или загрузите JSON LSS.</string>
+
+    <!-- Список и карточка заклинания -->
+    <string name="spell_ritual">ритуал</string>
+    <string name="spell_concentration_prefix">Концентрация, </string>
+    <string name="spell_casting_time">Время накладывания</string>
+    <string name="spell_duration">Длительность</string>
+    <string name="spell_range">Дистанция</string>
+    <string name="spell_components">Компоненты</string>
+    <string name="spell_classes">Классы</string>
+    <string name="spell_subclasses">Подклассы</string>
+    <string name="spell_source">Источник</string>
+    <string name="spell_export_json">Выгрузить JSON</string>
+    <string name="spell_delete_title">Удалить заклинание?</string>
+    <string name="spell_delete_text">«%1$s» будет удалено без возможности восстановления.</string>
+    <string name="spell_remove_title">Убрать заклинание?</string>
+    <string name="spell_remove_from_character">«%1$s» будет убрано у персонажа, но останется в библиотеке.</string>
+    <string name="spell_remove_default">«%1$s» будет убрано из списка.</string>
+    <string name="spell_remove_action">Убрать заклинание</string>
+    <string name="roll_total">Итого: %1$d</string>
+
+    <!-- Пустые состояния и библиотека -->
+    <string name="library_empty_title">Библиотека пуста</string>
+    <string name="library_add_manually">Добавить вручную</string>
+    <string name="library_import_json">Загрузить JSON</string>
+    <string name="library_load_dndsu">Загрузить с dnd.su</string>
+    <string name="library_download_all">Скачать всё с dnd.su</string>
+    <string name="library_export">Выгрузить библиотеку</string>
+    <string name="library_add_from">Добавить из библиотеки</string>
+    <string name="library_report_title">Загрузка завершена</string>
+    <string name="library_report_failed">Не удалось загрузить: %1$d</string>
+    <string name="library_downloading">Загрузка заклинаний: %1$d из %2$d</string>
+    <string name="library_fetching_list">Получаем список заклинаний…</string>
+    <string name="library_progress_saved">Сохранено: %1$d</string>
+    <string name="library_progress_own"> · своих: %1$d</string>
+    <string name="library_progress_errors"> · ошибок: %1$d</string>
+    <string name="library_stop">Остановить</string>
+    <string name="action_ok">Понятно</string>
+    <string name="dndsu_dialog_title">Загрузка с dnd.su</string>
+    <string name="dndsu_dialog_hint">Вставьте ссылку на заклинание или черту</string>
+    <string name="action_load">Загрузить</string>
+    <string name="file_read_failed">Не удалось прочитать файл</string>
+    <string name="file_save_failed">Не удалось сохранить файл</string>
+    <string name="export_spell_done">Заклинание выгружено</string>
+    <string name="export_character_done">Лист персонажа выгружен</string>
+    <string name="export_library_done">Библиотека выгружена</string>
+    <string name="exit_confirm">Нажмите ещё раз для выхода</string>
+    <string name="character_spells_empty">У персонажа пока нет заклинаний.</string>
+    <string name="character_create_spell">Создать заклинание</string>
+    <string name="characters_empty_title">Пока нет персонажей</string>
+    <string name="characters_empty_text">Создайте персонажа или загрузите готовый лист в формате LSS.</string>
+    <string name="characters_create">Создать персонажа</string>
+    <string name="characters_import_sheet">Загрузить лист</string>
+    <string name="characters_create_manually">Создать вручную</string>
+    <string name="characters_add">Добавить персонажа</string>
+    <string name="character_unnamed">Без имени</string>
+    <string name="character_fallback_title">Персонаж</string>
+    <string name="character_back_to_list">К персонажам</string>
+    <string name="tab_prepared">Подготовленные</string>
+    <string name="tab_all_known">Все известные</string>
+
+    <!-- Добавление заклинаний и переподготовка -->
+    <string name="add_spells_title">Добавить заклинания</string>
+    <string name="prepare_title">Переподготовка</string>
+    <string name="prepare_prepared">Подготовленные (%1$d)</string>
+    <string name="prepare_prepared_limit">Подготовленные (%1$d/%2$d)</string>
+    <string name="prepare_drop_hint">Перетащите сюда заклинание, чтобы подготовить</string>
+    <string name="prepare_known">Известные</string>
+    <string name="prepare_known_empty">Нет неподготовленных заклинаний</string>
+
+    <!-- Форма заклинания -->
+    <string name="form_new_spell">Новое заклинание</string>
+    <string name="form_edit_spell">Редактирование</string>
+    <string name="form_name">Название</string>
+    <string name="form_name_required">Укажите название заклинания</string>
+    <string name="form_level">Круг</string>
+    <string name="form_school">Школа</string>
+    <string name="form_description">Описание</string>
+    <string name="form_markup_hint">**жирный**, *курсив*, ## заголовок, списки через - или 1.</string>
+    <string name="form_insert_table">Вставить таблицу</string>
+    <string name="form_table_header">Заголовок</string>
+    <string name="form_table_cell">Ячейка</string>
+    <string name="form_casting_time">Время сотворения</string>
+    <string name="form_value">Значение</string>
+    <string name="form_units">Единицы</string>
+    <string name="form_casting_condition">Условие сотворения</string>
+    <string name="form_duration">Длительность</string>
+    <string name="form_range">Дистанция</string>
+    <string name="form_target">Цель / область</string>
+    <string name="form_target_size">Размер</string>
+    <string name="form_target_unit">Единица</string>
+    <string name="form_components">Компоненты</string>
+    <string name="form_component_vocal">Вербальный (V)</string>
+    <string name="form_component_somatic">Соматический (S)</string>
+    <string name="form_component_material">Материальный (M)</string>
+    <string name="form_materials">Материалы</string>
+    <string name="form_mechanics">Механика</string>
+    <string name="form_action_type">Тип действия</string>
+    <string name="form_save">Спасбросок</string>
+    <string name="form_damage">Урон / лечение</string>
+    <string name="form_formula">Формула</string>
+    <string name="form_type">Тип</string>
+    <string name="form_delete_damage">Удалить урон</string>
+    <string name="form_add_damage">Добавить тип урона</string>
+    <string name="form_classes">Классы</string>
+    <string name="form_class_list_entry">%1$s — до %2$d круга</string>
+
+    <!-- Форма персонажа -->
+    <string name="cform_new">Новый персонаж</string>
+    <string name="cform_edit">Настройки персонажа</string>
+    <string name="cform_classes">Классы</string>
+    <string name="cform_classes_hint">Уровень и ячейки считаются по классам</string>
+    <string name="cform_classes_locked">Классы выбираются при создании — уровень и ячейки потом можно менять вручную.</string>
+    <string name="cform_add_class">Добавить класс</string>
+    <string name="cform_add_another_class">Добавить ещё класс</string>
+    <string name="cform_recalc_title">Пересчитать ячейки?</string>
+    <string name="cform_recalc_text">Состав классов-заклинателей изменился. Новые ячейки ниже сравниваются с текущими.</string>
+    <string name="cform_level_column">Уровень</string>
+    <string name="cform_now_column">Сейчас</string>
+    <string name="cform_becomes_column">Станет</string>
+    <string name="cform_level_row">%1$d уровень</string>
+    <string name="cform_recalc">Пересчитать</string>
+    <string name="cform_keep">Оставить</string>
+    <string name="cform_spellcaster">Заклинатель</string>
+    <string name="cform_level">Уровень</string>
+    <string name="cform_remove_class">Убрать класс</string>
+    <string name="cform_class_name">Название класса</string>
+    <string name="cform_level_range">Уровень от 1 до %1$d</string>
+    <string name="cform_enter_class_name">Укажите название класса</string>
+    <string name="cform_pick_photo">Выбрать фото</string>
+    <string name="cform_change_photo">Изменить фото</string>
+    <string name="cform_character_name">Имя персонажа</string>
+    <string name="cform_level_summary">Уровень: %1$d · бонус мастерства %2$s</string>
+    <string name="cform_prepares">Переподготовка заклинаний</string>
+    <string name="cform_prepares_hint">Персонаж готовит заклинания после отдыха</string>
+    <string name="cform_add_class_spells">Добавить заклинания класса</string>
+    <string name="cform_add_class_spells_hint">Доступны круги по уровню класса: %1$s</string>
+    <string name="cform_max_prepared">Максимум подготовленных (без заговоров)</string>
+    <string name="cform_max_cantrips">Доступно заговоров</string>
+    <string name="cform_proficiencies">Владения</string>
+    <string name="cform_armor">Доспехи</string>
+    <string name="cform_weapons">Оружие</string>
+    <string name="cform_other_weapons">Другое оружие</string>
+    <string name="cform_tools">Инструменты</string>
+    <string name="cform_languages">Языки</string>
+    <string name="cform_magic_items">Магические предметы</string>
+    <string name="cform_attunement_limit">Лимит настроенных предметов</string>
+    <string name="cform_attunement_hint">Обычно персонаж может настроиться на 3 предмета</string>
+    <string name="cform_spell_slots">Ячейки заклинаний</string>
+    <string name="cform_slots_auto">Посчитаны на основе классов — значения можно менять.</string>
+    <string name="cform_sheet">Лист персонажа</string>
+    <string name="cform_sheet_format">Формат LSS (Long Story Short).</string>
+    <string name="cform_export_json">Выгрузить JSON</string>
+    <string name="cform_import_json">Загрузить JSON</string>
+    <string name="cform_delete_character">Удалить персонажа</string>
+
+    <!-- Комбинации -->
+    <string name="combo_damage_type">Тип урона</string>
+    <string name="combo_no_damage_type">Без типа</string>
+
+    <!-- Сокращённые характеристики -->
+    <string name="ability_short_str">СИЛ</string>
+    <string name="ability_short_dex">ЛОВ</string>
+    <string name="ability_short_con">ТЕЛ</string>
+    <string name="ability_short_int">ИНТ</string>
+    <string name="ability_short_wis">МУД</string>
+    <string name="ability_short_cha">ХАР</string>
+
+    <!-- Навыки -->
+    <string name="skill_acrobatics">Акробатика</string>
+    <string name="skill_animal_handling">Обращение с животными</string>
+    <string name="skill_arcana">Магия</string>
+    <string name="skill_athletics">Атлетика</string>
+    <string name="skill_deception">Обман</string>
+    <string name="skill_history">История</string>
+    <string name="skill_insight">Проницательность</string>
+    <string name="skill_intimidation">Запугивание</string>
+    <string name="skill_investigation">Анализ</string>
+    <string name="skill_medicine">Медицина</string>
+    <string name="skill_nature">Природа</string>
+    <string name="skill_perception">Внимательность</string>
+    <string name="skill_performance">Выступление</string>
+    <string name="skill_persuasion">Убеждение</string>
+    <string name="skill_religion">Религия</string>
+    <string name="skill_sleight_of_hand">Ловкость рук</string>
+    <string name="skill_stealth">Скрытность</string>
+    <string name="skill_survival">Выживание</string>
+
+    <!-- Владения -->
+    <string name="armor_light">Лёгкие</string>
+    <string name="armor_medium">Средние</string>
+    <string name="armor_heavy">Тяжёлые</string>
+    <string name="armor_shields">Щиты</string>
+    <string name="weapon_simple">Простое</string>
+    <string name="weapon_martial">Воинское</string>
+    <string name="proficiency_none">Нет владения</string>
+    <string name="proficiency_proficient">Владение</string>
+    <string name="proficiency_expertise">Экспертиза</string>
+    <string name="roll_kind_ability">Проверка</string>
+    <string name="roll_kind_skill">Навык</string>
+
+    <!-- Переменные формул -->
+    <string name="formula_proficiency_bonus">Бонус мастерства</string>
+    <string name="formula_character_level">Уровень персонажа</string>
+    <string name="formula_level">Уровень</string>
+    <string name="formula_ability_modifier">Модификатор: %1$s</string>
+    <string name="formula_variable_hint">[%1$s] — %2$s</string>
+    <string name="formula_invalid">Не удалось разобрать формулу</string>
+
+    <!-- Монеты -->
+    <string name="coin_platinum">Платина</string>
+    <string name="coin_gold">Золото</string>
+    <string name="coin_electrum">Электрум</string>
+    <string name="coin_silver">Серебро</string>
+    <string name="coin_copper">Медь</string>
+    <string name="coin_platinum_short">ПМ</string>
+    <string name="coin_gold_short">ЗМ</string>
+    <string name="coin_electrum_short">ЭМ</string>
+    <string name="coin_silver_short">СМ</string>
+    <string name="coin_copper_short">ММ</string>
+
+    <!-- Шаги комбинаций и режимы броска -->
+    <string name="combo_step_dice">Кубики</string>
+    <string name="combo_step_constant">Число</string>
+    <string name="combo_mode_normal">Обычный бросок</string>
+    <string name="combo_mode_maximum">Максимальный урон</string>
+    <string name="combo_mode_crit_classic">Классический крит</string>
+    <string name="combo_mode_crit_homebrew">Homebrew крит</string>
+    <string name="combo_reroll">Перебросить (%1$s)</string>
+
+    <!-- Инвентарь -->
+    <string name="inventory_coin_exact">%1$s: точное количество</string>
+
+    <!-- Сообщения состояния -->
+    <string name="msg_spell_removed_from_character">Заклинание убрано у персонажа</string>
+    <string name="msg_feat_name_required">Укажите название черты</string>
+    <string name="msg_feat_loading">Загрузка черты…</string>
+    <string name="msg_feat_load_failed">Не удалось загрузить черту: %1$s</string>
+    <string name="msg_error_generic">ошибка</string>
+    <string name="msg_error_unknown">неизвестная ошибка</string>
+    <string name="msg_error_format">ошибка формата</string>
+    <string name="msg_feat_added_to_character">Черта «%1$s» добавлена персонажу</string>
+    <string name="msg_feat_added_to_library">Черта «%1$s» добавлена в библиотеку</string>
+    <string name="msg_feat_updated">Черта «%1$s» обновлена</string>
+    <string name="msg_spell_already_in_library">Заклинание «%1$s» уже есть в библиотеке</string>
+    <string name="msg_spell_saved">Заклинание сохранено</string>
+    <string name="msg_cantrip_limit">Заклинание сохранено в библиотеке, но достигнут лимит заговоров (%1$d)</string>
+    <string name="msg_cantrip_limit_short">Достигнут лимит заговоров (%1$d)</string>
+    <string name="msg_spell_deleted">Заклинание удалено</string>
+    <string name="msg_json_read_failed">Не удалось прочитать JSON: %1$s</string>
+    <string name="msg_json_no_spell">В JSON нет данных заклинания</string>
+    <string name="msg_spell_imported">Заклинание импортировано</string>
+    <string name="msg_spell_exists_limited">Заклинание уже есть. %1$s</string>
+    <string name="msg_spell_added_to_character">Заклинание уже было — добавлено персонажу</string>
+    <string name="msg_spell_exists_in_library">Заклинание «%1$s» уже есть в библиотеке</string>
+    <string name="msg_link_must_be_dndsu">Ссылка должна вести на заклинание на сайте dnd.su</string>
+    <string name="msg_spell_loading">Загрузка заклинания…</string>
+    <string name="msg_spell_load_failed">Не удалось загрузить заклинание: %1$s</string>
+    <string name="msg_spell_parse_failed">Не удалось распознать заклинание на странице</string>
+    <string name="msg_spell_loaded_dndsu">Заклинание загружено с dnd.su</string>
+    <string name="msg_spell_list_failed">Не удалось получить список заклинаний</string>
+    <string name="msg_library_downloaded">Загружено заклинаний: %1$d</string>
+    <string name="msg_library_downloaded_own">Загружено заклинаний: %1$d, своих сохранено: %2$d</string>
+    <string name="msg_library_downloaded_errors">Загружено заклинаний: %1$d, ошибок: %2$d</string>
+    <string name="msg_library_is_empty">Библиотека пуста</string>
+    <string name="msg_library_export_failed">Не удалось собрать библиотеку в файл</string>
+    <string name="msg_library_imported">Добавлено заклинаний: %1$d</string>
+    <string name="msg_library_imported_own">Добавлено заклинаний: %1$d, своих сохранено: %2$d</string>
+    <string name="msg_download_stopped">Загрузка остановлена</string>
+    <string name="msg_character_saved">Персонаж сохранён</string>
+    <string name="msg_character_saved_spells">Персонаж сохранён, добавлено заклинаний: %1$d</string>
+    <string name="msg_sheet_read_failed">Не удалось прочитать лист: %1$s</string>
+    <string name="msg_sheet_updated">Лист персонажа обновлён</string>
+    <string name="msg_character_imported">Персонаж загружен</string>
+    <string name="msg_character_deleted">Персонаж удалён</string>
+    <string name="msg_prepared_limit">Достигнут лимит подготовленных заклинаний (%1$d)</string>
+    <string name="msg_enter_positive_number">Введите положительное число</string>
+    <string name="msg_enter_combo_name">Укажите название комбинации</string>
+    <string name="msg_combo_saved">Комбинация сохранена</string>
+    <string name="msg_enter_step_name">Укажите название шага</string>
+    <string name="msg_step_saved">Шаг сохранён</string>
+    <string name="msg_step_deleted">Шаг удалён</string>
+    <string name="msg_combo_deleted">Комбинация удалена</string>
+    <string name="msg_combo_needs_step">Добавьте хотя бы один шаг в комбинацию</string>
+    <string name="msg_enter_nonnegative">Введите неотрицательное количество</string>
+    <string name="msg_attunement_limit">Достигнут лимит настройки (%1$d)</string>
+    <string name="msg_item_saved">Предмет сохранён</string>
+    <string name="msg_item_deleted">Предмет удалён</string>
+    <string name="msg_attunement_limit_low">Нельзя установить лимит %1$d: сейчас настроено %2$d предметов</string>
+    <string name="msg_not_enough_coins">Недостаточно монет для этой операции</string>
+    <string name="msg_note_default_title">Новый блок</string>
+
+    <!-- Ошибки загрузки с dnd.su -->
+    <string name="dndsu_link_must_be_feat">Ссылка должна вести на черту с сайта dnd.su</string>
+    <string name="dndsu_feat_parse_failed">Не удалось распознать черту на странице. Убедитесь, что ссылка ведёт на черту dnd.su.</string>
+    <string name="dndsu_spell_parse_failed">Не удалось распознать заклинание на странице. Убедитесь, что ссылка ведёт на заклинание dnd.su.</string>
+    <string name="dndsu_not_found">Страница не найдена (404). Проверьте ссылку.</string>
+    <string name="dndsu_http_error">Сайт вернул ошибку %1$d.</string>
+    <string name="dndsu_no_connection">Нет подключения к интернету или сайт недоступен.</string>
+    <string name="dndsu_timeout">Превышено время ожидания. Попробуйте ещё раз.</string>
+    <string name="dndsu_page_load_failed">Не удалось загрузить страницу.</string>
+
+    <!-- Заметки -->
+    <string name="notes_title">Заметки</string>
+    <string name="notes_add_block">Добавить блок</string>
+    <string name="notes_empty_title">Заметок пока нет</string>
+    <string name="notes_empty_text">Добавьте первую заметку: NPC, план, зацепку.</string>
+    <string name="notes_new_block">Новый блок</string>
+    <string name="notes_delete_title">Удалить блок?</string>
+    <string name="notes_delete_text">Блок «%1$s» и всё его содержимое будут удалены.</string>
+    <string name="notes_untitled">Без названия</string>
+    <string name="notes_rename_block">Переименовать блок</string>
+    <string name="notes_delete_block">Удалить блок</string>
+    <string name="notes_text_hint">Текст заметки</string>
+    <string name="notes_title_label">Название</string>
+    <string name="note_list_none">Обычный</string>
+    <string name="note_list_bullet">Маркированный</string>
+    <string name="note_list_numbered">Нумерованный</string>
+    <string name="format_bold">Жирный</string>
+    <string name="format_italic">Курсив</string>
+    <string name="format_underline">Подчёркнутый</string>
+    <string name="format_font_size">Размер шрифта</string>
+    <string name="format_bullet_list">Маркированный список</string>
+    <string name="format_numbered_list">Нумерованный список</string>
+    <string name="action_expand">Развернуть</string>
+    <string name="action_collapse">Свернуть</string>
+
+    <!-- Ресурсы и ячейки -->
+    <string name="resources_title">Ресурсы</string>
+    <string name="resources_restore_all">Восполнить всё после отдыха</string>
+    <string name="resources_add">Добавить ресурс</string>
+    <string name="resources_spell_slots">Ячейки заклинаний</string>
+    <string name="resources_other">Другие ресурсы</string>
+    <string name="resources_empty_title">Отслеживать пока нечего</string>
+    <string name="resources_empty_text">Добавьте заряды, кости, очки или настройте ячейки заклинаний.</string>
+    <string name="resources_spend">Потратить %1$s</string>
+    <string name="resources_restore_one">Вернуть %1$s</string>
+    <string name="resources_restore">Восполнить %1$s</string>
+    <string name="resources_new">Новый ресурс</string>
+    <string name="resources_edit">Редактировать ресурс</string>
+    <string name="resources_name_hint">Например, очки монаха</string>
+    <string name="resources_description_hint">На что тратится и когда восстанавливается</string>
+    <string name="resources_maximum">Максимум</string>
+    <string name="resources_no_description">Описание не указано.</string>
+    <string name="resources_edit_named">Редактировать %1$s</string>
+    <string name="resources_delete_named">Удалить %1$s</string>
+    <string name="resources_spend_action">Потратить</string>
+    <string name="resources_return_action">Вернуть</string>
+    <string name="spell_slot_level">%1$d уровень</string>
+
+    <!-- Черты -->
+    <string name="feats_title">Черты</string>
+    <string name="feats_add_from_library">Добавить из библиотеки</string>
+    <string name="feats_add_manually">Добавить вручную</string>
+    <string name="feats_add">Добавить черту</string>
+    <string name="feats_empty_title">Черт пока нет</string>
+    <string name="feats_empty_text">Добавьте черту из библиотеки, вручную или по ссылке с dnd.su.</string>
+    <string name="feats_new">Новая черта</string>
+    <string name="feats_edit">Редактирование черты</string>
+    <string name="feats_remove_title">Убрать черту?</string>
+    <string name="feats_remove_text">Черта «%1$s» будет убрана у персонажа, но останется в библиотеке.</string>
+    <string name="feats_untitled">Без названия</string>
+    <string name="feats_edit_action">Редактировать черту</string>
+    <string name="feats_remove_action">Убрать черту</string>
+    <string name="feats_url_label">Ссылка на черту</string>
+    <string name="feats_url_example">Например: https://dnd.su/feats/103-alert/</string>
+    <string name="feats_add_title">Добавить черты</string>
+    <string name="feats_search_hint">Поиск по названию</string>
+    <string name="feats_library_empty">В библиотеке пока нет черт. Загрузите черту по ссылке с dnd.su или создайте вручную.</string>
+    <string name="feats_delete_from_library">Удалить из библиотеки</string>
+    <string name="field_description">Описание</string>
+
+    <!-- Характеристики -->
+    <string name="stats_title">Характеристики</string>
+    <string name="stats_armor_class">Класс защиты</string>
+    <string name="stats_speed_dialog">Скорость, футы</string>
+    <string name="stats_hp">Хиты</string>
+    <string name="stats_temp_hp_value">временных хитов: %1$d</string>
+    <string name="stats_no_temp_hp">без временных хитов</string>
+    <string name="stats_defense">Защита</string>
+    <string name="stats_speed">Скорость</string>
+    <string name="stats_speed_value">%1$d фт</string>
+    <string name="stats_proficiency">Мастерство</string>
+    <string name="stats_ability_check">%1$d · проверка %2$s</string>
+    <string name="stats_edit_value">Значение</string>
+    <string name="stats_roll_result">к20: %1$d %2$s</string>
+    <string name="stats_crit_success"> · крит!</string>
+    <string name="stats_crit_failure"> · провал</string>
+    <string name="stats_close_result">Закрыть результат</string>
+    <string name="stats_current_hp">Сейчас %1$d / %2$d</string>
+    <string name="stats_temp_suffix"> (+%1$d временных)</string>
+    <string name="stats_amount">Количество</string>
+    <string name="stats_damage">Урон</string>
+    <string name="stats_heal">Лечение</string>
+    <string name="stats_temp_hp">Временные хиты</string>
+    <string name="stats_max_hp">Максимум хитов</string>
+
+    <!-- Инвентарь -->
+    <string name="inventory_title">Инвентарь</string>
+    <string name="inventory_sort_manual">Пользовательский порядок</string>
+    <string name="inventory_sort_date">По дате</string>
+    <string name="inventory_sort_name">По названию</string>
+    <string name="inventory_sort_quantity">По количеству</string>
+    <string name="inventory_sort_rarity">По редкости</string>
+    <string name="inventory_tab_items">Предметы</string>
+    <string name="inventory_tab_magic">Магические</string>
+    <string name="inventory_add_item">Добавить предмет</string>
+    <string name="inventory_items_empty">Обычных предметов пока нет</string>
+    <string name="inventory_magic_empty">Магических предметов пока нет</string>
+    <string name="inventory_delete_title">Удалить предмет?</string>
+    <string name="inventory_delete_text">Количество «%1$s» станет равно нулю. Удалить предмет из списка?</string>
+    <string name="inventory_attunement_title">Лимит настроенных предметов</string>
+    <string name="inventory_name_hint">Название</string>
+    <string name="inventory_attunement">Настройка</string>
+    <string name="inventory_attunement_progress">%1$d из %2$d</string>
+    <string name="inventory_edit_limit">Изменить лимит</string>
+    <string name="inventory_edit_item">Изменить</string>
+    <string name="inventory_delete_item">Удалить</string>
+    <string name="inventory_decrease">Уменьшить</string>
+    <string name="inventory_increase">Увеличить</string>
+    <string name="inventory_no_attunement">Настройка не требуется</string>
+    <string name="inventory_attuned">Настроен</string>
+    <string name="inventory_not_attuned">Не настроен</string>
+    <string name="inventory_new_item">Новый предмет</string>
+    <string name="inventory_edit_item_title">Редактирование предмета</string>
+    <string name="inventory_quantity">Количество</string>
+    <string name="inventory_categories">Категории (необязательно)</string>
+    <string name="inventory_rarity">Редкость: %1$s</string>
+    <string name="inventory_requires_attunement">Требует настройки</string>
+    <string name="inventory_is_attuned">Настроен</string>
+    <string name="inventory_quantity_value">Количество: %1$d</string>
+    <string name="inventory_rarity_value">Редкость: %1$s</string>
+    <string name="inventory_no_description">Описание не указано</string>
+    <!-- Суффикс компактной записи монет: 1200 → 1,2к -->
+    <string name="inventory_thousand_suffix">к</string>
+
+    <!-- Комбинации -->
+    <string name="combos_title">Комбинации</string>
+    <string name="combos_step_library">Библиотека шагов</string>
+    <string name="combos_create">Создать комбинацию</string>
+    <string name="combos_empty_title">Комбинаций пока нет</string>
+    <string name="combos_empty_text">Соберите последовательность атак, заклинаний и дополнительных эффектов.</string>
+    <string name="combos_edit_named">Редактировать комбинацию</string>
+    <string name="combos_delete_named">Удалить комбинацию</string>
+    <string name="combos_untitled">Без названия</string>
+    <string name="combos_roll">Бросить комбинацию</string>
+    <string name="combos_special_rolls">Особые броски</string>
+    <string name="combos_new">Новая комбинация</string>
+    <string name="combos_edit">Редактирование комбинации</string>
+    <string name="combos_name">Название комбинации</string>
+    <string name="combos_from_library">Из библиотеки</string>
+    <string name="combos_new_step">Новый шаг</string>
+    <string name="combos_steps">Шаги комбинации</string>
+    <string name="combos_add_step">Добавьте хотя бы один шаг.</string>
+    <string name="combos_move_up">Вверх</string>
+    <string name="combos_move_down">Вниз</string>
+    <string name="combos_edit_shared_step">Редактировать общий шаг</string>
+    <string name="combos_remove_step">Убрать из комбинации</string>
+    <string name="combos_save">Сохранить комбинацию</string>
+    <string name="combos_delete">Удалить комбинацию</string>
+    <string name="combos_library_title">Библиотека шагов</string>
+    <string name="combos_library_empty_title">Шагов пока нет</string>
+    <string name="combos_library_empty_text">Общие шаги можно использовать сразу в нескольких комбинациях.</string>
+    <string name="combos_library_add">Добавить шаг</string>
+    <string name="combos_total">Итог</string>
+    <string name="combos_extra_effects">Дополнительные эффекты</string>
+    <string name="combos_pick_steps">Шаги из библиотеки</string>
+    <string name="combos_pick_empty">Библиотека пуста. Создайте новый шаг.</string>
+    <string name="combos_done">Готово</string>
+    <string name="combos_step_title">Шаг комбинации</string>
+    <string name="combos_step_value">Значение</string>
+    <string name="combos_step_effect">Дополнительный эффект</string>
+
+    <!-- Счётные формы: в русском языке три варианта склонения -->
+    <plurals name="spell_count">
+        <item quantity="one">%1$d заклинание</item>
+        <item quantity="few">%1$d заклинания</item>
+        <item quantity="many">%1$d заклинаний</item>
+        <item quantity="other">%1$d заклинания</item>
+    </plurals>
+    <plurals name="measure_minute">
+        <item quantity="one">%1$d минута</item>
+        <item quantity="few">%1$d минуты</item>
+        <item quantity="many">%1$d минут</item>
+        <item quantity="other">%1$d минуты</item>
+    </plurals>
+    <plurals name="measure_hour">
+        <item quantity="one">%1$d час</item>
+        <item quantity="few">%1$d часа</item>
+        <item quantity="many">%1$d часов</item>
+        <item quantity="other">%1$d часа</item>
+    </plurals>
+    <plurals name="measure_day">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дня</item>
+        <item quantity="many">%1$d дней</item>
+        <item quantity="other">%1$d дня</item>
+    </plurals>
+    <plurals name="measure_round">
+        <item quantity="one">%1$d раунд</item>
+        <item quantity="few">%1$d раунда</item>
+        <item quantity="many">%1$d раундов</item>
+        <item quantity="other">%1$d раунда</item>
+    </plurals>
+    <plurals name="measure_turn">
+        <item quantity="one">%1$d ход</item>
+        <item quantity="few">%1$d хода</item>
+        <item quantity="many">%1$d ходов</item>
+        <item quantity="other">%1$d хода</item>
+    </plurals>
+    <plurals name="measure_feet">
+        <item quantity="one">%1$d фут</item>
+        <item quantity="few">%1$d фута</item>
+        <item quantity="many">%1$d футов</item>
+        <item quantity="other">%1$d фута</item>
+    </plurals>
+    <plurals name="measure_mile">
+        <item quantity="one">%1$d миля</item>
+        <item quantity="few">%1$d мили</item>
+        <item quantity="many">%1$d миль</item>
+        <item quantity="other">%1$d мили</item>
+    </plurals>
+    <plurals name="measure_action">
+        <item quantity="one">%1$d действие</item>
+        <item quantity="few">%1$d действия</item>
+        <item quantity="many">%1$d действий</item>
+        <item quantity="other">%1$d действия</item>
+    </plurals>
+    <plurals name="measure_bonus_action">
+        <item quantity="one">%1$d бонусное действие</item>
+        <item quantity="few">%1$d бонусных действия</item>
+        <item quantity="many">%1$d бонусных действий</item>
+        <item quantity="other">%1$d бонусных действия</item>
+    </plurals>
+    <plurals name="measure_reaction">
+        <item quantity="one">%1$d реакция</item>
+        <item quantity="few">%1$d реакции</item>
+        <item quantity="many">%1$d реакций</item>
+        <item quantity="other">%1$d реакции</item>
+    </plurals>
+</resources>

@@ -1,26 +1,37 @@
 package com.example.spellbook.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Тесты справочников кодов формата LSS. */
+/**
+ * Тесты справочников кодов формата LSS.
+ *
+ * Проверяются только «канонические» имена источника dnd.su: подписи интерфейса
+ * лежат в строковых ресурсах и зависят от выбранного языка.
+ */
 class SpellOptionsTest {
 
     @Test
-    fun `labelFor returns label for known code`() {
-        assertEquals("Воплощение", SpellOptions.labelFor(SpellOptions.schools, "evo"))
-        assertEquals("Реакция", SpellOptions.labelFor(SpellOptions.activationTypes, "reaction"))
+    fun `canonical label returns source name for known code`() {
+        assertEquals("Воплощение", SpellOptions.canonicalLabel(SpellOptions.schools, "evo"))
+        assertEquals("Реакция", SpellOptions.canonicalLabel(SpellOptions.activationTypes, "reaction"))
     }
 
     @Test
-    fun `labelFor returns the code itself for unknown value`() {
-        assertEquals("unknown", SpellOptions.labelFor(SpellOptions.schools, "unknown"))
+    fun `canonical label returns the code itself for unknown value`() {
+        assertEquals("unknown", SpellOptions.canonicalLabel(SpellOptions.schools, "unknown"))
     }
 
     @Test
-    fun `labelFor supports empty code as not set`() {
-        assertEquals("Не задано", SpellOptions.labelFor(SpellOptions.abilities, ""))
+    fun `empty code is a valid not set option`() {
+        assertEquals("Не задано", SpellOptions.canonicalLabel(SpellOptions.abilities, ""))
+    }
+
+    @Test
+    fun `optionFor returns null for unknown code`() {
+        assertNull(SpellOptions.optionFor(SpellOptions.schools, "unknown"))
     }
 
     @Test
@@ -39,7 +50,7 @@ class SpellOptionsTest {
         )
 
         dictionaries.forEach { (name, options) ->
-            val codes = options.map { it.first }
+            val codes = options.map { it.code }
             assertEquals("Duplicated codes in dictionary $name", codes.distinct(), codes)
             assertTrue("Dictionary $name is empty", codes.isNotEmpty())
         }
@@ -47,7 +58,6 @@ class SpellOptionsTest {
 
     @Test
     fun `spell levels cover range from cantrip to ninth level`() {
-        assertEquals((0..9).toList(), SpellOptions.levels.map { it.first })
-        assertEquals("Заговор", SpellOptions.levels.first().second)
+        assertEquals((0..MAX_SPELL_LEVEL).toList(), SpellOptions.levels)
     }
 }

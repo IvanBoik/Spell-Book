@@ -34,8 +34,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.DamagePart
 import com.example.spellbook.data.model.Spell
@@ -43,6 +45,8 @@ import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.components.LabeledSwitchRow
 import com.example.spellbook.ui.components.NumberField
 import com.example.spellbook.ui.components.OptionField
+import com.example.spellbook.ui.spellLevelPairs
+import com.example.spellbook.ui.spellOptionPairs
 
 /** Код типа действия LSS, при котором заклинание требует спасброска. */
 private const val ACTION_TYPE_SAVE = "save"
@@ -64,17 +68,20 @@ private val TARGET_TYPES_WITH_SIZE = setOf(
 /** Типы активации, не подразумевающие числового времени сотворения (Особая). */
 private val ACTIVATION_TYPES_WITHOUT_VALUE = setOf("special")
 
-/** Заготовка таблицы с шапкой и двумя строками — пользователю остаётся заменить текст. */
-private val TABLE_TEMPLATE = listOf(
-    "| Заголовок 1 | Заголовок 2 |",
+/**
+ * Заготовка таблицы с шапкой и двумя строками — пользователю остаётся заменить текст.
+ * Подписи берутся из ресурсов: шаблон должен быть на языке интерфейса.
+ */
+private fun tableTemplate(header: String, cell: String): String = listOf(
+    "| $header 1 | $header 2 |",
     "| --- | --- |",
-    "| Ячейка | Ячейка |",
-    "| Ячейка | Ячейка |",
+    "| $cell | $cell |",
+    "| $cell | $cell |",
 ).joinToString("\n")
 
 /** Добавляет шаблон таблицы в конец описания, отделяя его от текста. */
-private fun appendTableTemplate(description: String): String =
-    if (description.isBlank()) TABLE_TEMPLATE else "${description.trimEnd()}\n$TABLE_TEMPLATE"
+private fun appendTableTemplate(description: String, template: String): String =
+    if (description.isBlank()) template else "${description.trimEnd()}\n$template"
 
 /**
  * Форма создания/редактирования заклинания. Все поля соответствуют формату LSS,
@@ -91,15 +98,34 @@ fun SpellFormScreen(
     var draft by remember(initial.id) { mutableStateOf(initial) }
     var nameError by remember(initial.id) { mutableStateOf(false) }
 
-    val levelOptions = remember { SpellOptions.levels.map { it.first.toString() to it.second } }
+    val levelOptions = spellLevelPairs().map { (level, label) -> level.toString() to label }
+    val schoolOptions = spellOptionPairs(SpellOptions.schools)
+    val activationOptions = spellOptionPairs(SpellOptions.activationTypes)
+    val durationOptions = spellOptionPairs(SpellOptions.durationUnits)
+    val rangeOptions = spellOptionPairs(SpellOptions.rangeUnits)
+    val targetTypeOptions = spellOptionPairs(SpellOptions.targetTypes)
+    val targetUnitOptions = spellOptionPairs(SpellOptions.targetUnits)
+    val actionTypeOptions = spellOptionPairs(SpellOptions.actionTypes)
+    val abilityOptions = spellOptionPairs(SpellOptions.abilities)
+    val damageTypeOptions = spellOptionPairs(SpellOptions.damageTypes)
+    val classOptions = spellOptionPairs(SpellOptions.classes)
+    val tableTemplate = tableTemplate(
+        header = stringResource(R.string.form_table_header),
+        cell = stringResource(R.string.form_table_cell),
+    )
 
     Scaffold(
         topBar = {
             DndTopBar(
-                title = if (isNew) "Новое заклинание" else "Редактирование",
+                title = stringResource(
+                    if (isNew) R.string.form_new_spell else R.string.form_edit_spell,
+                ),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -119,27 +145,27 @@ fun SpellFormScreen(
                     draft = draft.copy(name = it)
                     if (it.isNotBlank()) nameError = false
                 },
-                label = { Text("Название") },
+                label = { Text(stringResource(R.string.form_name)) },
                 singleLine = true,
                 isError = nameError,
                 supportingText = if (nameError) {
-                    { Text("Укажите название заклинания") }
+                    { Text(stringResource(R.string.form_name_required)) }
                 } else null,
                 modifier = Modifier.fillMaxWidth(),
             )
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OptionField(
-                    label = "Круг",
+                    label = stringResource(R.string.form_level),
                     value = draft.level.toString(),
                     options = levelOptions,
                     onValueChange = { draft = draft.copy(level = it.toIntOrNull() ?: 0) },
                     modifier = Modifier.weight(1f),
                 )
                 OptionField(
-                    label = "Школа",
+                    label = stringResource(R.string.form_school),
                     value = draft.school,
-                    options = SpellOptions.schools,
+                    options = schoolOptions,
                     onValueChange = { draft = draft.copy(school = it) },
                     modifier = Modifier.weight(1f),
                 )
@@ -156,7 +182,7 @@ fun SpellFormScreen(
             OutlinedTextField(
                 value = draft.description,
                 onValueChange = { draft = draft.copy(description = it) },
-                label = { Text("Описание") },
+                label = { Text(stringResource(R.string.form_description)) },
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -167,31 +193,31 @@ fun SpellFormScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    "**жирный**, *курсив*, ## заголовок, списки через - или 1.",
+                    stringResource(R.string.form_markup_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
                 OutlinedButton(onClick = {
-                    draft = draft.copy(description = appendTableTemplate(draft.description))
+                    draft = draft.copy(description = appendTableTemplate(draft.description, tableTemplate))
                 }) {
-                    Text("Вставить таблицу")
+                    Text(stringResource(R.string.form_insert_table))
                 }
             }
 
-            SectionTitle("Время сотворения")
+            SectionTitle(stringResource(R.string.form_casting_time))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 NumberField(
-                    label = "Значение",
+                    label = stringResource(R.string.form_value),
                     value = draft.activationCost,
                     onValueChange = { draft = draft.copy(activationCost = it) },
                     enabled = draft.activationType !in ACTIVATION_TYPES_WITHOUT_VALUE,
                     modifier = Modifier.weight(1f),
                 )
                 OptionField(
-                    label = "Единицы",
+                    label = stringResource(R.string.form_units),
                     value = draft.activationType,
-                    options = SpellOptions.activationTypes,
+                    options = activationOptions,
                     onValueChange = { unit ->
                         draft = draft.copy(
                             activationType = unit,
@@ -204,24 +230,24 @@ fun SpellFormScreen(
             OutlinedTextField(
                 value = draft.activationCondition,
                 onValueChange = { draft = draft.copy(activationCondition = it) },
-                label = { Text("Условие сотворения") },
+                label = { Text(stringResource(R.string.form_casting_condition)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            SectionTitle("Длительность")
+            SectionTitle(stringResource(R.string.form_duration))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 NumberField(
-                    label = "Значение",
+                    label = stringResource(R.string.form_value),
                     value = draft.durationValue,
                     onValueChange = { draft = draft.copy(durationValue = it) },
                     enabled = draft.durationUnits !in DURATION_UNITS_WITHOUT_VALUE,
                     modifier = Modifier.weight(1f),
                 )
                 OptionField(
-                    label = "Единицы",
+                    label = stringResource(R.string.form_units),
                     value = draft.durationUnits,
-                    options = SpellOptions.durationUnits,
+                    options = durationOptions,
                     onValueChange = { unit ->
                         draft = draft.copy(
                             durationUnits = unit,
@@ -232,19 +258,19 @@ fun SpellFormScreen(
                 )
             }
 
-            SectionTitle("Дистанция")
+            SectionTitle(stringResource(R.string.form_range))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 NumberField(
-                    label = "Значение",
+                    label = stringResource(R.string.form_value),
                     value = draft.rangeValue,
                     onValueChange = { draft = draft.copy(rangeValue = it) },
                     enabled = draft.rangeUnits !in RANGE_UNITS_WITHOUT_VALUE,
                     modifier = Modifier.weight(1f),
                 )
                 OptionField(
-                    label = "Единицы",
+                    label = stringResource(R.string.form_units),
                     value = draft.rangeUnits,
-                    options = SpellOptions.rangeUnits,
+                    options = rangeOptions,
                     onValueChange = { unit ->
                         draft = draft.copy(
                             rangeUnits = unit,
@@ -255,12 +281,12 @@ fun SpellFormScreen(
                 )
             }
 
-            SectionTitle("Цель / область")
+            SectionTitle(stringResource(R.string.form_target))
             val targetHasSize = draft.target.type in TARGET_TYPES_WITH_SIZE
             OptionField(
-                label = "Цель/область",
+                label = stringResource(R.string.form_target),
                 value = draft.target.type,
-                options = SpellOptions.targetTypes,
+                options = targetTypeOptions,
                 onValueChange = { type ->
                     draft = if (type in TARGET_TYPES_WITH_SIZE) {
                         draft.copy(target = draft.target.copy(type = type))
@@ -272,45 +298,45 @@ fun SpellFormScreen(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 NumberField(
-                    label = "Размер",
+                    label = stringResource(R.string.form_target_size),
                     value = draft.target.value,
                     onValueChange = { draft = draft.copy(target = draft.target.copy(value = it)) },
                     enabled = targetHasSize,
                     modifier = Modifier.weight(1f),
                 )
                 OptionField(
-                    label = "Единица",
+                    label = stringResource(R.string.form_target_unit),
                     value = draft.target.units,
-                    options = SpellOptions.targetUnits,
+                    options = targetUnitOptions,
                     enabled = targetHasSize,
                     onValueChange = { draft = draft.copy(target = draft.target.copy(units = it)) },
                     modifier = Modifier.weight(1f),
                 )
             }
 
-            SectionTitle("Компоненты")
+            SectionTitle(stringResource(R.string.form_components))
             LabeledSwitchRow(
-                text = "Вербальный (V)",
+                text = stringResource(R.string.form_component_vocal),
                 checked = draft.components.vocal,
                 onCheckedChange = { draft = draft.copy(components = draft.components.copy(vocal = it)) },
             )
             LabeledSwitchRow(
-                text = "Соматический (S)",
+                text = stringResource(R.string.form_component_somatic),
                 checked = draft.components.somatic,
                 onCheckedChange = { draft = draft.copy(components = draft.components.copy(somatic = it)) },
             )
             LabeledSwitchRow(
-                text = "Материальный (M)",
+                text = stringResource(R.string.form_component_material),
                 checked = draft.components.material,
                 onCheckedChange = { draft = draft.copy(components = draft.components.copy(material = it)) },
             )
             LabeledSwitchRow(
-                text = "Ритуал",
+                text = stringResource(R.string.filter_ritual),
                 checked = draft.components.ritual,
                 onCheckedChange = { draft = draft.copy(components = draft.components.copy(ritual = it)) },
             )
             LabeledSwitchRow(
-                text = "Концентрация",
+                text = stringResource(R.string.filter_concentration),
                 checked = draft.components.concentration,
                 onCheckedChange = { draft = draft.copy(components = draft.components.copy(concentration = it)) },
             )
@@ -318,28 +344,28 @@ fun SpellFormScreen(
                 OutlinedTextField(
                     value = draft.materials.value,
                     onValueChange = { draft = draft.copy(materials = draft.materials.copy(value = it)) },
-                    label = { Text("Материалы") },
+                    label = { Text(stringResource(R.string.form_materials)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
 
-            SectionTitle("Механика")
+            SectionTitle(stringResource(R.string.form_mechanics))
             OptionField(
-                label = "Тип действия",
+                label = stringResource(R.string.form_action_type),
                 value = draft.actionType,
-                options = SpellOptions.actionTypes,
+                options = actionTypeOptions,
                 onValueChange = { draft = draft.copy(actionType = it) },
             )
             if (draft.actionType == ACTION_TYPE_SAVE) {
                 OptionField(
-                    label = "Спасбросок",
+                    label = stringResource(R.string.form_save),
                     value = draft.save.ability,
-                    options = SpellOptions.abilities,
+                    options = abilityOptions,
                     onValueChange = { draft = draft.copy(save = draft.save.copy(ability = it)) },
                 )
             }
 
-            SectionTitle("Урон / лечение")
+            SectionTitle(stringResource(R.string.form_damage))
             draft.damageParts.forEachIndexed { index, part ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -355,14 +381,14 @@ fun SpellFormScreen(
                                 },
                             )
                         },
-                        label = { Text("Формула") },
+                        label = { Text(stringResource(R.string.form_formula)) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     OptionField(
-                        label = "Тип",
+                        label = stringResource(R.string.form_type),
                         value = part.type,
-                        options = SpellOptions.damageTypes,
+                        options = damageTypeOptions,
                         onValueChange = { type ->
                             draft = draft.copy(
                                 damageParts = draft.damageParts.toMutableList().also {
@@ -377,19 +403,22 @@ fun SpellFormScreen(
                             damageParts = draft.damageParts.filterIndexed { i, _ -> i != index },
                         )
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Удалить урон")
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.form_delete_damage),
+                        )
                     }
                 }
             }
             OutlinedButton(
                 onClick = { draft = draft.copy(damageParts = draft.damageParts + DamagePart()) },
             ) {
-                Text("Добавить тип урона")
+                Text(stringResource(R.string.form_add_damage))
             }
 
-            SectionTitle("Классы")
+            SectionTitle(stringResource(R.string.form_classes))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SpellOptions.classes.forEach { (code, name) ->
+                classOptions.forEach { (code, name) ->
                     val selected = code in draft.classes
                     FilterChip(
                         selected = selected,
@@ -420,7 +449,7 @@ fun SpellFormScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Сохранить")
+                Text(stringResource(R.string.action_save))
             }
             Spacer(modifier = Modifier.height(16.dp))
         }

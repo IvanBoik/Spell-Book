@@ -2,6 +2,7 @@ package com.example.spellbook.data.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -221,8 +222,9 @@ class ClassModelsTest {
     }
 
     @Test
-    fun `display name falls back to standard label`() {
-        assertEquals("Волшебник", classLevel(CharacterClass.WIZARD, 1).displayName)
+    fun `display name is used only for custom classes`() {
+        // У штатного класса название берётся из ресурсов на стороне UI.
+        assertNull(classLevel(CharacterClass.WIZARD, 1).displayName)
         assertEquals("Кровомаг", CharacterClassLevel(CharacterClass.OTHER, 1, "Кровомаг").displayName)
     }
 }

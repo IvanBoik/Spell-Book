@@ -68,6 +68,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.data.CharacterLssCodec
@@ -75,6 +76,7 @@ import com.example.spellbook.data.model.Character
 import com.example.spellbook.ui.screens.EmptySpellList
 import com.example.spellbook.ui.screens.AddSpellFab
 import com.example.spellbook.data.model.Spell
+import com.example.spellbook.ui.ProvideAppLocale
 import com.example.spellbook.ui.Screen
 import com.example.spellbook.ui.LibraryDownloadProgress
 import com.example.spellbook.ui.LibraryDownloadReport
@@ -82,6 +84,8 @@ import com.example.spellbook.ui.SpellBookViewModel
 import com.example.spellbook.ui.Tab
 import com.example.spellbook.ui.components.CharacterSection
 import com.example.spellbook.ui.components.CharacterSectionsBar
+
+import com.example.spellbook.ui.screens.SettingsScreen
 import com.example.spellbook.ui.components.SpellBookBottomBar
 import com.example.spellbook.ui.screens.AddSpellsScreen
 import com.example.spellbook.ui.screens.CharacterFormScreen
@@ -117,13 +121,19 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
         enableEdgeToEdge()
         setContent {
-            SpellBookTheme {
-                SpellBookApp(
-                    incomingUri = incomingUri,
-                    onIncomingUriHandled = { incomingUri = null },
-                    sharedUrl = sharedUrl,
-                    onSharedUrlHandled = { sharedUrl = null },
-                )
+            // ViewModel создаётся до темы: язык и оформление берутся из настроек.
+            val viewModel: SpellBookViewModel = viewModel()
+            val settings = viewModel.uiState.settings
+            ProvideAppLocale(settings.language) {
+                SpellBookTheme(appTheme = settings.theme) {
+                    SpellBookApp(
+                        incomingUri = incomingUri,
+                        onIncomingUriHandled = { incomingUri = null },
+                        sharedUrl = sharedUrl,
+                        onSharedUrlHandled = { sharedUrl = null },
+                        viewModel = viewModel,
+                    )
+                }
             }
         }
     }
@@ -171,6 +181,9 @@ private fun SpellBookApp(
     // Что именно выгружается — от этого зависит текст уведомления.
     var pendingExportKind by remember { mutableStateOf(ExportKind.SPELL) }
 
+    // Чью панель разделов редактируем в настройках; null — общая для всех персонажей.
+    var settingsScopeId by remember { mutableStateOf<String?>(null) }
+
     /** К какому персонажу применить загружаемый лист; null — создать нового. */
     var sheetImportTargetId by remember { mutableStateOf<String?>(null) }
 
@@ -191,7 +204,7 @@ private fun SpellBookApp(
                 viewModel.importSpellJson(text)
             }
         } else {
-            Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.file_read_failed), Toast.LENGTH_SHORT).show()
         }
         onIncomingUriHandled()
     }
@@ -219,7 +232,7 @@ private fun SpellBookApp(
                 viewModel.importSpellJson(text)
             }
         } else {
-            Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.file_read_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -232,14 +245,14 @@ private fun SpellBookApp(
         val ok = runCatching {
             context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(json) }
         }.isSuccess
-        val successText = when (pendingExportKind) {
-            ExportKind.SPELL -> "Заклинание выгружено"
-            ExportKind.CHARACTER -> "Лист персонажа выгружен"
-            ExportKind.LIBRARY -> "Библиотека выгружена"
+        val successRes = when (pendingExportKind) {
+            ExportKind.SPELL -> R.string.export_spell_done
+            ExportKind.CHARACTER -> R.string.export_character_done
+            ExportKind.LIBRARY -> R.string.export_library_done
         }
         Toast.makeText(
             context,
-            if (ok) successText else "Не удалось сохранить файл",
+            context.getString(if (ok) successRes else R.string.file_save_failed),
             Toast.LENGTH_SHORT,
         ).show()
     }
@@ -257,13 +270,14 @@ private fun SpellBookApp(
         if (text != null) {
             viewModel.importCharacterJson(text, targetId)
         } else {
-            Toast.makeText(context, "Не удалось прочитать файл", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.file_read_failed), Toast.LENGTH_SHORT).show()
         }
     }
 
     LaunchedEffect(state.message) {
+        // Сообщения хранятся как ресурсы и резолвятся здесь — в контексте выбранного языка.
         state.message?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, it.resolve(context), Toast.LENGTH_SHORT).show()
             viewModel.consumeMessage()
         }
     }
@@ -300,23 +314,33 @@ private fun SpellBookApp(
                     (context as? Activity)?.finish()
                 } else {
                     lastBackPressMillis = now
-                    Toast.makeText(context, "Нажмите ещё раз для выхода", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.exit_confirm), Toast.LENGTH_SHORT).show()
                 }
             }
 
-            is Screen.CharacterSpells -> viewModel.openCharacters()
+            Screen.Settings -> viewModel.exitSettings()
+            // Разделы персонажа: с домашнего — к списку, с остальных — к домашнему.
+            is Screen.CharacterSpells ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.SPELLS)
+            is Screen.PrepareSpells ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.PREPARE)
+            is Screen.SpellSlots ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.RESOURCES)
+            is Screen.Stats ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.STATS)
+            is Screen.Notes ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.NOTES)
+            is Screen.Feats ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.FEATS)
+            is Screen.Combos ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.COMBOS)
+            is Screen.Inventory ->
+                viewModel.exitCharacterSection(screen.characterId, CharacterSection.INVENTORY)
             is Screen.AddSpells -> viewModel.openCharacterSpells(screen.characterId)
-            is Screen.PrepareSpells -> viewModel.openCharacterSpells(screen.characterId)
-            is Screen.SpellSlots -> viewModel.openCharacterSpells(screen.characterId)
-            is Screen.Stats -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
-            is Screen.Notes -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
-            is Screen.Feats -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
             is Screen.AddFeats -> viewModel.openFeats(screen.characterId)
-            is Screen.Combos -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
             is Screen.ComboEditor -> viewModel.openCombos(screen.characterId)
             is Screen.StepLibrary -> viewModel.openCombos(screen.characterId)
             is Screen.ComboResult -> viewModel.openCombos(screen.characterId)
-            is Screen.Inventory -> viewModel.openCharacterSpells(screen.characterId, resetView = false)
             is Screen.CharacterForm -> viewModel.exitCharacterForm()
             is Screen.Details -> viewModel.navigateBackFromDetails()
             is Screen.SpellForm -> {
@@ -335,7 +359,8 @@ private fun SpellBookApp(
         Screen.Characters -> CharactersScreen(
             characters = state.characters,
             spellCounts = state.spellCounts,
-            onCharacterClick = viewModel::openCharacterSpells,
+            // Точка входа — домашний раздел персонажа, а не всегда заклинания.
+            onCharacterClick = viewModel::openCharacterHome,
             onAddCharacter = viewModel::openCreateCharacterForm,
             onImportSheet = {
                 // Новый лист создаёт персонажа, а не обновляет существующего.
@@ -346,7 +371,7 @@ private fun SpellBookApp(
         )
 
         Screen.Library -> SpellListScreen(
-            title = "Библиотека",
+            title = stringResource(R.string.tab_library),
             spells = state.librarySpells,
             query = viewModel.listQuery,
             onQueryChange = viewModel::updateListQuery,
@@ -455,7 +480,12 @@ private fun SpellBookApp(
                     onPrepare = { spellId -> viewModel.setSpellPrepared(screen.characterId, spellId, true) },
                     onUnprepare = { spellId -> viewModel.setSpellPrepared(screen.characterId, spellId, false) },
                     onSpellClick = viewModel::openDetails,
-                    onBack = { viewModel.openCharacterSpells(screen.characterId) },
+                    onBack = {
+                        viewModel.exitCharacterSection(screen.characterId, CharacterSection.PREPARE)
+                    },
+                    sectionsBar = {
+                        CharacterSections(viewModel, screen.characterId, CharacterSection.PREPARE)
+                    },
                 )
             }
         }
@@ -496,16 +526,11 @@ private fun SpellBookApp(
                         viewModel.reorderCharacterResources(screen.characterId, orderedIds)
                     },
                     onRestoreAll = { viewModel.restoreAllResources(screen.characterId) },
-                    onBack = { viewModel.openCharacterSpells(screen.characterId) },
+                    onBack = {
+                        viewModel.exitCharacterSection(screen.characterId, CharacterSection.RESOURCES)
+                    },
                     sectionsBar = {
-                        CharacterSectionsBar(
-                            current = CharacterSection.RESOURCES,
-                            showPrepare = character.canPrepareSpells,
-                            onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
-                            initialScrollIndex = viewModel.sectionsScrollIndex,
-                            initialScrollOffset = viewModel.sectionsScrollOffset,
-                            onScrollChanged = viewModel::saveSectionsScroll,
-                        )
+                        CharacterSections(viewModel, screen.characterId, CharacterSection.RESOURCES)
                     },
                 )
             }
@@ -532,16 +557,11 @@ private fun SpellBookApp(
                     onCycleSkill = { skill -> viewModel.cycleSkillProficiency(screen.characterId, skill) },
                     onRoll = { title, kind, bonus -> viewModel.rollD20(title, kind, bonus) },
                     onDismissRoll = viewModel::dismissD20Roll,
-                    onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+                    onBack = {
+                        viewModel.exitCharacterSection(screen.characterId, CharacterSection.STATS)
+                    },
                     sectionsBar = {
-                        CharacterSectionsBar(
-                            current = CharacterSection.STATS,
-                            showPrepare = character.canPrepareSpells,
-                            onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
-                            initialScrollIndex = viewModel.sectionsScrollIndex,
-                            initialScrollOffset = viewModel.sectionsScrollOffset,
-                            onScrollChanged = viewModel::saveSectionsScroll,
-                        )
+                        CharacterSections(viewModel, screen.characterId, CharacterSection.STATS)
                     },
                 )
             }
@@ -552,16 +572,9 @@ private fun SpellBookApp(
             onAddBlock = { title -> viewModel.addNoteBlock(screen.characterId, title) },
             onSaveBlock = viewModel::saveNoteBlock,
             onDeleteBlock = viewModel::deleteNoteBlock,
-            onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+            onBack = { viewModel.exitCharacterSection(screen.characterId, CharacterSection.NOTES) },
             sectionsBar = {
-                CharacterSectionsBar(
-                    current = CharacterSection.NOTES,
-                    showPrepare = viewModel.getCharacter(screen.characterId)?.canPrepareSpells == true,
-                    onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
-                    initialScrollIndex = viewModel.sectionsScrollIndex,
-                    initialScrollOffset = viewModel.sectionsScrollOffset,
-                    onScrollChanged = viewModel::saveSectionsScroll,
-                )
+                CharacterSections(viewModel, screen.characterId, CharacterSection.NOTES)
             },
         )
 
@@ -579,16 +592,9 @@ private fun SpellBookApp(
             onLoadFromDndSu = { url -> viewModel.importFeatFromDndSu(screen.characterId, url) },
             onAddFromLibrary = { viewModel.openAddFeats(screen.characterId) },
             onDiceClick = { formula -> DiceRoller.roll(formula) },
-            onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+            onBack = { viewModel.exitCharacterSection(screen.characterId, CharacterSection.FEATS) },
             sectionsBar = {
-                CharacterSectionsBar(
-                    current = CharacterSection.FEATS,
-                    showPrepare = viewModel.getCharacter(screen.characterId)?.canPrepareSpells == true,
-                    onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
-                    initialScrollIndex = viewModel.sectionsScrollIndex,
-                    initialScrollOffset = viewModel.sectionsScrollOffset,
-                    onScrollChanged = viewModel::saveSectionsScroll,
-                )
+                CharacterSections(viewModel, screen.characterId, CharacterSection.FEATS)
             },
         )
 
@@ -610,16 +616,9 @@ private fun SpellBookApp(
             onRoll = { comboId, mode -> viewModel.rollCombo(screen.characterId, comboId, mode) },
             onDelete = { comboId -> viewModel.deleteCombo(comboId, screen.characterId) },
             onReorder = { orderedIds -> viewModel.reorderCombos(orderedIds) },
-            onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+            onBack = { viewModel.exitCharacterSection(screen.characterId, CharacterSection.COMBOS) },
             sectionsBar = {
-                CharacterSectionsBar(
-                    current = CharacterSection.COMBOS,
-                    showPrepare = viewModel.getCharacter(screen.characterId)?.canPrepareSpells == true,
-                    onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
-                    initialScrollIndex = viewModel.sectionsScrollIndex,
-                    initialScrollOffset = viewModel.sectionsScrollOffset,
-                    onScrollChanged = viewModel::saveSectionsScroll,
-                )
+                CharacterSections(viewModel, screen.characterId, CharacterSection.COMBOS)
             },
         )
 
@@ -669,16 +668,11 @@ private fun SpellBookApp(
                     onToggleAttunement = viewModel::toggleItemAttunement,
                     onSetAttunementLimit = { viewModel.updateAttunementLimit(screen.characterId, it) },
                     onSetCoinAmount = { coin, amount -> viewModel.setCoinAmount(screen.characterId, coin, amount) },
-                    onBack = { viewModel.openCharacterSpells(screen.characterId, resetView = false) },
+                    onBack = {
+                        viewModel.exitCharacterSection(screen.characterId, CharacterSection.INVENTORY)
+                    },
                     sectionsBar = {
-                        CharacterSectionsBar(
-                            current = CharacterSection.INVENTORY,
-                            showPrepare = character.canPrepareSpells,
-                            onSelect = { section -> openCharacterSection(viewModel, screen.characterId, section) },
-                            initialScrollIndex = viewModel.sectionsScrollIndex,
-                            initialScrollOffset = viewModel.sectionsScrollOffset,
-                            onScrollChanged = viewModel::saveSectionsScroll,
-                        )
+                        CharacterSections(viewModel, screen.characterId, CharacterSection.INVENTORY)
                     },
                 )
             }
@@ -736,6 +730,27 @@ private fun SpellBookApp(
                 },
             )
         }
+
+        Screen.Settings -> {
+            val settings = state.settings
+            // Существующий персонаж мог быть удалён — возвращаемся к общей области.
+            val scopeId = settingsScopeId?.takeIf { id -> state.characters.any { it.id == id } }
+            SettingsScreen(
+                language = settings.language,
+                theme = settings.theme,
+                characters = state.characters,
+                scopeCharacterId = scopeId,
+                onScopeChange = { settingsScopeId = it },
+                layout = settings.layoutFor(scopeId),
+                hasOwnLayout = scopeId != null && settings.hasOwnLayout(scopeId),
+                onLanguageChange = viewModel::setLanguage,
+                onThemeChange = viewModel::setTheme,
+                onLayoutChange = { layout -> viewModel.setSectionLayout(scopeId, layout) },
+                onLayoutReset = { viewModel.setSectionLayout(scopeId, null) },
+                onBack = viewModel::exitSettings,
+                bottomBar = bottomBar,
+            )
+        }
     }
 }
 
@@ -752,26 +767,26 @@ private fun LibraryFab(
         expanded = expanded,
         onToggle = { expanded = !expanded },
         actions = listOf(
-            FabAction("Скачать всё с dnd.su", Icons.Default.CloudDownload) {
+            FabAction(stringResource(R.string.library_download_all), Icons.Default.CloudDownload) {
                 expanded = false
                 viewModel.downloadOfficialLibrary()
             },
-            FabAction("Выгрузить библиотеку", Icons.Default.Save) {
+            FabAction(stringResource(R.string.library_export), Icons.Default.Save) {
                 expanded = false
                 onExportLibrary()
             },
-            FabAction("Загрузить с dnd.su", Icons.Default.Link) {
+            FabAction(stringResource(R.string.library_load_dndsu), Icons.Default.Link) {
                 expanded = false
                 viewModel.prepareImportForCharacter(null)
                 onLoadFromDndSu()
             },
-            FabAction("Загрузить JSON", Icons.Default.UploadFile) {
+            FabAction(stringResource(R.string.library_import_json), Icons.Default.UploadFile) {
                 expanded = false
                 // Сбрасываем возможную привязку к персонажу: импорт из библиотеки — только в библиотеку.
                 viewModel.prepareImportForCharacter(null)
                 onImport()
             },
-            FabAction("Добавить вручную", Icons.Default.Edit) {
+            FabAction(stringResource(R.string.library_add_manually), Icons.Default.Edit) {
                 expanded = false
                 viewModel.openCreateSpellForm()
             },
@@ -816,8 +831,11 @@ private fun LibraryDownloadBanner(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                if (progress.total > 0) "Загрузка заклинаний: ${progress.processed} из ${progress.total}"
-                else "Получаем список заклинаний…",
+                if (progress.total > 0) {
+                    stringResource(R.string.library_downloading, progress.processed, progress.total)
+                } else {
+                    stringResource(R.string.library_fetching_list)
+                },
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -827,9 +845,17 @@ private fun LibraryDownloadBanner(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Text(
-                    "Сохранено: ${progress.saved}" +
-                        (if (progress.skipped > 0) " · своих: ${progress.skipped}" else "") +
-                        (if (progress.failed > 0) " · ошибок: ${progress.failed}" else ""),
+                    stringResource(R.string.library_progress_saved, progress.saved) +
+                        (if (progress.skipped > 0) {
+                            stringResource(R.string.library_progress_own, progress.skipped)
+                        } else {
+                            ""
+                        }) +
+                        (if (progress.failed > 0) {
+                            stringResource(R.string.library_progress_errors, progress.failed)
+                        } else {
+                            ""
+                        }),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -837,7 +863,7 @@ private fun LibraryDownloadBanner(
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
             TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) {
-                Text("Остановить")
+                Text(stringResource(R.string.library_stop))
             }
         }
     }
@@ -866,7 +892,7 @@ private fun CharacterSpellsScreenContent(
         spells
     }
     SpellListScreen(
-        title = character.name.ifBlank { "Персонаж" },
+        title = character.name.ifBlank { stringResource(R.string.character_fallback_title) },
         spells = displayedSpells,
         query = viewModel.listQuery,
         onQueryChange = viewModel::updateListQuery,
@@ -875,21 +901,24 @@ private fun CharacterSpellsScreenContent(
         filters = viewModel.listFilters,
         onFiltersChange = viewModel::updateListFilters,
         onSpellClick = viewModel::openDetails,
+        // Заклинание убирается только из набора персонажа: в библиотеке оно остаётся.
+        onSpellRemove = { spell -> viewModel.removeSpellFromCharacter(characterId, spell.id) },
+        removeConfirmTextRes = R.string.spell_remove_from_character,
         navigationIcon = {
-            IconButton(onClick = viewModel::openCharacters) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "К персонажам")
+            IconButton(
+                onClick = {
+                    viewModel.exitCharacterSection(characterId, CharacterSection.SPELLS)
+                },
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.character_back_to_list),
+                )
             }
         },
         headerContent = {
             // Отдельная панель разделов (не загромождает шапку с именем и поиском).
-            CharacterSectionsBar(
-                current = CharacterSection.SPELLS,
-                showPrepare = character.canPrepareSpells,
-                onSelect = { section -> openCharacterSection(viewModel, characterId, section) },
-                initialScrollIndex = viewModel.sectionsScrollIndex,
-                initialScrollOffset = viewModel.sectionsScrollOffset,
-                onScrollChanged = viewModel::saveSectionsScroll,
-            )
+            CharacterSections(viewModel, characterId, CharacterSection.SPELLS)
             if (character.canPrepareSpells) {
                 PreparedFilterToggle(
                     showPreparedOnly = showPreparedOnly,
@@ -920,26 +949,26 @@ private fun CharacterSpellsScreenContent(
 }
 
 /**
- * Открывает выбранный раздел персонажа. Общий обработчик для панели,
- * которая показывается на всех экранах персонажа.
+ * Панель разделов персонажа с учётом пользовательской настройки порядка и видимости.
+ * Вынесена отдельно: панель одинакова на всех экранах персонажа.
  */
-private fun openCharacterSection(
+@Composable
+private fun CharacterSections(
     viewModel: SpellBookViewModel,
     characterId: String,
-    section: CharacterSection,
+    current: CharacterSection,
 ) {
-    when (section) {
-        CharacterSection.SPELLS -> viewModel.openCharacterSpells(characterId, resetView = false)
-        CharacterSection.SETTINGS -> viewModel.openEditCharacterForm(characterId)
-        CharacterSection.STATS -> viewModel.openStats(characterId)
-        CharacterSection.RESOURCES -> viewModel.openSpellSlots(characterId)
-        CharacterSection.COMBOS -> viewModel.openCombos(characterId)
-        CharacterSection.INVENTORY -> viewModel.openInventory(characterId)
-        CharacterSection.FEATS -> viewModel.openFeats(characterId)
-        CharacterSection.NOTES -> viewModel.openNotes(characterId)
-        CharacterSection.PREPARE -> viewModel.openPrepareSpells(characterId)
-    }
+    CharacterSectionsBar(
+        current = current,
+        showPrepare = viewModel.getCharacter(characterId)?.canPrepareSpells == true,
+        onSelect = { section -> viewModel.openCharacterSection(characterId, section) },
+        layout = viewModel.uiState.settings.layoutFor(characterId),
+        initialScrollIndex = viewModel.sectionsScrollIndex,
+        initialScrollOffset = viewModel.sectionsScrollOffset,
+        onScrollChanged = viewModel::saveSectionsScroll,
+    )
 }
+
 
 /** Переключатель «Подготовленные / Все известные» на экране персонажа. */
 @Composable
@@ -951,12 +980,12 @@ private fun PreparedFilterToggle(
         androidx.compose.material3.Tab(
             selected = showPreparedOnly,
             onClick = { onChange(true) },
-            text = { Text("Подготовленные") },
+            text = { Text(stringResource(R.string.tab_prepared)) },
         )
         androidx.compose.material3.Tab(
             selected = !showPreparedOnly,
             onClick = { onChange(false) },
-            text = { Text("Все известные") },
+            text = { Text(stringResource(R.string.tab_all_known)) },
         )
     }
 }
@@ -977,19 +1006,19 @@ private fun CharacterSpellsFab(
         expanded = expanded,
         onToggle = { expanded = !expanded },
         actions = listOf(
-            FabAction("Добавить из библиотеки", Icons.AutoMirrored.Filled.MenuBook) {
+            FabAction(stringResource(R.string.library_add_from), Icons.AutoMirrored.Filled.MenuBook) {
                 expanded = false
                 viewModel.openAddSpells(characterId)
             },
-            FabAction("Загрузить с dnd.su", Icons.Default.Link) {
+            FabAction(stringResource(R.string.library_load_dndsu), Icons.Default.Link) {
                 expanded = false
                 onLoadFromDndSu()
             },
-            FabAction("Загрузить JSON", Icons.Default.UploadFile) {
+            FabAction(stringResource(R.string.library_import_json), Icons.Default.UploadFile) {
                 expanded = false
                 onImport()
             },
-            FabAction("Добавить вручную", Icons.Default.Edit) {
+            FabAction(stringResource(R.string.library_add_manually), Icons.Default.Edit) {
                 expanded = false
                 viewModel.openCreateSpellForm(forCharacterId = characterId)
             },
@@ -1008,14 +1037,14 @@ private fun CharacterSpellsEmpty(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("У персонажа пока нет заклинаний.")
+            Text(stringResource(R.string.character_spells_empty))
             Spacer(Modifier.height(12.dp))
             Button(onClick = onAddFromLibrary) {
-                Text("Добавить из библиотеки")
+                Text(stringResource(R.string.library_add_from))
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = onCreate) {
-                Text("Создать заклинание")
+                Text(stringResource(R.string.character_create_spell))
             }
         }
     }
@@ -1034,18 +1063,19 @@ private fun LibraryReportDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        title = { Text("Загрузка завершена") },
+        title = { Text(stringResource(R.string.library_report_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    buildString {
-                        append("Сохранено: ${report.saved}")
-                        if (report.skipped > 0) append(" · своих сохранено: ${report.skipped}")
+                    if (report.skipped > 0) {
+                        stringResource(R.string.msg_library_downloaded_own, report.saved, report.skipped)
+                    } else {
+                        stringResource(R.string.msg_library_downloaded, report.saved)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(
-                    "Не удалось загрузить: ${report.failures.size}",
+                    stringResource(R.string.library_report_failed, report.failures.size),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
@@ -1062,7 +1092,7 @@ private fun LibraryReportDialog(
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
-                                failure.reason,
+                                failure.reason.resolve(LocalContext.current),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1072,7 +1102,7 @@ private fun LibraryReportDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text("Понятно") }
+            Button(onClick = onDismiss) { Text(stringResource(R.string.action_ok)) }
         },
     )
 }
@@ -1086,10 +1116,10 @@ private fun DndSuUrlDialog(
     var url by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Загрузка с dnd.su") },
+        title = { Text(stringResource(R.string.dndsu_dialog_title)) },
         text = {
             Column {
-                Text("Вставьте ссылку на страницу заклинания")
+                Text(stringResource(R.string.dndsu_dialog_hint))
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = url,
@@ -1102,11 +1132,11 @@ private fun DndSuUrlDialog(
         },
         confirmButton = {
             Button(onClick = { onConfirm(url) }, enabled = url.isNotBlank()) {
-                Text("Загрузить")
+                Text(stringResource(R.string.action_load))
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onDismiss) { Text("Отмена") }
+            OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
 }
@@ -1133,9 +1163,10 @@ private fun shareSpellJson(context: Context, json: String, fileName: String) {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Поделиться заклинанием"))
+        val title = context.getString(R.string.action_share)
+        context.startActivity(Intent.createChooser(intent, title))
     }.onFailure {
-        Toast.makeText(context, "Не удалось поделиться файлом", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.file_save_failed), Toast.LENGTH_SHORT).show()
     }
 }
 

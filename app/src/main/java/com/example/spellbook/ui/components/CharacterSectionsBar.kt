@@ -1,5 +1,6 @@
 package com.example.spellbook.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,29 +28,87 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
+import com.example.spellbook.data.SectionLayout
 
 /** Единый отступ панели от шапки и от содержимого экрана. */
 private val SECTIONS_BAR_VERTICAL_PADDING = 2.dp
 
-/** Разделы персонажа, между которыми переключает панель. */
-enum class CharacterSection(val label: String, val icon: ImageVector) {
-    SETTINGS("Настройки", Icons.Default.Settings),
-    SPELLS("Заклинания", Icons.Default.Description),
-    STATS("Характеристики", Icons.Default.Shield),
-    RESOURCES("Ресурсы", Icons.Default.Bolt),
-    COMBOS("Комбинации", Icons.Default.Extension),
-    INVENTORY("Инвентарь", Icons.Default.Inventory2),
-    FEATS("Черты", Icons.Default.Star),
-    NOTES("Заметки", Icons.Default.EditNote),
-    PREPARE("Подготовка", Icons.Default.EditNote),
+/**
+ * Разделы персонажа, между которыми переключает панель.
+ *
+ * Порядок объявления — это порядок по умолчанию: сначала главная страница
+ * и заклинания — то, чем пользуются чаще всего, а редко нужные настройки
+ * персонажа уходят в конец панели.
+ */
+enum class CharacterSection(@param:StringRes val labelRes: Int, val icon: ImageVector) {
+    STATS(R.string.section_stats, Icons.Default.Shield),
+    SPELLS(R.string.section_spells, Icons.Default.Description),
+    RESOURCES(R.string.section_resources, Icons.Default.Bolt),
+    COMBOS(R.string.section_combos, Icons.Default.Extension),
+    INVENTORY(R.string.section_inventory, Icons.Default.Inventory2),
+    FEATS(R.string.section_feats, Icons.Default.Star),
+    NOTES(R.string.section_notes, Icons.Default.EditNote),
+    PREPARE(R.string.section_prepare, Icons.Default.EditNote),
+    SETTINGS(R.string.section_settings, Icons.Default.Settings);
+
+    companion object {
+        /**
+         * Главный раздел персонажа: точка входа при его выборе и цель кнопки «Назад»
+         * на остальных экранах. Характеристики есть у любого персонажа, в отличие от
+         * заклинаний, которых у немагического героя может не быть вовсе.
+         */
+        val HOME = STATS
+
+        /**
+         * Разделы, которые нельзя скрыть: главная страница и настройки персонажа,
+         * без которых его нечем редактировать. Остальные — включая заклинания — отключаемые.
+         */
+        val ALWAYS_VISIBLE = setOf(HOME, SETTINGS)
+
+        fun fromName(name: String): CharacterSection? = entries.firstOrNull { it.name == name }
+    }
 }
+
+/**
+ * Все разделы в пользовательском порядке, включая скрытые.
+ *
+ * Сначала идёт заданный порядок, затем разделы, которых в настройке нет (например,
+ * появившиеся в новой версии), — так обновление приложения не «теряет» разделы.
+ */
+fun CharacterSection.Companion.ordered(layout: SectionLayout): List<CharacterSection> {
+    val ordered = layout.order.mapNotNull { fromName(it) }
+    return ordered + CharacterSection.entries.filterNot { it in ordered }
+}
+
+/**
+ * Разделы для панели: в пользовательском порядке и без скрытых.
+ *
+ * @param showPrepare доступна ли подготовка заклинаний у этого персонажа.
+ * @param keepVisible раздел, который нельзя убрать из панели (текущий экран).
+ */
+fun CharacterSection.Companion.arrange(
+    layout: SectionLayout,
+    showPrepare: Boolean,
+    keepVisible: CharacterSection? = null,
+): List<CharacterSection> = ordered(layout).filter { section ->
+    val available = section != CharacterSection.PREPARE || showPrepare
+    val visible = section.name !in layout.hidden ||
+        section in ALWAYS_VISIBLE ||
+        section == keepVisible
+    available && visible
+}
+
+
 
 /**
  * Горизонтально прокручиваемая панель разделов персонажа.
  * Показывается на всех экранах персонажа, чтобы переключаться между ними без возврата назад.
  *
  * @param current текущий раздел — подсвечивается и не реагирует на нажатие.
+ * @param layout пользовательская настройка порядка и скрытых разделов.
  * @param initialScrollIndex и [initialScrollOffset] восстанавливают прокрутку при смене экрана.
  */
 @Composable
@@ -58,12 +117,13 @@ fun CharacterSectionsBar(
     showPrepare: Boolean,
     onSelect: (CharacterSection) -> Unit,
     modifier: Modifier = Modifier,
+    layout: SectionLayout = SectionLayout.DEFAULT,
     initialScrollIndex: Int = 0,
     initialScrollOffset: Int = 0,
     onScrollChanged: (index: Int, offset: Int) -> Unit = { _, _ -> },
 ) {
-    // Раздел заклинаний — «корневой» экран персонажа, подготовка доступна не всем.
-    val sections = CharacterSection.entries.filter { it != CharacterSection.PREPARE || showPrepare }
+    // Текущий раздел остаётся в панели, даже если скрыт: иначе непонятно, где находишься.
+    val sections = CharacterSection.arrange(layout, showPrepare, keepVisible = current)
 
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialScrollIndex,
@@ -90,7 +150,7 @@ fun CharacterSectionsBar(
                 leadingIcon = {
                     Icon(section.icon, contentDescription = null, modifier = Modifier.size(18.dp))
                 },
-                label = { Text(section.label) },
+                label = { Text(stringResource(section.labelRes)) },
                 colors = if (selected) {
                     AssistChipDefaults.assistChipColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,

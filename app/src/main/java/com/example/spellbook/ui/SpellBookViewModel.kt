@@ -6,8 +6,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.spellbook.R
 import com.example.spellbook.data.AddSpellResult
+import com.example.spellbook.data.AppLanguage
 import com.example.spellbook.data.AppPreferences
+import com.example.spellbook.data.AppTheme
+import com.example.spellbook.data.SectionLayout
+import com.example.spellbook.ui.components.CharacterSection
 import com.example.spellbook.data.CharacterLssCodec
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.withRecalculatedResources
@@ -52,14 +57,24 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
-/** Две основные вкладки приложения. */
-enum class Tab { CHARACTERS, LIBRARY }
+/** Вкладки нижней навигации. */
+enum class Tab { CHARACTERS, LIBRARY, SETTINGS }
 
 /** Граней у проверочного кубика. */
 private const val D20_SIDES = 20
 
-/** Заголовок блока заметок, если пользователь его не указал. */
-private const val DEFAULT_NOTE_TITLE = "Новый блок"
+/**
+ * Превращает исключение в сообщение для пользователя.
+ *
+ * У [DndSuException] уже есть локализуемый текст, остальные ошибки показываются
+ * через [fallbackRes] с техническим описанием.
+ */
+private fun Throwable.toUiMessage(fallbackRes: Int): UiMessage = when (this) {
+    is DndSuException -> UiMessage(messageRes, args)
+    else -> UiMessage.of(fallbackRes, localizedMessage ?: message.orEmpty())
+}
+
+
 
 /**
  * Сколько заклинаний скачиваем одновременно. Последовательная загрузка занимала минуты;
@@ -69,24 +84,28 @@ private const val LIBRARY_DOWNLOAD_PARALLELISM = 8
 
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
+    /** Персонаж, которому принадлежит экран; null у общих экранов (библиотека, настройки). */
+    val characterId: String? get() = null
+
     data object Characters : Screen
-    data class CharacterSpells(val characterId: String) : Screen
+    data class CharacterSpells(override val characterId: String) : Screen
     data object Library : Screen
     data class Details(val spellId: String) : Screen
     data class SpellForm(val spellId: String?) : Screen
-    data class CharacterForm(val characterId: String?) : Screen
-    data class AddSpells(val characterId: String) : Screen
-    data class PrepareSpells(val characterId: String) : Screen
-    data class SpellSlots(val characterId: String) : Screen
-    data class Combos(val characterId: String) : Screen
-    data class ComboEditor(val characterId: String, val comboId: String?) : Screen
-    data class StepLibrary(val characterId: String) : Screen
-    data class ComboResult(val characterId: String, val comboId: String) : Screen
-    data class Inventory(val characterId: String) : Screen
-    data class Stats(val characterId: String) : Screen
-    data class Notes(val characterId: String) : Screen
-    data class Feats(val characterId: String) : Screen
-    data class AddFeats(val characterId: String) : Screen
+    data class CharacterForm(override val characterId: String?) : Screen
+    data class AddSpells(override val characterId: String) : Screen
+    data class PrepareSpells(override val characterId: String) : Screen
+    data class SpellSlots(override val characterId: String) : Screen
+    data class Combos(override val characterId: String) : Screen
+    data class ComboEditor(override val characterId: String, val comboId: String?) : Screen
+    data class StepLibrary(override val characterId: String) : Screen
+    data class ComboResult(override val characterId: String, val comboId: String) : Screen
+    data class Inventory(override val characterId: String) : Screen
+    data class Stats(override val characterId: String) : Screen
+    data class Notes(override val characterId: String) : Screen
+    data class Feats(override val characterId: String) : Screen
+    data class AddFeats(override val characterId: String) : Screen
+    data object Settings : Screen
 }
 
 data class SpellBookUiState(
@@ -115,8 +134,31 @@ data class SpellBookUiState(
     val libraryProgress: LibraryDownloadProgress? = null,
     /** Итог последней массовой загрузки с логом ошибок; null — показывать нечего. */
     val libraryReport: LibraryDownloadReport? = null,
-    val message: String? = null,
+    /** Пользовательские настройки приложения (язык, тема, панель разделов). */
+    val settings: AppSettingsState = AppSettingsState(),
+    /** Сообщение для пользователя; текст собирается на стороне UI по языку интерфейса. */
+    val message: UiMessage? = null,
 )
+
+/**
+ * Настройки приложения в состоянии UI.
+ *
+ * [characterLayouts] содержит только персонажей с личной настройкой панели;
+ * для остальных действует [globalLayout].
+ */
+data class AppSettingsState(
+    val language: AppLanguage = AppLanguage.SYSTEM,
+    val theme: AppTheme = AppTheme.SYSTEM,
+    val globalLayout: SectionLayout = SectionLayout.DEFAULT,
+    val characterLayouts: Map<String, SectionLayout> = emptyMap(),
+) {
+    /** Действующая настройка панели для персонажа: личная, иначе общая. */
+    fun layoutFor(characterId: String?): SectionLayout =
+        characterId?.let { characterLayouts[it] } ?: globalLayout
+
+    /** Есть ли у персонажа собственная настройка (иначе он наследует общую). */
+    fun hasOwnLayout(characterId: String): Boolean = characterId in characterLayouts
+}
 
 /** Состояние загрузки официальной библиотеки заклинаний. */
 data class LibraryDownloadProgress(
@@ -141,7 +183,8 @@ data class LibraryDownloadProgress(
 data class LibraryDownloadFailure(
     val name: String,
     val url: String,
-    val reason: String,
+    /** Причина сбоя; текст собирается на языке интерфейса при показе лога. */
+    val reason: UiMessage,
 )
 
 /** Итог массовой загрузки: сколько сохранено и что не получилось. */
@@ -209,8 +252,11 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     var comboRollResult by mutableStateOf<ComboRollResult?>(null)
         private set
 
-    /** Последняя корневая страница раздела «Персонажи»: список или конкретный персонаж. */
+    /** Последняя корневая страница раздела «Персонажи»: список или экран персонажа. */
     private var lastCharactersScreen: Screen = Screen.Characters
+
+    /** Персонаж, на данные которого сейчас оформлены подписки. */
+    private var currentCharacterId: String? = null
 
     /**
      * id персонажа, в контексте которого создаётся/импортируется заклинание.
@@ -219,6 +265,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     private var pendingCharacterId: String? = null
 
     init {
+        uiState = uiState.copy(settings = readSettings())
         viewModelScope.launch {
             repository.migrateLegacyIfNeeded()
             importBundledLibraryOnce()
@@ -245,6 +292,73 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      * были доступны сразу и офлайн. Повторно не выполняется: иначе удалённые
      * заклинания возвращались бы при каждом старте.
      */
+    // region Настройки приложения
+
+    /**
+     * Строка ресурса с учётом выбранного языка интерфейса.
+     * Нужна редко: когда текст сохраняется в базу (например, заголовок блока заметок).
+     */
+    private fun localizedString(resId: Int): String {
+        val locale = prefs.language.locale ?: return getApplication<Application>().getString(resId)
+        val configuration = android.content.res.Configuration(
+            getApplication<Application>().resources.configuration,
+        ).apply { setLocale(locale) }
+        return getApplication<Application>()
+            .createConfigurationContext(configuration)
+            .getString(resId)
+    }
+
+    /** Собирает текущие настройки из хранилища. */
+    private fun readSettings() = AppSettingsState(
+        language = prefs.language,
+        theme = prefs.theme,
+        globalLayout = prefs.globalSectionLayout,
+        characterLayouts = prefs.allCharacterSectionLayouts(),
+    )
+
+    fun openSettings() {
+        uiState = uiState.copy(tab = Tab.SETTINGS, screen = Screen.Settings)
+    }
+
+    /**
+     * Возврат с экрана настроек: настройки — самостоятельная вкладка,
+     * поэтому возвращаемся к персонажам — корневому разделу приложения.
+     */
+    fun exitSettings() {
+        selectTab(Tab.CHARACTERS)
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        prefs.language = language
+        uiState = uiState.copy(settings = uiState.settings.copy(language = language))
+    }
+
+    fun setTheme(theme: AppTheme) {
+        prefs.theme = theme
+        uiState = uiState.copy(settings = uiState.settings.copy(theme = theme))
+    }
+
+    /**
+     * Сохраняет настройку панели разделов.
+     *
+     * [characterId] = null — общая настройка для всех персонажей без личной;
+     * [layout] = null у конкретного персонажа — вернуться к общей настройке.
+     */
+    fun setSectionLayout(characterId: String?, layout: SectionLayout?) {
+        if (characterId == null) {
+            val global = layout ?: SectionLayout.DEFAULT
+            prefs.globalSectionLayout = global
+            uiState = uiState.copy(settings = uiState.settings.copy(globalLayout = global))
+        } else {
+            prefs.setSectionLayoutFor(characterId, layout)
+            val layouts = uiState.settings.characterLayouts.toMutableMap()
+            if (layout == null) layouts.remove(characterId) else layouts[characterId] = layout
+            uiState = uiState.copy(settings = uiState.settings.copy(characterLayouts = layouts))
+        }
+    }
+
+    // endregion
+
     private suspend fun importBundledLibraryOnce() {
         if (prefs.bundledLibraryImported) return
         // Импорт идёт молча: для пользователя библиотека просто уже есть при первом запуске.
@@ -252,21 +366,14 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.bundledLibraryImported = true
     }
 
-    /** При старте открываем набор последнего выбранного персонажа, если он ещё существует. */
+    /** При старте открываем главную страницу последнего персонажа, если он ещё существует. */
     private suspend fun restoreLastCharacter() {
         val lastId = prefs.lastCharacterId ?: return
-        val character = repository.getCharacter(lastId)
-        if (character != null) {
-            observeCharacterSpells(lastId)
-            val characterScreen = Screen.CharacterSpells(lastId)
-            lastCharactersScreen = characterScreen
-            uiState = uiState.copy(
-                tab = Tab.CHARACTERS,
-                screen = characterScreen,
-            )
-        } else {
+        if (repository.getCharacter(lastId) == null) {
             prefs.lastCharacterId = null
+            return
         }
+        openCharacterHome(lastId)
     }
 
     /** Джоба подписки на подготовленные заклинания текущего персонажа. */
@@ -359,14 +466,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun selectTab(tab: Tab) {
         uiState = when (tab) {
             Tab.LIBRARY -> uiState.copy(tab = tab, screen = Screen.Library)
+            Tab.SETTINGS -> uiState.copy(tab = tab, screen = Screen.Settings)
             Tab.CHARACTERS -> {
-                // Восстанавливаем последнюю страницу самого раздела: список либо персонажа.
-                val target = when (val saved = lastCharactersScreen) {
-                    is Screen.CharacterSpells -> saved.takeIf { characterScreen ->
-                        uiState.characters.any { it.id == characterScreen.characterId }
-                    } ?: Screen.Characters
-                    else -> Screen.Characters
-                }
+                // Восстанавливаем последнюю страницу самого раздела: список либо экран персонажа.
+                val savedCharacterId = lastCharactersScreen.characterId
+                val target = lastCharactersScreen.takeIf {
+                    savedCharacterId != null && uiState.characters.any { it.id == savedCharacterId }
+                } ?: Screen.Characters
                 lastCharactersScreen = target
                 uiState.copy(tab = tab, screen = target)
             }
@@ -385,16 +491,69 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      * При возврате из деталей (resetView = false) состояние списка сохраняется.
      */
     fun openCharacterSpells(characterId: String, resetView: Boolean = true) {
-        val changingCharacter = (uiState.screen as? Screen.CharacterSpells)?.characterId != characterId
-        prefs.lastCharacterId = characterId
-        if (changingCharacter) observeCharacterSpells(characterId)
+        val changingCharacter = enterCharacter(characterId)
         if (resetView || changingCharacter) {
             resetListControls()
             showPreparedOnly = true
         }
-        val characterScreen = Screen.CharacterSpells(characterId)
-        lastCharactersScreen = characterScreen
-        uiState = uiState.copy(tab = Tab.CHARACTERS, screen = characterScreen)
+        showCharacterScreen(Screen.CharacterSpells(characterId))
+    }
+
+    /**
+     * Готовит переход к персонажу: запоминает его и переподписывается на данные,
+     * если открывается другой персонаж.
+     *
+     * @return true, если персонаж сменился.
+     */
+    private fun enterCharacter(characterId: String): Boolean {
+        val changingCharacter = currentCharacterId != characterId
+        prefs.lastCharacterId = characterId
+        if (changingCharacter) {
+            currentCharacterId = characterId
+            observeCharacterSpells(characterId)
+        }
+        return changingCharacter
+    }
+
+    /** Показывает экран персонажа и запоминает его для возврата на вкладку «Персонажи». */
+    private fun showCharacterScreen(screen: Screen) {
+        lastCharactersScreen = screen
+        uiState = uiState.copy(tab = Tab.CHARACTERS, screen = screen)
+    }
+
+    /**
+     * Открывает главную страницу персонажа — его характеристики.
+     *
+     * Используется при выборе персонажа и при возврате «Назад» с его экранов:
+     * заклинания больше не обязательны, а характеристики есть у любого персонажа.
+     */
+    fun openCharacterHome(characterId: String) {
+        openCharacterSection(characterId, CharacterSection.HOME)
+    }
+
+    /** Открывает заданный раздел персонажа (общий обработчик панели разделов). */
+    fun openCharacterSection(characterId: String, section: CharacterSection) {
+        when (section) {
+            CharacterSection.SPELLS -> openCharacterSpells(characterId, resetView = false)
+            CharacterSection.SETTINGS -> openEditCharacterForm(characterId)
+            CharacterSection.STATS -> openStats(characterId)
+            CharacterSection.RESOURCES -> openSpellSlots(characterId)
+            CharacterSection.COMBOS -> openCombos(characterId)
+            CharacterSection.INVENTORY -> openInventory(characterId)
+            CharacterSection.FEATS -> openFeats(characterId)
+            CharacterSection.NOTES -> openNotes(characterId)
+            CharacterSection.PREPARE -> openPrepareSpells(characterId)
+        }
+    }
+
+    /**
+     * Возврат с экрана раздела персонажа.
+     *
+     * С главной страницы выходим к списку персонажей, с остальных — на главную:
+     * так кнопка «Назад» никогда не зацикливается на текущем экране.
+     */
+    fun exitCharacterSection(characterId: String, section: CharacterSection) {
+        if (section == CharacterSection.HOME) openCharacters() else openCharacterHome(characterId)
     }
 
     fun openLibrary() {
@@ -423,15 +582,14 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** Возврат к корневому списку текущей вкладки. */
+    /** Возврат к корневому экрану текущей вкладки. */
     fun navigateBackToList() {
-        val screen = if (uiState.tab == Tab.LIBRARY) {
-            Screen.Library
-        } else {
-            val lastId = prefs.lastCharacterId
-            if (lastId != null) Screen.CharacterSpells(lastId) else Screen.Characters
+        if (uiState.tab == Tab.LIBRARY) {
+            uiState = uiState.copy(screen = Screen.Library)
+            return
         }
-        uiState = uiState.copy(screen = screen)
+        val lastId = prefs.lastCharacterId
+        if (lastId != null) openCharacterHome(lastId) else openCharacters()
     }
 
     /**
@@ -464,28 +622,42 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         uiState = uiState.copy(screen = Screen.AddSpells(characterId))
     }
 
+    // Любой раздел может быть точкой входа в персонажа (см. openCharacterHome),
+    // поэтому каждый оформляет подписки и запоминается для возврата на вкладку.
+
     fun openPrepareSpells(characterId: String) {
-        uiState = uiState.copy(screen = Screen.PrepareSpells(characterId))
+        enterCharacter(characterId)
+        showCharacterScreen(Screen.PrepareSpells(characterId))
     }
 
     fun openSpellSlots(characterId: String) {
-        uiState = uiState.copy(screen = Screen.SpellSlots(characterId))
+        enterCharacter(characterId)
+        showCharacterScreen(Screen.SpellSlots(characterId))
     }
 
     fun openInventory(characterId: String) {
-        uiState = uiState.copy(screen = Screen.Inventory(characterId))
+        enterCharacter(characterId)
+        showCharacterScreen(Screen.Inventory(characterId))
     }
 
     fun openStats(characterId: String) {
-        uiState = uiState.copy(screen = Screen.Stats(characterId), lastD20Roll = null)
+        enterCharacter(characterId)
+        lastCharactersScreen = Screen.Stats(characterId)
+        uiState = uiState.copy(
+            tab = Tab.CHARACTERS,
+            screen = Screen.Stats(characterId),
+            lastD20Roll = null,
+        )
     }
 
     fun openNotes(characterId: String) {
-        uiState = uiState.copy(screen = Screen.Notes(characterId))
+        enterCharacter(characterId)
+        showCharacterScreen(Screen.Notes(characterId))
     }
 
     fun openFeats(characterId: String) {
-        uiState = uiState.copy(screen = Screen.Feats(characterId))
+        enterCharacter(characterId)
+        showCharacterScreen(Screen.Feats(characterId))
     }
 
     fun openAddFeats(characterId: String) {
@@ -497,7 +669,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     /** Создаёт черту в библиотеке и сразу добавляет её персонажу. */
     fun addFeat(characterId: String, name: String, description: String) {
         if (name.isBlank()) {
-            uiState = uiState.copy(message = "Укажите название черты")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_feat_name_required))
             return
         }
         viewModelScope.launch {
@@ -546,12 +718,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun importFeatFromDndSu(characterId: String?, url: String) {
         viewModelScope.launch {
-            uiState = uiState.copy(message = "Загрузка черты…")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_feat_loading))
             val parsed = runCatching { DndSuLoader.loadFeat(url) }.getOrElse { error ->
-                uiState = uiState.copy(
-                    message = (error as? DndSuException)?.message
-                        ?: "Не удалось загрузить черту: ${error.localizedMessage ?: "ошибка"}",
-                )
+                uiState = uiState.copy(message = error.toUiMessage(R.string.msg_feat_load_failed))
                 return@launch
             }
             // Повторная загрузка обновляет текст, а не создаёт дубль.
@@ -563,13 +732,12 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             val target = characterId ?: pendingCharacterId
             if (target != null) repository.addFeatToCharacter(target, feat.id)
 
-            uiState = uiState.copy(
-                message = when {
-                    target != null -> "Черта «${parsed.name}» добавлена персонажу"
-                    existing == null -> "Черта «${parsed.name}» добавлена в библиотеку"
-                    else -> "Черта «${parsed.name}» обновлена"
-                },
-            )
+            val messageRes = when {
+                target != null -> R.string.msg_feat_added_to_character
+                existing == null -> R.string.msg_feat_added_to_library
+                else -> R.string.msg_feat_updated
+            }
+            uiState = uiState.copy(message = UiMessage.of(messageRes, parsed.name))
         }
     }
 
@@ -589,7 +757,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun addNoteBlock(characterId: String, title: String) {
         val block = NoteBlock(
             characterId = characterId,
-            title = title.trim().ifBlank { DEFAULT_NOTE_TITLE },
+            // Заголовок по умолчанию берётся из ресурсов на языке интерфейса.
+            title = title.trim().ifBlank { localizedString(R.string.msg_note_default_title) },
             paragraphs = listOf(NoteParagraph()),
         )
         viewModelScope.launch { repository.saveNoteBlock(block) }
@@ -615,7 +784,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     // endregion
 
     fun openCombos(characterId: String) {
-        uiState = uiState.copy(screen = Screen.Combos(characterId))
+        enterCharacter(characterId)
+        showCharacterScreen(Screen.Combos(characterId))
     }
 
     fun openStepLibrary(characterId: String) {
@@ -669,7 +839,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             if (duplicate != null && duplicate.id != normalized.id) {
                 pendingCharacterId = characterId // возвращаем контекст, пользователь остаётся в форме
                 uiState = uiState.copy(
-                    message = "Заклинание «${normalized.name}» уже есть в библиотеке",
+                    message = UiMessage.of(R.string.msg_spell_already_in_library, normalized.name),
                 )
                 return@launch
             }
@@ -678,7 +848,11 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                 !addSpellToCharacterChecked(characterId, normalized)
             uiState = uiState.copy(
                 screen = Screen.Details(normalized.id),
-                message = if (cantripError) cantripLimitMessage(characterId!!) else "Заклинание сохранено",
+                message = if (cantripError) {
+                    cantripLimitMessage(characterId!!)
+                } else {
+                    UiMessage(R.string.msg_spell_saved)
+                },
             )
         }
     }
@@ -693,9 +867,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         return result != AddSpellResult.CANTRIP_LIMIT_REACHED
     }
 
-    private fun cantripLimitMessage(characterId: String): String {
+    private fun cantripLimitMessage(characterId: String): UiMessage {
         val max = getCharacter(characterId)?.maxCantrips ?: 0
-        return "Заклинание сохранено в библиотеку, но достигнут лимит заговоров ($max)"
+        return UiMessage.of(R.string.msg_cantrip_limit, max)
     }
 
     fun deleteSpell(spellId: String) {
@@ -703,7 +877,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             repository.deleteSpell(spellId)
             uiState = uiState.copy(
                 screen = if (uiState.tab == Tab.LIBRARY) Screen.Library else Screen.Characters,
-                message = "Заклинание удалено",
+                message = UiMessage(R.string.msg_spell_deleted),
             )
         }
     }
@@ -713,13 +887,11 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun importSpellJson(json: String) {
         val imported = runCatching { SpellLssCodec.decodeSpell(json) }
             .getOrElse {
-                uiState = uiState.copy(
-                    message = "Не удалось прочитать JSON: ${it.localizedMessage ?: "ошибка формата"}",
-                )
+                uiState = uiState.copy(message = it.toUiMessage(R.string.msg_json_read_failed))
                 return
             }
         if (imported.name.isBlank()) {
-            uiState = uiState.copy(message = "В JSON нет названия заклинания")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_json_no_spell))
             return
         }
         val characterId = pendingCharacterId
@@ -728,7 +900,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             saveUniqueOrReuse(
                 spell = imported,
                 characterId = characterId,
-                newMessage = "Заклинание импортировано",
+                newMessage = UiMessage(R.string.msg_spell_imported),
             )
         }
     }
@@ -737,7 +909,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      * Сохраняет заклинание, проверяя уникальность по названию. Если такое уже есть в
      * библиотеке — переиспользуем его (без дубля) и при необходимости добавляем в набор персонажа.
      */
-    private suspend fun saveUniqueOrReuse(spell: Spell, characterId: String?, newMessage: String) {
+    private suspend fun saveUniqueOrReuse(spell: Spell, characterId: String?, newMessage: UiMessage) {
         val normalized = spell.copy(description = DiceRoller.wrapDiceTokens(spell.description))
         val existing = repository.findSpellByName(normalized.name)
         if (existing != null) {
@@ -745,9 +917,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             uiState = uiState.copy(
                 screen = Screen.Details(existing.id),
                 message = when {
-                    limited -> "Заклинание уже есть. ${cantripLimitMessage(characterId!!)}"
-                    characterId != null -> "Заклинание уже есть — добавлено персонажу"
-                    else -> "Заклинание «${normalized.name}» уже есть в библиотеке"
+                    // Лимит заговоров важнее: показываем причину, почему не добавилось.
+                    limited -> cantripLimitMessage(characterId!!)
+                    characterId != null -> UiMessage(R.string.msg_spell_added_to_character)
+                    else -> UiMessage.of(R.string.msg_spell_exists_in_library, normalized.name)
                 },
             )
             return
@@ -766,32 +939,27 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun importFromDndSu(url: String) {
         if (!DndSuLoader.isSpellUrl(url)) {
-            uiState = uiState.copy(message = "Ссылка должна вести на заклинание с сайта dnd.su")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_link_must_be_dndsu))
             return
         }
         val characterId = pendingCharacterId
         pendingCharacterId = null
-        uiState = uiState.copy(message = "Загрузка заклинания…")
+        uiState = uiState.copy(message = UiMessage(R.string.msg_spell_loading))
         viewModelScope.launch {
             val spell = try {
                 DndSuLoader.load(url)
-            } catch (e: DndSuException) {
-                uiState = uiState.copy(message = e.message)
-                return@launch
             } catch (e: Exception) {
-                uiState = uiState.copy(
-                    message = "Не удалось загрузить заклинание: ${e.localizedMessage ?: "неизвестная ошибка"}",
-                )
+                uiState = uiState.copy(message = e.toUiMessage(R.string.msg_spell_load_failed))
                 return@launch
             }
             if (spell.name.isBlank()) {
-                uiState = uiState.copy(message = "Не удалось распознать заклинание на странице")
+                uiState = uiState.copy(message = UiMessage(R.string.msg_spell_parse_failed))
                 return@launch
             }
             saveUniqueOrReuse(
                 spell = spell,
                 characterId = characterId,
-                newMessage = "Заклинание загружено с dnd.su",
+                newMessage = UiMessage(R.string.msg_spell_loaded_dndsu),
             )
         }
     }
@@ -809,7 +977,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             val urls = try {
                 DndSuCatalog.loadOfficialSpellUrls()
             } catch (e: DndSuException) {
-                finishLibraryDownload(e.message ?: "Не удалось получить список заклинаний")
+                finishLibraryDownload(e.toUiMessage(R.string.msg_spell_list_failed))
                 return@launch
             }
 
@@ -829,12 +997,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                             // Сохраняем причину сбоя, чтобы показать её в логе после загрузки.
                             val attempt = runCatching { DndSuLoader.load(url) }
                             val spell = attempt.getOrNull()
-                            val failure = when {
+                            // Причина сбоя показывается в логе как есть: это техническая диагностика.
+                            val failure: UiMessage? = when {
                                 spell == null -> attempt.exceptionOrNull()
-                                    ?.let { it.message ?: it::class.simpleName }
-                                    ?: "неизвестная ошибка"
+                                    ?.toUiMessage(R.string.msg_spell_load_failed)
+                                    ?: UiMessage(R.string.msg_error_unknown)
 
-                                spell.name.isBlank() -> "не удалось распознать заклинание на странице"
+                                spell.name.isBlank() -> UiMessage(R.string.msg_spell_parse_failed)
                                 else -> null
                             }
                             val replaced = if (failure == null && spell != null) {
@@ -871,10 +1040,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                 }.awaitAll()
             }
 
-            val summary = buildString {
-                append("Загружено заклинаний: $saved")
-                if (skipped > 0) append(", своих сохранено: $skipped")
-                if (failures.isNotEmpty()) append(", ошибок: ${failures.size}")
+            // Вариант сообщения зависит от того, были ли пропуски и ошибки.
+            val summary = when {
+                failures.isNotEmpty() ->
+                    UiMessage.of(R.string.msg_library_downloaded_errors, saved, failures.size)
+
+                skipped > 0 -> UiMessage.of(R.string.msg_library_downloaded_own, saved, skipped)
+                else -> UiMessage.of(R.string.msg_library_downloaded, saved)
             }
             // Лог показываем только при наличии ошибок: иначе достаточно краткого итога.
             val report = failures
@@ -896,7 +1068,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun exportLibraryJson(): String? {
         val spells = uiState.librarySpells
         if (spells.isEmpty()) {
-            uiState = uiState.copy(message = "Библиотека пуста")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_library_is_empty))
             return null
         }
         return SpellLssCodec.encodeList(spells)
@@ -909,7 +1081,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun importLibraryJson(json: String) {
         val spells = runCatching { SpellLssCodec.decodeList(json) }.getOrNull()
         if (spells.isNullOrEmpty()) {
-            uiState = uiState.copy(message = "Не удалось прочитать библиотеку из файла")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_library_export_failed))
             return
         }
         viewModelScope.launch {
@@ -920,9 +1092,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                 if (repository.saveOfficialSpell(spell)) saved++ else skipped++
             }
             uiState = uiState.copy(
-                message = buildString {
-                    append("Добавлено заклинаний: $saved")
-                    if (skipped > 0) append(", своих сохранено: $skipped")
+                message = if (skipped > 0) {
+                    UiMessage.of(R.string.msg_library_imported_own, saved, skipped)
+                } else {
+                    UiMessage.of(R.string.msg_library_imported, saved)
                 },
             )
         }
@@ -932,10 +1105,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun cancelLibraryDownload() {
         libraryDownload?.cancel()
         libraryDownload = null
-        uiState = uiState.copy(libraryProgress = null, message = "Загрузка остановлена")
+        uiState = uiState.copy(libraryProgress = null, message = UiMessage(R.string.msg_download_stopped))
     }
 
-    private fun finishLibraryDownload(message: String, report: LibraryDownloadReport? = null) {
+    private fun finishLibraryDownload(message: UiMessage, report: LibraryDownloadReport? = null) {
         libraryDownload = null
         uiState = uiState.copy(libraryProgress = null, libraryReport = report, message = message)
     }
@@ -962,18 +1135,20 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      * классов, готовящих из полного списка, в пределах доступных кругов.
      */
     fun saveCharacter(character: Character, addClassSpells: Boolean = false) {
-        // Редактирование (открыто с экрана заклинаний) — возвращаемся к ним, создание — к списку персонажей.
+        // Редактирование — возвращаемся к персонажу, создание — к списку персонажей.
         val editing = (uiState.screen as? Screen.CharacterForm)?.characterId != null
         viewModelScope.launch {
             // Уровень и характеристики могли измениться — пересчитываем ресурсы на формулах.
             repository.upsertCharacter(character.withRecalculatedResources())
             val added = if (addClassSpells) addClassSpellsToCharacter(character) else 0
-            val target = if (editing) Screen.CharacterSpells(character.id) else Screen.Characters
-            uiState = uiState.copy(
-                screen = target,
-                message = if (added > 0) "Персонаж сохранён · заклинаний добавлено: $added"
-                else "Персонаж сохранён",
-            )
+            val message = if (added > 0) {
+                UiMessage.of(R.string.msg_character_saved_spells, added)
+            } else {
+                UiMessage(R.string.msg_character_saved)
+            }
+            // Домашний раздел зависит от настройки панели, поэтому навигируем через него.
+            if (editing) openCharacterHome(character.id) else openCharacters()
+            uiState = uiState.copy(message = message)
         }
     }
 
@@ -1024,30 +1199,46 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val existing = characterId?.let(::getCharacter)
         val imported = runCatching { CharacterLssCodec.decode(json, existing) }
             .getOrElse {
-                uiState = uiState.copy(
-                    message = "Не удалось прочитать лист: ${it.localizedMessage ?: "ошибка формата"}",
-                )
+                uiState = uiState.copy(message = it.toUiMessage(R.string.msg_sheet_read_failed))
                 return
             }
         viewModelScope.launch {
             repository.upsertCharacter(imported)
-            val message = if (existing != null) "Лист персонажа обновлён" else "Персонаж загружен"
-            openCharacterSpells(imported.id)
-            uiState = uiState.copy(message = message)
+            val messageRes = if (existing != null) {
+                R.string.msg_sheet_updated
+            } else {
+                R.string.msg_character_imported
+            }
+            openCharacterHome(imported.id)
+            uiState = uiState.copy(message = UiMessage(messageRes))
         }
     }
 
-    /** Возврат с формы персонажа туда, откуда её открыли (без сохранения). */
+    /**
+     * Возврат с формы персонажа (без сохранения).
+     *
+     * Форма существующего персонажа — это раздел «Настройки» в панели, поэтому
+     * возвращаемся по общему правилу разделов; форма создания ведёт к списку.
+     */
     fun exitCharacterForm() {
         val editingId = (uiState.screen as? Screen.CharacterForm)?.characterId
-        if (editingId != null) openCharacterSpells(editingId, resetView = false) else openCharacters()
+        if (editingId != null) {
+            exitCharacterSection(editingId, CharacterSection.SETTINGS)
+        } else {
+            openCharacters()
+        }
     }
 
     fun deleteCharacter(characterId: String) {
         viewModelScope.launch {
             repository.deleteCharacter(characterId)
+            // Личная настройка панели больше ни к чему не относится.
+            setSectionLayout(characterId, null)
             if (prefs.lastCharacterId == characterId) prefs.lastCharacterId = null
-            uiState = uiState.copy(screen = Screen.Characters, message = "Персонаж удалён")
+            uiState = uiState.copy(
+                screen = Screen.Characters,
+                message = UiMessage(R.string.msg_character_deleted),
+            )
         }
     }
 
@@ -1055,8 +1246,15 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { repository.addSpellToCharacter(characterId, spellId) }
     }
 
+    /**
+     * Убирает заклинание из набора персонажа. Само заклинание остаётся в общей библиотеке,
+     * поэтому его можно добавить обратно в любой момент.
+     */
     fun removeSpellFromCharacter(characterId: String, spellId: String) {
-        viewModelScope.launch { repository.removeSpellFromCharacter(characterId, spellId) }
+        viewModelScope.launch {
+            repository.removeSpellFromCharacter(characterId, spellId)
+            uiState = uiState.copy(message = UiMessage(R.string.msg_spell_removed_from_character))
+        }
     }
 
     fun toggleSpellForCharacter(characterId: String, spellId: String, add: Boolean) {
@@ -1080,7 +1278,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val ok = repository.setSpellPrepared(characterId, spellId, prepared, max)
             if (!ok) {
-                uiState = uiState.copy(message = "Достигнут лимит подготовленных заклинаний ($max)")
+                uiState = uiState.copy(message = UiMessage.of(R.string.msg_prepared_limit, max))
             }
         }
     }
@@ -1122,7 +1320,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         // Формула задаёт максимум автоматически, поэтому число вводить не обязательно.
         val resolved = resolveResourceMaximum(maximumFormula, maximum, character)
         if (name.isBlank() || resolved <= 0) {
-            uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_enter_positive_number))
             return
         }
         val resource = CharacterResource(
@@ -1149,7 +1347,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val character = getCharacter(characterId) ?: return
         val resolved = resolveResourceMaximum(maximumFormula, maximum, character)
         if (name.isBlank() || resolved <= 0) {
-            uiState = uiState.copy(message = "Укажите название и положительный лимит ресурса")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_enter_positive_number))
             return
         }
         updateCharacterResource(characterId, resourceId) { resource ->
@@ -1372,18 +1570,21 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun saveEditingCombo() {
         val combo = editingCombo ?: return
         if (combo.name.isBlank()) {
-            uiState = uiState.copy(message = "Укажите название комбинации")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_enter_combo_name))
             return
         }
         viewModelScope.launch {
             repository.saveCombo(combo.copy(name = combo.name.trim()), editingComboStepIds)
-            uiState = uiState.copy(screen = Screen.Combos(combo.characterId), message = "Комбинация сохранена")
+            uiState = uiState.copy(
+                screen = Screen.Combos(combo.characterId),
+                message = UiMessage(R.string.msg_combo_saved),
+            )
         }
     }
 
     fun saveComboStep(step: ComboStep, addToCurrentCombo: Boolean = false) {
         if (step.name.isBlank()) {
-            uiState = uiState.copy(message = "Укажите название шага")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_enter_step_name))
             return
         }
         viewModelScope.launch {
@@ -1391,7 +1592,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             if (addToCurrentCombo && step.id !in editingComboStepIds) {
                 editingComboStepIds = editingComboStepIds + step.id
             }
-            uiState = uiState.copy(message = "Шаг сохранён")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_step_saved))
         }
     }
 
@@ -1399,7 +1600,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.deleteComboStep(stepId)
             editingComboStepIds = editingComboStepIds - stepId
-            uiState = uiState.copy(message = "Шаг удалён")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_step_deleted))
         }
     }
 
@@ -1417,7 +1618,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteCombo(comboId: String, characterId: String) {
         viewModelScope.launch {
             repository.deleteCombo(comboId)
-            uiState = uiState.copy(screen = Screen.Combos(characterId), message = "Комбинация удалена")
+            uiState = uiState.copy(
+                screen = Screen.Combos(characterId),
+                message = UiMessage(R.string.msg_combo_deleted),
+            )
         }
     }
 
@@ -1425,7 +1629,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             val combo = repository.getComboWithSteps(comboId)
             if (combo == null || combo.steps.isEmpty()) {
-                uiState = uiState.copy(message = "Добавьте хотя бы один шаг в комбинацию")
+                uiState = uiState.copy(message = UiMessage(R.string.msg_combo_needs_step))
                 return@launch
             }
             // Формулы шагов вычисляются по текущим характеристикам персонажа.
@@ -1440,18 +1644,18 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun saveInventoryItem(item: InventoryItem) {
         if (item.name.isBlank() || item.quantity <= 0) {
-            uiState = uiState.copy(message = "Укажите название и положительное количество")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_enter_positive_number))
             return
         }
         val normalized = item.normalized()
         if (normalized.attuned && !canAttune(normalized.characterId, normalized.id)) {
             val limit = getCharacter(normalized.characterId)?.maxAttunedItems ?: 0
-            uiState = uiState.copy(message = "Достигнут лимит настройки ($limit)")
+            uiState = uiState.copy(message = UiMessage.of(R.string.msg_attunement_limit, limit))
             return
         }
         viewModelScope.launch {
             repository.saveInventoryItem(normalized)
-            uiState = uiState.copy(message = "Предмет сохранён")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_item_saved))
         }
     }
 
@@ -1473,7 +1677,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteInventoryItem(itemId: String) {
         viewModelScope.launch {
             repository.deleteInventoryItem(itemId)
-            uiState = uiState.copy(message = "Предмет удалён")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_item_deleted))
         }
     }
 
@@ -1494,7 +1698,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             if (!item.requiresAttunement) return@launch
             if (!item.attuned && !canAttune(item.characterId, item.id)) {
                 val limit = getCharacter(item.characterId)?.maxAttunedItems ?: 0
-                uiState = uiState.copy(message = "Достигнут лимит настройки ($limit)")
+                uiState = uiState.copy(message = UiMessage.of(R.string.msg_attunement_limit, limit))
                 return@launch
             }
             repository.saveInventoryItem(item.copy(attuned = !item.attuned))
@@ -1506,7 +1710,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val attunedCount = uiState.inventoryItems.count { it.characterId == characterId && it.attuned }
         if (newLimit < attunedCount) {
             uiState = uiState.copy(
-                message = "Нельзя установить лимит $newLimit: сейчас настроено $attunedCount предметов",
+                message = UiMessage.of(R.string.msg_attunement_limit_low, newLimit, attunedCount),
             )
             return
         }
@@ -1519,7 +1723,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val character = getCharacter(characterId) ?: return
         val updated = character.coins.toMutableMap()
         if (subtract && changes.any { (coin, value) -> (updated[coin.ordinal] ?: 0) < value }) {
-            uiState = uiState.copy(message = "Недостаточно монет для этой операции")
+            uiState = uiState.copy(message = UiMessage(R.string.msg_not_enough_coins))
             return
         }
         changes.forEach { (coin, value) ->

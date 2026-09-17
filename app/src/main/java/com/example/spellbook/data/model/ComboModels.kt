@@ -1,23 +1,25 @@
 package com.example.spellbook.data.model
 
+import androidx.annotation.StringRes
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.spellbook.R
 import java.util.UUID
 
 val COMBO_DICE_SIDES = listOf(4, 6, 8, 10, 12, 20, 100)
 
-enum class ComboStepType(val label: String) {
-    DICE("Кубики"),
-    CONSTANT("Число"),
+enum class ComboStepType(@param:StringRes val labelRes: Int) {
+    DICE(R.string.combo_step_dice),
+    CONSTANT(R.string.combo_step_constant),
 }
 
-enum class ComboRollMode(val label: String) {
-    NORMAL("Обычный бросок"),
-    MAXIMUM("Максимальный урон"),
-    CRITICAL_CLASSIC("Классический крит"),
-    CRITICAL_HOMEBREW("Homebrew крит"),
+enum class ComboRollMode(@param:StringRes val labelRes: Int) {
+    NORMAL(R.string.combo_mode_normal),
+    MAXIMUM(R.string.combo_mode_maximum),
+    CRITICAL_CLASSIC(R.string.combo_mode_crit_classic),
+    CRITICAL_HOMEBREW(R.string.combo_mode_crit_homebrew),
 }
 
 @Entity(

@@ -1,5 +1,7 @@
 package com.example.spellbook.data
 
+import androidx.annotation.StringRes
+import com.example.spellbook.R
 import com.example.spellbook.data.model.Spell
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -9,8 +11,17 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
-/** Ошибка загрузки заклинания с dnd.su с понятным пользователю сообщением. */
-class DndSuException(message: String, cause: Throwable? = null) : Exception(message, cause)
+/**
+ * Ошибка загрузки с dnd.su с понятным пользователю сообщением.
+ *
+ * Текст хранится как ресурс с аргументами: слой данных не знает языка интерфейса,
+ * а сообщение собирается непосредственно перед показом.
+ */
+class DndSuException(
+    @param:StringRes val messageRes: Int,
+    val args: List<Any> = emptyList(),
+    cause: Throwable? = null,
+) : Exception("dnd.su error: res=$messageRes", cause)
 
 /**
  * Загружает и разбирает заклинание по ссылке на dnd.su.
@@ -44,16 +55,13 @@ object DndSuLoader {
     suspend fun loadFeat(url: String): ParsedFeat = withContext(Dispatchers.IO) {
         val cleanUrl = url.trim()
         if (!isFeatUrl(cleanUrl)) {
-            throw DndSuException("Ссылка должна вести на черту с сайта dnd.su")
+            throw DndSuException(R.string.dndsu_link_must_be_feat)
         }
         val html = fetchHtml(cleanUrl)
         try {
             DndSuFeatParser.parse(html)
         } catch (e: Exception) {
-            throw DndSuException(
-                "Не удалось распознать черту на странице. Убедитесь, что ссылка ведёт на черту dnd.su.",
-                e,
-            )
+            throw DndSuException(R.string.dndsu_feat_parse_failed, cause = e)
         }
     }
 
@@ -65,7 +73,7 @@ object DndSuLoader {
     suspend fun load(url: String): Spell = withContext(Dispatchers.IO) {
         val cleanUrl = url.trim()
         if (!isSpellUrl(cleanUrl)) {
-            throw DndSuException("Ссылка должна вести на заклинание с сайта dnd.su")
+            throw DndSuException(R.string.msg_link_must_be_dndsu)
         }
 
         val html = fetchHtml(cleanUrl)
@@ -73,10 +81,7 @@ object DndSuLoader {
         try {
             DndSuSpellParser.parse(html)
         } catch (e: Exception) {
-            throw DndSuException(
-                "Не удалось распознать заклинание на странице. Убедитесь, что ссылка ведёт на заклинание dnd.su.",
-                e,
-            )
+            throw DndSuException(R.string.dndsu_spell_parse_failed, cause = e)
         }
     }
 
@@ -88,16 +93,15 @@ object DndSuLoader {
             .get()
             .outerHtml()
     } catch (e: HttpStatusException) {
-        throw DndSuException(
-            if (e.statusCode == HTTP_NOT_FOUND) "Страница не найдена (404). Проверьте ссылку."
-            else "Сайт вернул ошибку ${e.statusCode}.",
-            e,
-        )
+        if (e.statusCode == HTTP_NOT_FOUND) {
+            throw DndSuException(R.string.dndsu_not_found, cause = e)
+        }
+        throw DndSuException(R.string.dndsu_http_error, listOf(e.statusCode), e)
     } catch (e: UnknownHostException) {
-        throw DndSuException("Нет подключения к интернету или сайт недоступен.", e)
+        throw DndSuException(R.string.dndsu_no_connection, cause = e)
     } catch (e: SocketTimeoutException) {
-        throw DndSuException("Превышено время ожидания. Попробуйте ещё раз.", e)
+        throw DndSuException(R.string.dndsu_timeout, cause = e)
     } catch (e: IOException) {
-        throw DndSuException("Не удалось загрузить страницу: ${e.localizedMessage ?: "ошибка сети"}", e)
+        throw DndSuException(R.string.dndsu_page_load_failed, cause = e)
     }
 }

@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.spellbook.data.model.NOTE_DEFAULT_FONT_SIZE
 import com.example.spellbook.data.model.NOTE_FONT_SIZES
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.model.NoteCharStyle
 import com.example.spellbook.data.model.NoteListStyle
@@ -97,17 +99,20 @@ fun NotesScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Заметки",
+                title = stringResource(R.string.notes_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Добавить блок")
+                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.notes_add_block))
             }
         },
     ) { padding ->
@@ -120,12 +125,12 @@ fun NotesScreen(
                 ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        "Заметок пока нет",
+                        stringResource(R.string.notes_empty_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Разделяйте записи на блоки: сюжет, зацепки, NPC.",
+                        stringResource(R.string.notes_empty_text),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -161,7 +166,7 @@ fun NotesScreen(
 
     if (showAddDialog) {
         BlockTitleDialog(
-            title = "Новый блок",
+            title = stringResource(R.string.notes_new_block),
             initial = "",
             onDismiss = { showAddDialog = false },
             onConfirm = { onAddBlock(it); showAddDialog = false },
@@ -172,16 +177,18 @@ fun NotesScreen(
             onDismissRequest = { blockPendingDeletion = null },
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp,
-            title = { Text("Удалить блок?") },
-            text = { Text("Блок «${block.title}» и его содержимое будут удалены.") },
+            title = { Text(stringResource(R.string.notes_delete_title)) },
+            text = { Text(stringResource(R.string.notes_delete_text, block.title)) },
             confirmButton = {
                 Button(onClick = {
                     onDeleteBlock(block.id)
                     blockPendingDeletion = null
-                }) { Text("Удалить") }
+            }) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { blockPendingDeletion = null }) { Text("Отмена") }
+            TextButton(onClick = { blockPendingDeletion = null }) {
+                Text(stringResource(R.string.action_cancel))
+            }
             },
         )
     }
@@ -214,7 +221,7 @@ private fun NoteBlockCard(
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        block.title.ifBlank { "Без названия" },
+                    block.title.ifBlank { stringResource(R.string.notes_untitled) },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -229,14 +236,22 @@ private fun NoteBlockCard(
                     }
                 }
                 IconButton(onClick = { renaming = true }) {
-                    Icon(Icons.Default.TextFields, contentDescription = "Переименовать блок")
+                Icon(
+                    Icons.Default.TextFields,
+                    contentDescription = stringResource(R.string.notes_rename_block),
+                )
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Удалить блок")
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.notes_delete_block),
+                )
                 }
                 Icon(
                     imageVector = if (block.collapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                    contentDescription = if (block.collapsed) "Развернуть" else "Свернуть",
+                contentDescription = stringResource(
+                    if (block.collapsed) R.string.action_expand else R.string.action_collapse,
+                ),
                     modifier = Modifier.padding(end = 12.dp),
                 )
             }
@@ -264,7 +279,7 @@ private fun NoteBlockCard(
 
     if (renaming) {
         BlockTitleDialog(
-            title = "Название блока",
+            title = stringResource(R.string.notes_rename_block),
             initial = block.title,
             onDismiss = { renaming = false },
             onConfirm = { onSaveBlock(block.copy(title = it)); renaming = false },
@@ -304,7 +319,7 @@ private fun ParagraphEditor(
                 }
             },
             visualTransformation = NoteStyleTransformation(paragraph),
-            placeholder = { Text("Текст заметки") },
+                placeholder = { Text(stringResource(R.string.notes_text_hint)) },
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
@@ -448,7 +463,7 @@ private fun FormattingBar(
     ) {
         FormatToggle(
             icon = Icons.Default.FormatBold,
-            description = "Жирный",
+            description = stringResource(R.string.format_bold),
             active = hasSelection && paragraph.rangeHas(start, end) { it.bold },
             enabled = hasSelection,
         ) {
@@ -457,7 +472,7 @@ private fun FormattingBar(
         }
         FormatToggle(
             icon = Icons.Default.FormatItalic,
-            description = "Курсив",
+            description = stringResource(R.string.format_italic),
             active = hasSelection && paragraph.rangeHas(start, end) { it.italic },
             enabled = hasSelection,
         ) {
@@ -466,7 +481,7 @@ private fun FormattingBar(
         }
         FormatToggle(
             icon = Icons.Default.FormatUnderlined,
-            description = "Подчёркнутый",
+            description = stringResource(R.string.format_underline),
             active = hasSelection && paragraph.rangeHas(start, end) { it.underline },
             enabled = hasSelection,
         ) {
@@ -477,7 +492,7 @@ private fun FormattingBar(
         Box {
             FormatToggle(
                 icon = Icons.Default.TextFields,
-                description = "Размер шрифта",
+                description = stringResource(R.string.format_font_size),
                 active = false,
                 enabled = hasSelection,
             ) { sizeMenuOpen = true }
@@ -501,13 +516,13 @@ private fun FormattingBar(
 
         FormatToggle(
             icon = Icons.AutoMirrored.Filled.FormatListBulleted,
-            description = "Маркированный список",
+            description = stringResource(R.string.format_bullet_list),
             active = currentListStyle == NoteListStyle.BULLET,
             enabled = true,
         ) { onToggleList(NoteListStyle.BULLET) }
         FormatToggle(
             icon = Icons.Default.FormatListNumbered,
-            description = "Нумерованный список",
+            description = stringResource(R.string.format_numbered_list),
             active = currentListStyle == NoteListStyle.NUMBERED,
             enabled = true,
         ) { onToggleList(NoteListStyle.NUMBERED) }
@@ -558,13 +573,17 @@ private fun BlockTitleDialog(
             OutlinedTextField(
                 value = value,
                 onValueChange = { value = it },
-                label = { Text("Название") },
+        label = { Text(stringResource(R.string.notes_title_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
         },
-        confirmButton = { Button(onClick = { onConfirm(value) }) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = {
+            Button(onClick = { onConfirm(value) }) { Text(stringResource(R.string.action_save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 

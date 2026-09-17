@@ -188,13 +188,13 @@ class SpellQueryTest {
     }
 
     @Test
-    fun `SpellSort options contain every sort variant`() {
-        assertEquals(SpellSort.entries.map { it.name to it.label }, SpellSort.options)
+    fun `every sort variant has a label resource`() {
+        assertTrue(SpellSort.entries.all { it.labelRes != 0 })
     }
 
     @Test
     fun `casting time codes match activation codes`() {
-        val activationCodes = SpellOptions.activationTypes.map { it.first }
+        val activationCodes = SpellOptions.activationTypes.map { it.code }
 
         assertTrue(castingTimeOptions.all { it.first in activationCodes })
     }

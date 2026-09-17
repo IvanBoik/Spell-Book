@@ -87,8 +87,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.spellbook.data.model.Character
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.model.CoinType
 import com.example.spellbook.data.model.INVENTORY_CATEGORIES
+import com.example.spellbook.data.model.DEFAULT_ITEM_RARITY
 import com.example.spellbook.data.model.ITEM_RARITIES
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.ui.components.DndTopBar
@@ -96,12 +99,12 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private enum class InventoryTab { ITEMS, MAGIC }
-private enum class InventorySort(val label: String) {
-    MANUAL("Пользовательский порядок"),
-    DATE("По дате"),
-    NAME("По названию"),
-    QUANTITY("По количеству"),
-    RARITY("По редкости"),
+private enum class InventorySort(@param:androidx.annotation.StringRes val labelRes: Int) {
+    MANUAL(R.string.inventory_sort_manual),
+    DATE(R.string.inventory_sort_date),
+    NAME(R.string.inventory_sort_name),
+    QUANTITY(R.string.inventory_sort_quantity),
+    RARITY(R.string.inventory_sort_rarity),
 }
 
 /** Порядок отображения монет: от наименьшего номинала к наибольшему. */
@@ -213,12 +216,15 @@ fun InventoryScreen(
                             onFocusLost = { showSearch = false },
                         )
                     } else {
-                        Text("Инвентарь")
+                        Text(stringResource(R.string.inventory_title))
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
                 actions = {
@@ -234,15 +240,23 @@ fun InventoryScreen(
                     }) {
                         Icon(
                             imageVector = if (showSearch) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = if (showSearch) "Закрыть поиск" else "Поиск",
+                            contentDescription = stringResource(
+                                if (showSearch) R.string.search_close else R.string.search_open,
+                            ),
                         )
                     }
                     IconButton(onClick = { showFilters = !showFilters }) {
-                        Icon(Icons.Default.FilterList, contentDescription = "Фильтры")
+                        Icon(
+                            Icons.Default.FilterList,
+                            contentDescription = stringResource(R.string.filter_title),
+                        )
                     }
                     Box {
                         IconButton(onClick = { showSort = true }) {
-                            Icon(Icons.Default.Sort, contentDescription = "Сортировка")
+                            Icon(
+                                Icons.Default.Sort,
+                                contentDescription = stringResource(R.string.sort_title),
+                            )
                         }
                         DropdownMenu(
                             expanded = showSort,
@@ -252,7 +266,7 @@ fun InventoryScreen(
                         ) {
                             InventorySort.entries.forEach { option ->
                                 DropdownMenuItem(
-                                    text = { Text(option.label) },
+                                    text = { Text(stringResource(option.labelRes)) },
                                     onClick = {
                                         sort = option
                                         showSort = false
@@ -276,7 +290,12 @@ fun InventoryScreen(
                         isMagic = tab == InventoryTab.MAGIC,
                     )
                 },
-            ) { Icon(Icons.Default.Add, contentDescription = "Добавить предмет") }
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.inventory_add_item),
+                )
+            }
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
@@ -289,7 +308,7 @@ fun InventoryScreen(
                         tab = InventoryTab.ITEMS
                         selectedCategories = emptySet()
                     },
-                    text = { Text("Инвентарь") },
+                    text = { Text(stringResource(R.string.inventory_tab_items)) },
                 )
                 Tab(
                     selected = tab == InventoryTab.MAGIC,
@@ -297,7 +316,7 @@ fun InventoryScreen(
                         tab = InventoryTab.MAGIC
                         selectedCategories = emptySet()
                     },
-                    text = { Text("Магические") },
+                    text = { Text(stringResource(R.string.inventory_tab_magic)) },
                 )
             }
 
@@ -349,7 +368,13 @@ fun InventoryScreen(
                 if (filtered.isEmpty()) {
                     item {
                         Text(
-                            if (tab == InventoryTab.ITEMS) "Обычных предметов пока нет" else "Магических предметов пока нет",
+                stringResource(
+                    if (tab == InventoryTab.ITEMS) {
+                        R.string.inventory_items_empty
+                    } else {
+                        R.string.inventory_magic_empty
+                    },
+                ),
                             modifier = Modifier.fillMaxWidth().padding(32.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
@@ -448,21 +473,21 @@ fun InventoryScreen(
             onDismissRequest = { itemPendingDeletion = null },
             containerColor = MaterialTheme.colorScheme.surface,
             tonalElevation = 0.dp,
-            title = { Text("Удалить предмет?") },
+            title = { Text(stringResource(R.string.inventory_delete_title)) },
             text = {
-                Text("Количество «${item.name}» станет равно нулю. Удалить предмет из инвентаря?")
+                Text(stringResource(R.string.inventory_delete_text, item.name))
             },
             confirmButton = {
                 Button(onClick = {
                     onDeleteItem(item.id)
                     itemPendingDeletion = null
                 }) {
-                    Text("Удалить")
+                Text(stringResource(R.string.action_delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { itemPendingDeletion = null }) {
-                    Text("Отмена")
+                Text(stringResource(R.string.action_cancel))
                 }
             },
         )
@@ -477,7 +502,7 @@ fun InventoryScreen(
     }
     if (showAttunementLimit) {
         NumberDialog(
-            title = "Лимит настроенных предметов",
+            title = stringResource(R.string.inventory_attunement_title),
             initial = character.maxAttunedItems,
             onDismiss = { showAttunementLimit = false },
             onSave = { onSetAttunementLimit(it); showAttunementLimit = false },
@@ -507,7 +532,9 @@ private fun InventorySearchField(
     TextField(
         value = query,
         onValueChange = onQueryChange,
-        placeholder = { Text("Название", color = onColor.copy(alpha = 0.6f)) },
+        placeholder = {
+            Text(stringResource(R.string.inventory_name_hint), color = onColor.copy(alpha = 0.6f))
+        },
         singleLine = true,
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,
@@ -553,13 +580,16 @@ private fun WalletCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Text(
-                        text = coin.shortLabel,
+                        text = stringResource(coin.shortLabelRes),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = compactCoinAmount(character.coins[coin.ordinal] ?: 0),
+                        text = compactCoinAmount(
+                            amount = character.coins[coin.ordinal] ?: 0,
+                            thousandSuffix = stringResource(R.string.inventory_thousand_suffix),
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(MaterialTheme.shapes.small)
@@ -581,8 +611,10 @@ private fun WalletCard(
 /**
  * Сокращает большие суммы монет с округлением вниз до одной десятичной позиции:
  * 2 199 → 2,1к; 15 582 → 15,5к; 1 000 000 → 1кк.
+ *
+ * @param thousandSuffix подпись «тысячи» на языке интерфейса.
  */
-private fun compactCoinAmount(amount: Int): String {
+private fun compactCoinAmount(amount: Int, thousandSuffix: String): String {
     val safeAmount = amount.coerceAtLeast(0).toLong()
     if (safeAmount < COIN_COMPACT_BASE) return safeAmount.toString()
 
@@ -590,7 +622,7 @@ private fun compactCoinAmount(amount: Int): String {
     var suffix = ""
     while (safeAmount / scale >= COIN_COMPACT_BASE) {
         scale *= COIN_COMPACT_BASE
-        suffix += "к"
+        suffix += thousandSuffix
     }
 
     val whole = safeAmount / scale
@@ -613,10 +645,23 @@ private fun AttunementSummary(current: Int, maximum: Int, onEdit: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Настройка", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("$current из $maximum", color = if (current >= maximum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    stringResource(R.string.inventory_attunement),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    stringResource(R.string.inventory_attunement_progress, current, maximum),
+                    color = if (current >= maximum) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Изменить лимит") }
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.inventory_edit_limit),
+                    )
+                }
         }
     }
 }
@@ -659,14 +704,14 @@ private fun SwipeableInventoryCard(
             ) {
                 InventoryActionButton(
                     icon = Icons.Default.Edit,
-                    description = "Редактировать",
+                    description = stringResource(R.string.inventory_edit_item),
                     background = INVENTORY_EDIT_ACTION_COLOR,
                     contentColor = Color.Black,
                     onClick = onEdit,
                 )
                 InventoryActionButton(
                     icon = Icons.Default.Delete,
-                    description = "Удалить",
+                    description = stringResource(R.string.inventory_delete_item),
                     background = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError,
                     onClick = onDelete,
@@ -723,19 +768,30 @@ private fun SwipeableInventoryCard(
                             Text(item.rarity, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    IconButton(onClick = onMinus) { Icon(Icons.Default.Remove, contentDescription = "Уменьшить") }
+                    IconButton(onClick = onMinus) {
+                        Icon(
+                            Icons.Default.Remove,
+                            contentDescription = stringResource(R.string.inventory_decrease),
+                        )
+                    }
                     Text(
                         item.quantity.toString(),
                         modifier = Modifier.clickable(onClick = onQuantityClick).padding(6.dp),
                         fontWeight = FontWeight.Bold,
                     )
-                    IconButton(onClick = onPlus) { Icon(Icons.Default.Add, contentDescription = "Увеличить") }
+                    IconButton(onClick = onPlus) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = stringResource(R.string.inventory_increase),
+                        )
+                    }
                 }
                 if (item.isMagic) {
+                    // Кружок-маркер не переводится: это чисто визуальный индикатор.
                     val status = when {
-                        !item.requiresAttunement -> "Настройка не требуется"
-                        item.attuned -> "● Настроен"
-                        else -> "○ Не настроен"
+                        !item.requiresAttunement -> stringResource(R.string.inventory_no_attunement)
+                        item.attuned -> "● " + stringResource(R.string.inventory_attuned)
+                        else -> "○ " + stringResource(R.string.inventory_not_attuned)
                     }
                     Text(
                         status,
@@ -794,13 +850,48 @@ private fun InventoryItemDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        title = { Text(if (initial.name.isBlank()) "Новый предмет" else "Редактирование предмета") },
+        title = {
+            Text(
+                stringResource(
+                    if (initial.name.isBlank()) {
+                        R.string.inventory_new_item
+                    } else {
+                        R.string.inventory_edit_item_title
+                    },
+                ),
+            )
+        },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                item { OutlinedTextField(name, { name = it }, label = { Text("Название") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(quantity, { quantity = it.filter(Char::isDigit) }, label = { Text("Количество") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { OutlinedTextField(description, { description = it }, label = { Text("Описание") }, minLines = 3, modifier = Modifier.fillMaxWidth()) }
-                item { Text("Категории (необязательно)", fontWeight = FontWeight.Bold) }
+            item {
+                OutlinedTextField(
+                    name,
+                    { name = it },
+                    label = { Text(stringResource(R.string.inventory_name_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                OutlinedTextField(
+                    quantity,
+                    { quantity = it.filter(Char::isDigit) },
+                    label = { Text(stringResource(R.string.inventory_quantity)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                OutlinedTextField(
+                    description,
+                    { description = it },
+                    label = { Text(stringResource(R.string.field_description)) },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item { Text(stringResource(R.string.inventory_categories), fontWeight = FontWeight.Bold) }
                 item {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         INVENTORY_CATEGORIES.forEach { category ->
@@ -816,7 +907,9 @@ private fun InventoryItemDialog(
                 if (isMagic) {
                     item {
                         Box {
-                            OutlinedButton(onClick = { showRarity = true }, modifier = Modifier.fillMaxWidth()) { Text("Редкость: $rarity") }
+            OutlinedButton(onClick = { showRarity = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.inventory_rarity, rarity))
+            }
                             DropdownMenu(expanded = showRarity, onDismissRequest = { showRarity = false }, containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
                                 ITEM_RARITIES.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { rarity = option; showRarity = false }) }
                             }
@@ -824,7 +917,10 @@ private fun InventoryItemDialog(
                     }
                     item {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Требует настройки", modifier = Modifier.weight(1f))
+                    Text(
+                        stringResource(R.string.inventory_requires_attunement),
+                        modifier = Modifier.weight(1f),
+                    )
                             Switch(
                                 checked = requiresAttunement,
                                 onCheckedChange = { requiresAttunement = it; if (!it) attuned = false },
@@ -835,7 +931,7 @@ private fun InventoryItemDialog(
                     if (requiresAttunement) {
                         item {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("Настроен", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.inventory_is_attuned), modifier = Modifier.weight(1f))
                                 Switch(
                                     checked = attuned,
                                     onCheckedChange = { attuned = it },
@@ -857,14 +953,16 @@ private fun InventoryItemDialog(
                         description = description,
                         categories = categories.toList(),
                         isMagic = initial.isMagic,
-                        rarity = if (initial.isMagic) rarity else "Без редкости",
+                            rarity = if (initial.isMagic) rarity else DEFAULT_ITEM_RARITY,
                         requiresAttunement = initial.isMagic && requiresAttunement,
                         attuned = initial.isMagic && requiresAttunement && attuned,
                     ))
                 },
-            ) { Text("Сохранить") }
+            ) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }
 
@@ -887,13 +985,19 @@ private fun ItemDetailsDialog(item: InventoryItem, onDismiss: () -> Unit) {
         title = { Text(item.name) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Количество: ${item.quantity}")
+                Text(stringResource(R.string.inventory_quantity_value, item.quantity))
                 if (item.categories.isNotEmpty()) Text(item.categories.joinToString(" · "), color = MaterialTheme.colorScheme.primary)
-                if (item.isMagic) Text("Редкость: ${item.rarity}")
-                Text(item.description.ifBlank { "Описание не указано" }, color = if (item.description.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                if (item.isMagic) Text(stringResource(R.string.inventory_rarity_value, item.rarity))
+                Text(
+                    item.description.ifBlank { stringResource(R.string.inventory_no_description) },
+                    color = if (item.description.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.onSurface,
+                )
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Закрыть") } },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+        },
     )
 }
 
@@ -905,7 +1009,7 @@ private fun ExactCoinDialog(
     onSave: (Int) -> Unit,
 ) {
     NumberDialog(
-        title = "${coin.label}: точное количество",
+        title = stringResource(R.string.inventory_coin_exact, stringResource(coin.labelRes)),
         initial = initial,
         onDismiss = onDismiss,
         onSave = onSave,
@@ -941,7 +1045,13 @@ internal fun NumberDialog(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             )
         },
-        confirmButton = { Button(onClick = { onSave(value.toIntOrNull() ?: 0) }) { Text("Сохранить") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        confirmButton = {
+            Button(onClick = { onSave(value.toIntOrNull() ?: 0) }) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
     )
 }

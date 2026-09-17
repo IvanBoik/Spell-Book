@@ -1,12 +1,23 @@
 package com.example.spellbook.data
 
+import androidx.annotation.StringRes
+import com.example.spellbook.R
 import com.example.spellbook.data.model.AbilityType
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.ComboRollMode
 import kotlin.random.Random
 
-/** Переменная формулы: код для вставки и понятное описание для подсказки. */
-data class FormulaVariable(val code: String, val label: String)
+/**
+ * Переменная формулы: код для вставки и понятное описание для подсказки.
+ *
+ * [abilityLabelRes] задан, если переменная — модификатор характеристики:
+ * тогда подпись складывается из двух ресурсов («Модификатор: Сила»).
+ */
+data class FormulaVariable(
+    val code: String,
+    @param:StringRes val labelRes: Int,
+    @param:StringRes val abilityLabelRes: Int? = null,
+)
 
 /**
  * Результат вычисления выражения.
@@ -49,30 +60,38 @@ object StatFormula {
 
     /** Список подсказок, который показывается после ввода `[`. */
     val SUGGESTIONS: List<FormulaVariable> = buildList {
-        add(FormulaVariable("pb", "Бонус мастерства"))
-        add(FormulaVariable("level", "Уровень персонажа"))
+        add(FormulaVariable("pb", R.string.formula_proficiency_bonus))
+        add(FormulaVariable("level", R.string.formula_character_level))
         AbilityType.entries.forEach { ability ->
-            add(FormulaVariable(ABILITY_CODES[ability.ordinal], "Модификатор: ${ability.label}"))
+            add(
+                FormulaVariable(
+                    code = ABILITY_CODES[ability.ordinal],
+                    labelRes = R.string.formula_ability_modifier,
+                    abilityLabelRes = ability.labelRes,
+                ),
+            )
         }
     }
 
     /** Короткие читаемые названия переменных — для отображения формулы пользователю. */
-    private val VARIABLE_NAMES: Map<String, String> = buildMap {
-        put("pb", "Бонус мастерства")
-        put("level", "Уровень")
+    val VARIABLE_NAME_RES: Map<String, Int> = buildMap {
+        put("pb", R.string.formula_proficiency_bonus)
+        put("level", R.string.formula_level)
         AbilityType.entries.forEach { ability ->
-            put(ABILITY_CODES[ability.ordinal], ability.label)
+            put(ABILITY_CODES[ability.ordinal], ability.labelRes)
         }
     }
 
     /**
      * Заменяет коды переменных читаемыми названиями: `2d6 + [str]` → `2d6 + Сила`.
      * Неизвестные переменные остаются как есть — так видна опечатка в формуле.
+     *
+     * @param names готовые подписи на языке интерфейса (код → название).
      */
-    fun humanize(expression: String): String =
+    fun humanize(expression: String, names: Map<String, String>): String =
         VARIABLE_PATTERN.replace(expression) { match ->
             val code = match.groupValues[1].trim().lowercase()
-            VARIABLE_NAMES[code] ?: match.value
+            names[code] ?: match.value
         }
 
     private val VARIABLE_PATTERN = Regex("\\[([^]]*)]")

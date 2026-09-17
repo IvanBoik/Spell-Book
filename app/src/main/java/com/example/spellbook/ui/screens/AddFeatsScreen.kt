@@ -31,8 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.ui.components.DndTopBar
 
@@ -59,10 +61,13 @@ fun AddFeatsScreen(
     Scaffold(
         topBar = {
             DndTopBar(
-                title = "Добавить черты",
+                title = stringResource(R.string.feats_add_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
             )
@@ -72,14 +77,14 @@ fun AddFeatsScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Поиск по названию") },
+                label = { Text(stringResource(R.string.feats_search_hint)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             if (libraryFeats.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Text(
-                        "В библиотеке пока нет черт. Загрузите черту по ссылке с dnd.su или создайте вручную.",
+                        stringResource(R.string.feats_library_empty),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -134,7 +139,10 @@ private fun SelectableFeatRow(
                 }
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Удалить из библиотеки")
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = stringResource(R.string.feats_delete_from_library),
+                )
             }
         }
     }

@@ -57,13 +57,17 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.measureLabel
+import com.example.spellbook.ui.spellLevelLabel
+import com.example.spellbook.ui.spellOptionLabel
 import androidx.compose.ui.unit.sp
 import com.example.spellbook.util.DiceRoller
 import com.example.spellbook.util.HtmlUtils
-import com.example.spellbook.util.RussianPlurals
 
 /** Расстояние между блоками описания и пунктами списка. */
 private val DESCRIPTION_BLOCK_SPACING = 8.dp
@@ -102,18 +106,21 @@ fun SpellDetailsScreen(
                 title = spell.name,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back),
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = onShare) {
-                        Icon(Icons.Default.Share, contentDescription = "Поделиться")
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
                     }
                     IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Редактировать")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
                     }
                     IconButton(onClick = { confirmDelete = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
                     }
                 },
             )
@@ -137,19 +144,20 @@ fun SpellDetailsScreen(
                     fontWeight = FontWeight.Bold,
                 )
 
-                InfoRow("Время накладывания", activationLabel(spell))
-                InfoRow("Длительность", durationLabel(spell))
-                InfoRow("Дистанция", rangeLabel(spell))
-                InfoRow("Компоненты", componentsLabel(spell))
+                InfoRow(stringResource(R.string.spell_casting_time), activationLabel(spell))
+                InfoRow(stringResource(R.string.spell_duration), durationLabel(spell))
+                InfoRow(stringResource(R.string.spell_range), rangeLabel(spell))
+                InfoRow(stringResource(R.string.spell_components), componentsLabel(spell))
                 if (spell.classes.isNotEmpty()) {
-                    InfoRow("Классы", spell.classes.joinToString { SpellOptions.labelFor(SpellOptions.classes, it) })
+                    val classes = spell.classes.map { spellOptionLabel(SpellOptions.classes, it) }
+                    InfoRow(stringResource(R.string.spell_classes), classes.joinToString())
                 }
                 // Часть заклинаний доступна только отдельным подклассам, а не классу целиком.
                 if (spell.subclasses.isNotEmpty()) {
-                    InfoRow("Подклассы", spell.subclasses.joinToString())
+                    InfoRow(stringResource(R.string.spell_subclasses), spell.subclasses.joinToString())
                 }
                 if (spell.source.isNotBlank()) {
-                    InfoRow("Источник", spell.source)
+                    InfoRow(stringResource(R.string.spell_source), spell.source)
                 }
 
                 if (spell.description.isNotBlank()) {
@@ -163,8 +171,12 @@ fun SpellDetailsScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onEdit, modifier = Modifier.weight(1f)) { Text("Редактировать") }
-                    OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) { Text("Выгрузить JSON") }
+                    Button(onClick = onEdit, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.action_edit))
+                    }
+                    OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.spell_export_json))
+                    }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -184,16 +196,16 @@ fun SpellDetailsScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить заклинание?") },
-            text = { Text("«${spell.name}» будет удалено без возможности восстановления.") },
+            title = { Text(stringResource(R.string.spell_delete_title)) },
+            text = { Text(stringResource(R.string.spell_delete_text, spell.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text("Удалить") }
+                }) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Отмена") }
+                TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }
@@ -551,7 +563,10 @@ private fun DiceResultCard(
                     fontWeight = FontWeight.Bold,
                 )
                 IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = stringResource(R.string.action_close),
+                )
                 }
             }
             Text(
@@ -565,7 +580,7 @@ private fun DiceResultCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Итого: ${result.total}",
+                text = stringResource(R.string.roll_total, result.total),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )
@@ -573,42 +588,31 @@ private fun DiceResultCard(
     }
 }
 
-private fun levelLabelDetails(level: Int): String =
-    SpellOptions.levels.firstOrNull { it.first == level }?.second ?: "$level круг"
-
+@Composable
 private fun headerLabel(spell: Spell): String = buildString {
-    append(levelLabelDetails(spell.level))
+    append(spellLevelLabel(spell.level))
     append(" · ")
-    append(SpellOptions.labelFor(SpellOptions.schools, spell.school))
+    append(spellOptionLabel(SpellOptions.schools, spell.school))
     // Уточнение школы идёт сразу за ней в скобках, как в книгах.
     if (spell.schoolNote.isNotBlank()) append(" (${spell.schoolNote})")
-    if (spell.components.ritual) append(" · ритуал")
+    if (spell.components.ritual) append(" · ${stringResource(R.string.spell_ritual)}")
 }
 
-/**
- * Подпись вида «1 минута» / «10 минут». Если для кода нет склоняемых форм
- * («Мгновенная», «Касание» и т. п.), берётся готовая подпись из справочника.
- */
-private fun measureLabel(
-    code: String,
-    value: Int?,
-    options: List<Pair<String, String>>,
-): String {
-    val fallback = SpellOptions.labelFor(options, code)
-    // Единица по умолчанию — одна: «1 действие» читается лучше, чем просто «Действие».
-    val count = value?.takeIf { it > 0 } ?: 1
-    val word = RussianPlurals.forCount(code, count) ?: return fallback
-    return "$count $word"
-}
-
+@Composable
 private fun activationLabel(spell: Spell): String =
     measureLabel(spell.activationType, spell.activationCost, SpellOptions.activationTypes)
 
+@Composable
 private fun durationLabel(spell: Spell): String {
-    val concentration = if (spell.components.concentration) "Концентрация, " else ""
+    val concentration = if (spell.components.concentration) {
+        stringResource(R.string.spell_concentration_prefix)
+    } else {
+        ""
+    }
     return concentration + measureLabel(spell.durationUnits, spell.durationValue, SpellOptions.durationUnits)
 }
 
+@Composable
 private fun rangeLabel(spell: Spell): String =
     measureLabel(spell.rangeUnits, spell.rangeValue, SpellOptions.rangeUnits)
 
