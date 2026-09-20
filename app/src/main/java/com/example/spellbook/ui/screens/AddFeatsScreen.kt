@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.example.spellbook.R
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.imeAwareContentInsets
 
 /**
  * Выбор черт из общей библиотеки для набора персонажа.
@@ -72,6 +73,8 @@ fun AddFeatsScreen(
                 },
             )
         },
+        // При поиске список должен сжиматься, а не уходить под клавиатуру.
+        contentWindowInsets = imeAwareContentInsets,
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
             OutlinedTextField(

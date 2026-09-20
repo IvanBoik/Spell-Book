@@ -39,6 +39,7 @@ import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.imeAwareContentInsets
 import com.example.spellbook.ui.spellLevelLabel
 import com.example.spellbook.ui.spellOptionLabel
 
@@ -75,6 +76,8 @@ fun AddSpellsScreen(
                 },
             )
         },
+        // При поиске список должен сжиматься, а не уходить под клавиатуру.
+        contentWindowInsets = imeAwareContentInsets,
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             OutlinedTextField(

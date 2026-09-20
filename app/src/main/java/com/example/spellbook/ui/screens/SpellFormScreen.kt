@@ -42,6 +42,7 @@ import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.DamagePart
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.imeAwareContentInsets
 import com.example.spellbook.ui.components.LabeledSwitchRow
 import com.example.spellbook.ui.components.NumberField
 import com.example.spellbook.ui.components.OptionField
@@ -130,6 +131,8 @@ fun SpellFormScreen(
                 },
             )
         },
+        // Длинная форма: поля внизу иначе оказываются под клавиатурой.
+        contentWindowInsets = imeAwareContentInsets,
     ) { padding ->
         Column(
             modifier = Modifier

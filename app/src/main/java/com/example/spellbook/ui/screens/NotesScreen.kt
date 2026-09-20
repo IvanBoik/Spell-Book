@@ -73,6 +73,7 @@ import com.example.spellbook.data.model.NoteCharStyle
 import com.example.spellbook.data.model.NoteListStyle
 import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.imeAwareContentInsets
 
 private val NOTE_CARD_SHAPE = RoundedCornerShape(12.dp)
 
@@ -115,6 +116,8 @@ fun NotesScreen(
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.notes_add_block))
             }
         },
+        // Длинная заметка не должна уходить под клавиатуру во время набора.
+        contentWindowInsets = imeAwareContentInsets,
     ) { padding ->
         if (blocks.isEmpty()) {
             Column(Modifier.padding(padding).fillMaxSize()) {

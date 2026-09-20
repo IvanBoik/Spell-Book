@@ -81,6 +81,7 @@ import com.example.spellbook.data.model.proficiencyBonusFor
 import com.example.spellbook.data.model.spellSlotsFor
 import com.example.spellbook.data.model.totalLevel
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.imeAwareContentInsets
 
 /** Уровни ячеек заклинаний D&D: 1..9. */
 private val SLOT_LEVELS = (1..9).toList()
@@ -647,6 +648,8 @@ fun CharacterFormScreen(
                 },
             )
         },
+        // Длинная форма: поля внизу иначе оказываются под клавиатурой.
+        contentWindowInsets = imeAwareContentInsets,
     ) { padding ->
         Column(
             modifier = Modifier
