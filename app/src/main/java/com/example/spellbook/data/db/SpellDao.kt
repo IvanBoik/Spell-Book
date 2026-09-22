@@ -16,16 +16,50 @@ interface SpellDao {
     @Query("SELECT * FROM spells ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<Spell>>
 
-    /** Заклинания конкретного персонажа (по таблице связи). */
+    /**
+     * Заклинания конкретного персонажа вместе с его персональными правками.
+     *
+     * Заклинание берётся целиком (`s.*`), а не поколоночно: иначе каждое новое
+     * поле модели пришлось бы не забыть добавить и сюда.
+     */
     @Query(
         """
-        SELECT s.* FROM spells s
+        SELECT s.*, cs.nameOverride AS nameOverride, cs.descriptionOverride AS descriptionOverride
+        FROM spells s
         INNER JOIN character_spells cs ON cs.spellId = s.id
         WHERE cs.characterId = :characterId
         ORDER BY cs.addedAt DESC
         """
     )
-    fun observeForCharacter(characterId: String): Flow<List<Spell>>
+    fun observeForCharacterRaw(characterId: String): Flow<List<SpellWithOverrides>>
+
+    /**
+     * Сохраняет персональную правку заклинания. null в обоих полях
+     * возвращает текст из библиотеки.
+     */
+    @Query(
+        """
+        UPDATE character_spells
+        SET nameOverride = :name, descriptionOverride = :description
+        WHERE characterId = :characterId AND spellId = :spellId
+        """
+    )
+    suspend fun updateOverrides(
+        characterId: String,
+        spellId: String,
+        name: String?,
+        description: String?,
+    )
+
+    /** Есть ли у персонажа персональная правка этого заклинания. */
+    @Query(
+        """
+        SELECT COUNT(*) FROM character_spells
+        WHERE characterId = :characterId AND spellId = :spellId
+          AND (nameOverride IS NOT NULL OR descriptionOverride IS NOT NULL)
+        """
+    )
+    suspend fun countOverrides(characterId: String, spellId: String): Int
 
     @Query("SELECT * FROM spells WHERE id = :spellId LIMIT 1")
     suspend fun getById(spellId: String): Spell?

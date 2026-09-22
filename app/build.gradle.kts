@@ -4,6 +4,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+/** Флаг ручного запуска генератора встроенной библиотеки черт (см. BundledFeatLibraryGenerator). */
+val GENERATE_FEATS_PROPERTY = "generate.feats"
+
 android {
     namespace = "com.example.spellbook"
     compileSdk {
@@ -41,6 +44,13 @@ android {
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Пробрасываем флаги запуска в JVM тестов: по ним включаются инструменты
+        // разработчика (например, генератор встроенной библиотеки черт).
+        unitTests.all { test ->
+            System.getProperty(GENERATE_FEATS_PROPERTY)?.let { value ->
+                test.systemProperty(GENERATE_FEATS_PROPERTY, value)
+            }
+        }
     }
 }
 

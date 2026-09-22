@@ -17,6 +17,11 @@ data class Feat(
     val description: String = "",
     /** Источник: ссылка на dnd.su, если черта загружена оттуда. */
     val source: String = "",
+    /**
+     * Книга, в которой появилась черта, например `Player's Handbook`.
+     * По ней черты группируются в библиотеке; пустая строка — у созданных вручную.
+     */
+    val book: String = "",
     val createdAt: Long = System.currentTimeMillis(),
 )
 
@@ -50,19 +55,44 @@ data class CharacterFeatCrossRef(
     val collapsed: Boolean = false,
     /** Пользовательский порядок; по умолчанию новые черты оказываются сверху. */
     val sortOrder: Long = -System.currentTimeMillis(),
+    /**
+     * Название и описание только для этого персонажа; null — берётся из библиотеки.
+     *
+     * Позволяет править черту «под себя», не затрагивая общую библиотеку
+     * и остальных персонажей, взявших ту же черту.
+     */
+    val nameOverride: String? = null,
+    val descriptionOverride: String? = null,
 )
 
-/** Черта персонажа: данные из библиотеки плюс персональные свёрнутость и порядок. */
+/**
+ * Черта персонажа: данные из библиотеки плюс персональные свёрнутость и порядок.
+ *
+ * [name] и [description] уже учитывают персональную правку, если она есть.
+ */
 data class CharacterFeat(
     val id: String,
     val name: String,
     val description: String,
     val source: String,
+    val book: String,
     val createdAt: Long,
     val collapsed: Boolean,
     val sortOrder: Long,
+    /** Правлена ли черта только для этого персонажа. */
+    val hasPersonalEdit: Boolean = false,
 ) {
     /** Короткая выжимка для свёрнутого состояния. */
     val preview: String
         get() = description.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }.orEmpty()
+
+    /** Представление в виде библиотечной черты — для общих экранов списка и просмотра. */
+    fun asFeat(): Feat = Feat(
+        id = id,
+        name = name,
+        description = description,
+        source = source,
+        book = book,
+        createdAt = createdAt,
+    )
 }

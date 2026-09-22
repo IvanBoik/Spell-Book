@@ -1,10 +1,7 @@
 package com.example.spellbook.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,7 +33,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,13 +43,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import com.example.spellbook.R
 import com.example.spellbook.data.model.CharacterFeat
-import com.example.spellbook.data.model.Feat
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.EditScope
+import com.example.spellbook.ui.components.EditScopeDialog
 import com.example.spellbook.ui.components.dragToReorder
 import com.example.spellbook.ui.components.rememberDragReorderState
 
@@ -72,7 +68,8 @@ private val FEAT_DRAG_STEP = 72.dp
 fun FeatsScreen(
     feats: List<CharacterFeat>,
     onAddFeat: (name: String, description: String) -> Unit,
-    onSaveFeat: (Feat) -> Unit,
+    /** Сохраняет правку черты с учётом выбранной области применения. */
+    onSaveFeat: (featId: String, name: String, description: String, scope: EditScope) -> Unit,
     onToggleCollapsed: (featId: String, collapsed: Boolean) -> Unit,
     onRemoveFromCharacter: (String) -> Unit,
     onReorder: (List<String>) -> Unit,
@@ -80,6 +77,8 @@ fun FeatsScreen(
     onAddFromLibrary: () -> Unit,
     onDiceClick: (String) -> Unit,
     onBack: () -> Unit,
+    /** Имя персонажа — для вопроса, куда сохранить правку. */
+    characterName: String = "",
     sectionsBar: @Composable () -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -87,6 +86,8 @@ fun FeatsScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
     var editingFeat by remember { mutableStateOf<CharacterFeat?>(null) }
     var featPendingDeletion by remember { mutableStateOf<CharacterFeat?>(null) }
+    // Текст, введённый в редакторе и ожидающий выбора области сохранения.
+    var pendingEdit by remember { mutableStateOf<Triple<String, String, String>?>(null) }
 
     val dragState = rememberDragReorderState<String>(step = FEAT_DRAG_STEP)
     val orderedFeats = dragState.order(feats.map { it.id })
@@ -212,17 +213,19 @@ fun FeatsScreen(
             initialDescription = feat.description,
             onDismiss = { editingFeat = null },
             onConfirm = { name, description ->
-                // Черта общая: правка отразится у всех персонажей, которые её взяли.
-                onSaveFeat(
-                    Feat(
-                        id = feat.id,
-                        name = name.trim(),
-                        description = description.trim(),
-                        source = feat.source,
-                        createdAt = feat.createdAt,
-                    ),
-                )
                 editingFeat = null
+                // Черта взята из общей библиотеки — уточняем, кого коснётся правка.
+                pendingEdit = Triple(feat.id, name, description)
+            },
+        )
+    }
+    pendingEdit?.let { (featId, name, description) ->
+        EditScopeDialog(
+            characterName = characterName,
+            onDismiss = { pendingEdit = null },
+            onSelect = { scope ->
+                pendingEdit = null
+                onSaveFeat(featId, name, description, scope)
             },
         )
     }
@@ -329,86 +332,4 @@ private fun FeatCard(
     }
 }
 
-@Composable
-private fun FeatEditorDialog(
-    title: String,
-    initialName: String,
-    initialDescription: String,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit,
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var description by remember { mutableStateOf(initialDescription) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        title = { Text(title) },
-        text = {
-            // При открытой клавиатуре диалог сжимается, поэтому содержимое прокручивается.
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-            label = { Text(stringResource(R.string.form_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-            label = { Text(stringResource(R.string.field_description)) },
-                    minLines = 4,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(name, description) }, enabled = name.isNotBlank()) {
-                Text(stringResource(R.string.action_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
-}
-
-@Composable
-private fun FeatUrlDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var url by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        title = { Text(stringResource(R.string.dndsu_dialog_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-            label = { Text(stringResource(R.string.feats_url_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Text(
-                stringResource(R.string.feats_url_example),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onConfirm(url) }, enabled = url.isNotBlank()) {
-                Text(stringResource(R.string.action_load))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
-}
+// Диалоги добавления и правки черты общие с библиотекой — см. FeatDialogs.kt.

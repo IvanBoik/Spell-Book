@@ -26,6 +26,18 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_BUNDLED_LIBRARY, false)
         set(value) = prefs.edit().putBoolean(KEY_BUNDLED_LIBRARY, value).apply()
 
+    /**
+     * Версия уже импортированного набора черт; 0 — импорта ещё не было.
+     *
+     * Хранится числом, а не флагом: когда встроенный файл обновляется (например,
+     * у черт появилась книга-источник), достаточно поднять версию — и данные подтянутся
+     * у тех, кто уже выполнил импорт раньше. Удалённые пользователем черты при этом
+     * вернутся — это осознанный размен: без повторного импорта новые поля не появятся.
+     */
+    var bundledFeatsVersion: Int
+        get() = prefs.getInt(KEY_BUNDLED_FEATS_VERSION, 0)
+        set(value) = prefs.edit().putInt(KEY_BUNDLED_FEATS_VERSION, value).apply()
+
     /** Язык интерфейса; по умолчанию — системный. */
     var language: AppLanguage
         get() = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, null))
@@ -98,6 +110,7 @@ class AppPreferences(context: Context) {
         const val PREFS_NAME = "spellbook_prefs"
         const val KEY_LAST_CHARACTER = "last_character_id"
         const val KEY_BUNDLED_LIBRARY = "bundled_library_imported"
+        const val KEY_BUNDLED_FEATS_VERSION = "bundled_feats_version"
         const val KEY_LANGUAGE = "app_language"
         const val KEY_THEME = "app_theme"
         const val KEY_GLOBAL_SECTIONS = "sections_global"

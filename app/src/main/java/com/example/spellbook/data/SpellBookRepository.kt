@@ -17,6 +17,7 @@ import com.example.spellbook.data.model.Spell
 import com.example.spellbook.data.model.SpellOrigin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -45,8 +46,24 @@ class SpellBookRepository(
 
     fun observeAllSpells(): Flow<List<Spell>> = spellDao.observeAll()
 
+    /** Заклинания персонажа с учётом его персональных правок текста. */
     fun observeSpellsForCharacter(characterId: String): Flow<List<Spell>> =
-        spellDao.observeForCharacter(characterId)
+        spellDao.observeForCharacterRaw(characterId).map { rows -> rows.map { it.resolved() } }
+
+    /**
+     * Сохраняет текст заклинания только для одного персонажа.
+     * Библиотека и остальные персонажи остаются нетронутыми.
+     */
+    suspend fun setSpellOverrides(
+        characterId: String,
+        spellId: String,
+        name: String?,
+        description: String?,
+    ) = spellDao.updateOverrides(characterId, spellId, name, description)
+
+    /** Есть ли у персонажа собственная версия этого заклинания. */
+    suspend fun hasSpellOverrides(characterId: String, spellId: String): Boolean =
+        spellDao.countOverrides(characterId, spellId) > 0
 
     fun observeSpellIdsForCharacter(characterId: String): Flow<List<String>> =
         spellDao.observeSpellIdsForCharacter(characterId)
@@ -217,7 +234,31 @@ class SpellBookRepository(
 
     suspend fun findFeatByName(name: String): Feat? = featDao.findByName(name.trim())
 
+    /** Черта библиотеки по идентификатору или null. */
+    suspend fun getFeat(featId: String): Feat? = featDao.getById(featId)
+
     suspend fun saveFeat(feat: Feat) = featDao.upsertFeat(feat)
+
+    /**
+     * Сохраняет официальную черту, не создавая дублей по названию.
+     *
+     * Существующая черта обновляется с сохранением `id` и даты создания: так не теряются
+     * привязки к персонажам вместе с их порядком и свёрнутостью. Пользовательские черты
+     * (те, что заведены вручную и не имеют ссылки на источник) не трогаем — их текст
+     * принадлежит пользователю.
+     *
+     * @return была ли запись добавлена или обновлена.
+     */
+    suspend fun saveOfficialFeat(feat: Feat): Boolean {
+        val existing = findFeatByName(feat.name)
+            ?: run {
+                featDao.upsertFeat(feat)
+                return true
+            }
+        if (existing.source.isBlank()) return false
+        featDao.upsertFeat(feat.copy(id = existing.id, createdAt = existing.createdAt))
+        return true
+    }
 
     suspend fun deleteFeat(featId: String) = featDao.deleteFeat(featId)
 
@@ -229,6 +270,17 @@ class SpellBookRepository(
 
     suspend fun setFeatCollapsed(characterId: String, featId: String, collapsed: Boolean) =
         featDao.updateCollapsed(characterId, featId, collapsed)
+
+    /**
+     * Сохраняет текст черты только для одного персонажа.
+     * Библиотека и остальные персонажи остаются нетронутыми.
+     */
+    suspend fun setFeatOverrides(
+        characterId: String,
+        featId: String,
+        name: String?,
+        description: String?,
+    ) = featDao.updateOverrides(characterId, featId, name, description)
 
     suspend fun reorderFeats(characterId: String, orderedIds: List<String>) =
         featDao.reorderFeats(characterId, orderedIds)
@@ -260,9 +312,7 @@ class SpellBookRepository(
      * @return сколько записей добавлено или обновлено; 0 — если файла нет.
      */
     suspend fun importBundledLibrary(): Int = withContext(Dispatchers.IO) {
-        val json = runCatching {
-            context.assets.open(BUNDLED_LIBRARY_ASSET).bufferedReader().use { it.readText() }
-        }.getOrNull() ?: return@withContext 0
+        val json = readAsset(BUNDLED_LIBRARY_ASSET) ?: return@withContext 0
 
         val spells = runCatching { SpellLssCodec.decodeList(json) }.getOrNull().orEmpty()
         var saved = 0
@@ -272,10 +322,37 @@ class SpellBookRepository(
         saved
     }
 
+    /**
+     * Импортирует набор черт, вложенный в приложение как файл в `assets`.
+     *
+     * Работает по тем же правилам, что и встроенная библиотека заклинаний: выполняется
+     * в фоне, черты пользователя не затирает, а ранее загруженные обновляет на месте.
+     *
+     * @return сколько записей добавлено или обновлено; 0 — если файла нет.
+     */
+    suspend fun importBundledFeats(): Int = withContext(Dispatchers.IO) {
+        val json = readAsset(BUNDLED_FEATS_ASSET) ?: return@withContext 0
+
+        val feats = runCatching { FeatLibraryCodec.decodeList(json) }.getOrNull().orEmpty()
+        var saved = 0
+        feats.forEach { feat ->
+            if (saveOfficialFeat(feat)) saved++
+        }
+        saved
+    }
+
+    /** Содержимое файла из `assets` или null, если файла нет либо он нечитаем. */
+    private fun readAsset(name: String): String? = runCatching {
+        context.assets.open(name).bufferedReader().use { it.readText() }
+    }.getOrNull()
+
     private companion object {
         const val LEGACY_FILE_NAME = "spells.json"
 
-        /** Файл со встроенной библиотекой; лежит в `app/src/main/assets`. */
+        /** Файл со встроенной библиотекой заклинаний; лежит в `app/src/main/assets`. */
         const val BUNDLED_LIBRARY_ASSET = "spellbook-library.json"
+
+        /** Файл со встроенной библиотекой черт; там же. */
+        const val BUNDLED_FEATS_ASSET = "feats-library.json"
     }
 }

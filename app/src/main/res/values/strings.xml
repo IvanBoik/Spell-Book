@@ -16,6 +16,26 @@
     <string name="tab_characters">Characters</string>
     <string name="tab_library">Library</string>
 
+    <!-- Library sections -->
+    <string name="library_section_spells">Spells</string>
+    <string name="library_section_feats">Feats</string>
+    <string name="library_feats_title">Feats</string>
+    <string name="library_feats_search">Feat name</string>
+    <string name="library_feats_no_results">No feats match your search</string>
+    <string name="library_feats_other_book">Other</string>
+    <string name="library_feats_delete_text">Feat “%1$s” will be deleted from the library and removed from every character who has it.</string>
+    <string name="library_feats_filter_ability">Increases ability</string>
+
+    <!-- Scope of an edit made from a character screen -->
+    <string name="edit_scope_title">Where to save the change?</string>
+    <string name="edit_scope_text">This entry comes from the shared library. You can change it for everyone or keep your version for this character only.</string>
+    <string name="edit_scope_character">Only for %1$s</string>
+    <string name="edit_scope_everyone">For everyone (library)</string>
+    <string name="edit_personal_badge">Personal version</string>
+    <string name="feats_add_to_character">Add to character</string>
+    <string name="feats_remove_from_character">Remove from character</string>
+
+
     <!-- Common actions -->
     <string name="action_back">Back</string>
     <string name="action_cancel">Cancel</string>
@@ -228,6 +248,7 @@
     <string name="file_read_failed">Could not read the file</string>
     <string name="file_save_failed">Could not save the file</string>
     <string name="export_spell_done">Spell exported</string>
+    <string name="export_feat_done">Feat exported</string>
     <string name="export_character_done">Character sheet exported</string>
     <string name="export_library_done">Library exported</string>
     <string name="exit_confirm">Press again to exit</string>
@@ -661,6 +682,10 @@
     <plurals name="spell_count">
         <item quantity="one">%1$d spell</item>
         <item quantity="other">%1$d spells</item>
+    </plurals>
+    <plurals name="feat_count">
+        <item quantity="one">%1$d feat</item>
+        <item quantity="other">%1$d feats</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d minute</item>

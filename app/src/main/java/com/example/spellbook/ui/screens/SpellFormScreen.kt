@@ -42,6 +42,8 @@ import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.DamagePart
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.EditScope
+import com.example.spellbook.ui.components.EditScopeDialog
 import com.example.spellbook.ui.components.imeAwareContentInsets
 import com.example.spellbook.ui.components.LabeledSwitchRow
 import com.example.spellbook.ui.components.NumberField
@@ -93,11 +95,19 @@ private fun appendTableTemplate(description: String, template: String): String =
 fun SpellFormScreen(
     initial: Spell,
     isNew: Boolean,
-    onSave: (Spell) -> Unit,
+    /** [EditScope] равен null, когда заклинание правится из библиотеки. */
+    onSave: (Spell, EditScope?) -> Unit,
     onBack: () -> Unit,
+    /**
+     * Имя персонажа, из раздела которого открыта форма; null — библиотека.
+     * Если задано, перед сохранением спрашиваем, менять ли текст у всех или только у него.
+     */
+    characterName: String? = null,
 ) {
     var draft by remember(initial.id) { mutableStateOf(initial) }
     var nameError by remember(initial.id) { mutableStateOf(false) }
+    // Заклинание, ожидающее выбора области сохранения.
+    var pendingSave by remember(initial.id) { mutableStateOf<Spell?>(null) }
 
     val levelOptions = spellLevelPairs().map { (level, label) -> level.toString() to label }
     val schoolOptions = spellOptionPairs(SpellOptions.schools)
@@ -446,8 +456,11 @@ fun SpellFormScreen(
                 onClick = {
                     if (draft.name.isBlank()) {
                         nameError = true
+                    } else if (characterName == null) {
+                        onSave(draft, null)
                     } else {
-                        onSave(draft)
+                        // Запись общая для всех персонажей — уточняем, куда сохранить правку.
+                        pendingSave = draft
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -456,6 +469,17 @@ fun SpellFormScreen(
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    pendingSave?.let { spell ->
+        EditScopeDialog(
+            characterName = characterName.orEmpty(),
+            onDismiss = { pendingSave = null },
+            onSelect = { scope ->
+                pendingSave = null
+                onSave(spell, scope)
+            },
+        )
     }
 }
 

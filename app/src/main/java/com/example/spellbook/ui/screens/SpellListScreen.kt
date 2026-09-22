@@ -4,9 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,11 +39,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -62,7 +60,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -88,8 +85,10 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.spellbook.R
 import com.example.spellbook.data.SpellComponent
 import com.example.spellbook.data.SpellFilters
 import com.example.spellbook.data.SpellOptions
@@ -97,10 +96,8 @@ import com.example.spellbook.data.SpellSort
 import com.example.spellbook.data.availableSources
 import com.example.spellbook.data.castingTimeOptions
 import com.example.spellbook.data.filterSortSearch
-import com.example.spellbook.data.spellOriginOptions
 import com.example.spellbook.data.model.Spell
-import androidx.compose.ui.res.stringResource
-import com.example.spellbook.R
+import com.example.spellbook.data.spellOriginOptions
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.spellLevelLabel
 import com.example.spellbook.ui.spellLevelPairs
@@ -450,7 +447,7 @@ private fun SpellListTopBar(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchField(
+internal fun SearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     autoFocus: Boolean,
@@ -652,7 +649,7 @@ private fun FilterPanel(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> FilterChipGroup(
+internal fun <T> FilterChipGroup(
     title: String,
     options: List<Pair<T, String>>,
     selected: Set<T>,
@@ -674,7 +671,7 @@ private fun <T> FilterChipGroup(
 }
 
 @Composable
-private fun burgundyFilterChipColors() = FilterChipDefaults.filterChipColors(
+internal fun burgundyFilterChipColors() = FilterChipDefaults.filterChipColors(
     containerColor = MaterialTheme.colorScheme.surface,
     labelColor = MaterialTheme.colorScheme.onSurface,
     selectedContainerColor = MaterialTheme.colorScheme.primary,

@@ -5,27 +5,24 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,7 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,10 +39,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -57,15 +53,16 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.sp
 import com.example.spellbook.R
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
+import com.example.spellbook.ui.components.DetailsActionBar
+import com.example.spellbook.ui.components.DetailsActionBarReservedHeight
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.measureLabel
 import com.example.spellbook.ui.spellLevelLabel
 import com.example.spellbook.ui.spellOptionLabel
-import androidx.compose.ui.unit.sp
 import com.example.spellbook.util.DiceRoller
 import com.example.spellbook.util.HtmlUtils
 
@@ -110,17 +107,6 @@ fun SpellDetailsScreen(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.action_back),
                         )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onShare) {
-                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.action_share))
-                    }
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.action_edit))
-                    }
-                    IconButton(onClick = { confirmDelete = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.action_delete))
                     }
                 },
             )
@@ -169,25 +155,27 @@ fun SpellDetailsScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onEdit, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.action_edit))
-                    }
-                    OutlinedButton(onClick = onExport, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.spell_export_json))
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                // Место под плавающий блок действий: прокрутив текст до конца,
+                // пользователь видит его ниже описания, а не поверх последних строк.
+                Spacer(modifier = Modifier.height(DetailsActionBarReservedHeight))
             }
+
+            DetailsActionBar(
+                onEdit = onEdit,
+                onDelete = { confirmDelete = true },
+                onShare = onShare,
+                onExport = onExport,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
 
             rollResult?.let { result ->
                 DiceResultCard(
                     result = result,
                     onClose = { rollResult = null },
+                    // Поднимаем плашку над блоком действий: иначе на узких экранах они налезают друг на друга.
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(16.dp),
+                        .padding(start = 16.dp, end = 16.dp, bottom = DetailsActionBarReservedHeight),
                 )
             }
         }
@@ -542,7 +530,7 @@ private sealed interface DescriptionToken {
 
 /** Плавающее окно с результатом броска костей в левом нижнем углу. */
 @Composable
-private fun DiceResultCard(
+internal fun DiceResultCard(
     result: DiceRoller.Result,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,

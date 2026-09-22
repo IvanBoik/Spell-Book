@@ -35,4 +35,11 @@ data class CharacterSpellCrossRef(
     val addedAt: Long = System.currentTimeMillis(),
     /** Подготовлено ли заклинание (для персонажей с переподготовкой). */
     val prepared: Boolean = false,
+    /**
+     * Название и описание только для этого персонажа; null — берётся из библиотеки.
+     *
+     * Позволяет править заклинание «под себя», не затрагивая общую библиотеку.
+     */
+    val nameOverride: String? = null,
+    val descriptionOverride: String? = null,
 )

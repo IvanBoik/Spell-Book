@@ -13,6 +13,7 @@ import com.example.spellbook.data.AppPreferences
 import com.example.spellbook.data.AppTheme
 import com.example.spellbook.data.SectionLayout
 import com.example.spellbook.ui.components.CharacterSection
+import com.example.spellbook.ui.components.EditScope
 import com.example.spellbook.data.CharacterLssCodec
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.withRecalculatedResources
@@ -20,6 +21,8 @@ import com.example.spellbook.data.DndSuException
 import com.example.spellbook.data.ComboRoller
 import com.example.spellbook.data.DndSuCatalog
 import com.example.spellbook.data.DndSuLoader
+import com.example.spellbook.data.FeatFilters
+import com.example.spellbook.data.FeatLibraryCodec
 import com.example.spellbook.data.SpellBookRepository
 import com.example.spellbook.data.SpellFilters
 import com.example.spellbook.data.SpellLssCodec
@@ -82,6 +85,14 @@ private fun Throwable.toUiMessage(fallbackRes: Int): UiMessage = when (this) {
  */
 private const val LIBRARY_DOWNLOAD_PARALLELISM = 8
 
+/**
+ * Версия встроенного набора черт. Повышается при обновлении `assets/feats-library.json`,
+ * чтобы новые данные подтянулись и у тех, кто уже выполнил импорт раньше.
+ *
+ * v2 — у черт появилась книга-источник для группировки в библиотеке.
+ */
+private const val BUNDLED_FEATS_VERSION = 2
+
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
     /** Персонаж, которому принадлежит экран; null у общих экранов (библиотека, настройки). */
@@ -89,9 +100,26 @@ sealed interface Screen {
 
     data object Characters : Screen
     data class CharacterSpells(override val characterId: String) : Screen
+
+    /** Корень библиотеки: выбор между заклинаниями и чертами. */
     data object Library : Screen
+    data object LibrarySpells : Screen
+    data object LibraryFeats : Screen
+
+    /** Просмотр черты из библиотеки. */
+    data class FeatDetails(val featId: String) : Screen
+
+    /** Просмотр черты при добавлении её персонажу: внизу есть кнопка «Добавить». */
+    data class AddFeatDetails(
+        override val characterId: String,
+        val featId: String,
+    ) : Screen
     data class Details(val spellId: String) : Screen
-    data class SpellForm(val spellId: String?) : Screen
+    /** Форма заклинания; [characterId] задан, если её открыли из раздела персонажа. */
+    data class SpellForm(
+        val spellId: String?,
+        override val characterId: String? = null,
+    ) : Screen
     data class CharacterForm(override val characterId: String?) : Screen
     data class AddSpells(override val characterId: String) : Screen
     data class PrepareSpells(override val characterId: String) : Screen
@@ -269,6 +297,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.migrateLegacyIfNeeded()
             importBundledLibraryOnce()
+            importBundledFeatsOnce()
             restoreLastCharacter()
         }
         repository.observeCharacters()
@@ -364,6 +393,19 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         // Импорт идёт молча: для пользователя библиотека просто уже есть при первом запуске.
         repository.importBundledLibrary()
         prefs.bundledLibraryImported = true
+    }
+
+    /**
+     * Загружает встроенные черты, если их ещё нет или файл обновился.
+     *
+     * Сравнивается версия набора, а не просто факт импорта: иначе у тех, кто уже
+     * получил черты раньше, не появились бы новые поля — например, книга-источник,
+     * по которой черты группируются в библиотеке.
+     */
+    private suspend fun importBundledFeatsOnce() {
+        if (prefs.bundledFeatsVersion >= BUNDLED_FEATS_VERSION) return
+        repository.importBundledFeats()
+        prefs.bundledFeatsVersion = BUNDLED_FEATS_VERSION
     }
 
     /** При старте открываем главную страницу последнего персонажа, если он ещё существует. */
@@ -560,6 +602,88 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.Library)
     }
 
+    /** Раздел библиотеки с заклинаниями. Поиск и фильтры начинаются с чистого листа. */
+    fun openLibrarySpells() {
+        resetListControls()
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibrarySpells)
+    }
+
+    /** Раздел библиотеки с чертами, сгруппированными по книгам-источникам. */
+    fun openLibraryFeats() {
+        resetFeatControls()
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryFeats)
+    }
+
+    /**
+     * Сбрасывает поиск и фильтры черт.
+     *
+     * Список библиотеки и список персонажа делят одно состояние, поэтому при переходе
+     * между ними условия отбора начинаются с чистого листа.
+     */
+    private fun resetFeatControls() {
+        featsQuery = ""
+        featsFilters = FeatFilters()
+        featsScrollIndex = 0
+        featsScrollOffset = 0
+    }
+
+    /** Поиск по библиотеке черт; хранится здесь, чтобы переживать поворот экрана. */
+    var featsQuery by mutableStateOf("")
+        private set
+
+    fun updateFeatsQuery(query: String) { featsQuery = query }
+
+    /** Фильтры библиотеки черт (повышаемые характеристики). */
+    var featsFilters by mutableStateOf(FeatFilters())
+        private set
+
+    fun updateFeatsFilters(filters: FeatFilters) { featsFilters = filters }
+
+    /**
+     * Позиция списка черт. Хранится в ViewModel, чтобы возврат с экрана черты
+     * открывал список на том же месте — как у заклинаний.
+     */
+    var featsScrollIndex: Int = 0
+        private set
+    var featsScrollOffset: Int = 0
+        private set
+
+    fun saveFeatsScroll(index: Int, offset: Int) {
+        featsScrollIndex = index
+        featsScrollOffset = offset
+    }
+
+    /** Открывает черту отдельным экраном — как детали заклинания. */
+    fun openFeatDetails(featId: String) {
+        uiState = uiState.copy(screen = Screen.FeatDetails(featId))
+    }
+
+    /** Открывает черту библиотеки при выборе черт для персонажа. */
+    fun openAddFeatDetails(characterId: String, featId: String) {
+        uiState = uiState.copy(screen = Screen.AddFeatDetails(characterId, featId))
+    }
+
+    /** Сохраняет отредактированную черту библиотеки (название и описание). */
+    fun editLibraryFeat(featId: String, name: String, description: String) {
+        val feat = getLibraryFeat(featId) ?: return
+        // Правка общая: черта обновится у всех персонажей, которые её взяли.
+        saveFeat(feat.copy(name = name.trim(), description = description.trim()))
+    }
+
+    /** JSON черты для выгрузки в файл или отправки. */
+    fun exportFeatJson(featId: String): String? =
+        getLibraryFeat(featId)?.let { FeatLibraryCodec.toJson(it).toString() }
+
+    /**
+     * JSON черты персонажа: выгружается именно тот текст, который видит
+     * пользователь, включая персональную правку.
+     */
+    fun exportCharacterFeatJson(feat: CharacterFeat): String =
+        FeatLibraryCodec.toJson(feat.asFeat()).toString()
+
+    /** Черта из библиотеки по идентификатору или null, если её уже удалили. */
+    fun getLibraryFeat(featId: String): Feat? = uiState.libraryFeats.firstOrNull { it.id == featId }
+
     /** Экран, с которого открыли детали заклинания (чтобы вернуться именно туда). */
     private var detailsOrigin: Screen? = null
 
@@ -585,7 +709,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     /** Возврат к корневому экрану текущей вкладки. */
     fun navigateBackToList() {
         if (uiState.tab == Tab.LIBRARY) {
-            uiState = uiState.copy(screen = Screen.Library)
+            // Заклинания живут в своём разделе, а не на корневом экране библиотеки.
+            uiState = uiState.copy(screen = Screen.LibrarySpells)
             return
         }
         val lastId = prefs.lastCharacterId
@@ -606,8 +731,16 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         pendingCharacterId = characterId
     }
 
+    /**
+     * Открывает форму редактирования заклинания.
+     *
+     * Контекст персонажа берётся с экрана, с которого открыли детали: если это был
+     * набор персонажа, правка спросит, менять ли текст для всех или только для него.
+     */
     fun openEditSpellForm(spellId: String) {
-        uiState = uiState.copy(screen = Screen.SpellForm(spellId = spellId))
+        uiState = uiState.copy(
+            screen = Screen.SpellForm(spellId = spellId, characterId = detailsOrigin?.characterId),
+        )
     }
 
     fun openCreateCharacterForm() {
@@ -661,6 +794,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun openAddFeats(characterId: String) {
+        // Список добавления делит поиск и фильтры с библиотекой — начинаем с чистого листа.
+        resetFeatControls()
         uiState = uiState.copy(screen = Screen.AddFeats(characterId))
     }
 
@@ -681,6 +816,42 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun saveFeat(feat: Feat) {
         viewModelScope.launch { repository.saveFeat(feat) }
+    }
+
+    /**
+     * Правка черты из раздела персонажа.
+     *
+     * [scope] = [EditScope.EVERYONE] меняет запись в общей библиотеке, иначе текст
+     * сохраняется только этому персонажу и библиотека остаётся нетронутой.
+     */
+    fun editCharacterFeat(
+        characterId: String,
+        featId: String,
+        name: String,
+        description: String,
+        scope: EditScope,
+    ) {
+        viewModelScope.launch {
+            val trimmedName = name.trim()
+            val trimmedDescription = description.trim()
+            when (scope) {
+                EditScope.EVERYONE -> {
+                    val feat = repository.getFeat(featId) ?: return@launch
+                    repository.saveFeat(
+                        feat.copy(name = trimmedName, description = trimmedDescription),
+                    )
+                    // Своя версия больше не нужна: пользователь явно выбрал общий текст.
+                    repository.setFeatOverrides(characterId, featId, null, null)
+                }
+
+                EditScope.THIS_CHARACTER -> repository.setFeatOverrides(
+                    characterId,
+                    featId,
+                    trimmedName,
+                    trimmedDescription,
+                )
+            }
+        }
     }
 
     /** Удаляет черту только у персонажа; в библиотеке она остаётся. */
@@ -725,8 +896,16 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             }
             // Повторная загрузка обновляет текст, а не создаёт дубль.
             val existing = repository.findFeatByName(parsed.name)
-            val feat = existing?.copy(description = parsed.description, source = url.trim())
-                ?: Feat(name = parsed.name, description = parsed.description, source = url.trim())
+            val feat = existing?.copy(
+                description = parsed.description,
+                source = url.trim(),
+                book = parsed.book,
+            ) ?: Feat(
+                name = parsed.name,
+                description = parsed.description,
+                source = url.trim(),
+                book = parsed.book,
+            )
             repository.saveFeat(feat)
 
             val target = characterId ?: pendingCharacterId
@@ -827,6 +1006,39 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     // region Заклинания
+
+    /**
+     * Правка заклинания из раздела персонажа.
+     *
+     * При [EditScope.THIS_CHARACTER] меняются только название и описание: остальные
+     * характеристики (круг, школа, компоненты) — правила заклинания, они общие.
+     */
+    fun editCharacterSpell(characterId: String, spell: Spell, scope: EditScope) {
+        val normalized = spell.copy(description = DiceRoller.wrapDiceTokens(spell.description))
+        viewModelScope.launch {
+            when (scope) {
+                EditScope.EVERYONE -> {
+                    repository.upsertSpell(normalized)
+                    repository.setSpellOverrides(characterId, normalized.id, null, null)
+                }
+
+                EditScope.THIS_CHARACTER -> repository.setSpellOverrides(
+                    characterId,
+                    normalized.id,
+                    normalized.name.trim(),
+                    normalized.description,
+                )
+            }
+            uiState = uiState.copy(
+                screen = Screen.Details(normalized.id),
+                message = UiMessage(R.string.msg_spell_saved),
+            )
+        }
+    }
+
+    /** Есть ли у персонажа своя версия этого заклинания. */
+    suspend fun hasSpellOverrides(characterId: String, spellId: String): Boolean =
+        repository.hasSpellOverrides(characterId, spellId)
 
     fun saveSpell(spell: Spell) {
         // Оборачиваем кости (1d6, 2d8 и т.п.) в LSS-токены, чтобы они стали кликабельными.

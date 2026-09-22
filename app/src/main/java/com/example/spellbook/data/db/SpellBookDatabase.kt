@@ -32,7 +32,7 @@ import com.example.spellbook.data.model.Spell
         Feat::class,
         CharacterFeatCrossRef::class,
     ],
-    version = 21,
+    version = 23,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -310,6 +310,28 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v21 → v22: книга-источник черты — по ней черты группируются в библиотеке. */
+        private val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE feats ADD COLUMN book TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /**
+         * v22 → v23: персональные правки черт и заклинаний.
+         *
+         * NULL означает «брать текст из библиотеки», поэтому у всех существующих
+         * записей поведение не меняется.
+         */
+        private val MIGRATION_22_23 = object : Migration(22, 23) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE character_feats ADD COLUMN nameOverride TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE character_feats ADD COLUMN descriptionOverride TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE character_spells ADD COLUMN nameOverride TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE character_spells ADD COLUMN descriptionOverride TEXT DEFAULT NULL")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -340,6 +362,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_18_19,
                     MIGRATION_19_20,
                     MIGRATION_20_21,
+                    MIGRATION_21_22,
+                    MIGRATION_22_23,
                 ).build()
             }
     }

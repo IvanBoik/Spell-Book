@@ -4,8 +4,12 @@ import com.example.spellbook.util.HtmlUtils
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 
-/** Разобранная страница черты dnd.su. */
-data class ParsedFeat(val name: String, val description: String)
+/**
+ * Разобранная страница черты dnd.su.
+ *
+ * @param book книга, в которой появилась черта; пустая, если на странице не указана.
+ */
+data class ParsedFeat(val name: String, val description: String, val book: String = "")
 
 /**
  * Парсер страницы черты с сайта dnd.su. Разметка совпадает со страницами заклинаний:
@@ -20,7 +24,19 @@ object DndSuFeatParser {
         require(name.isNotBlank() && description.isNotBlank()) {
             "На странице не найдены название и описание черты"
         }
-        return ParsedFeat(name = name, description = description)
+        return ParsedFeat(name = name, description = description, book = parseBook(doc))
+    }
+
+    /**
+     * Книга-источник из плашки рядом с названием: `<span class="source-plaque" title="Player's Handbook">`.
+     *
+     * Плашек может быть несколько (например, редакции 2014 и 2024 года) — берём первую:
+     * это книга, где черта появилась впервые, и именно её текст показан на странице.
+     */
+    private fun parseBook(doc: Document): String {
+        val plaque = doc.selectFirst("h2.card-title .source-plaque") ?: return ""
+        // В title лежит полное название, в тексте — короткий код вроде `PH14`.
+        return plaque.attr("title").trim().ifBlank { plaque.text().trim() }
     }
 
     /** «Бдительный [Alert]» → «Бдительный». */

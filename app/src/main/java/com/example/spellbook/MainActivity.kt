@@ -7,21 +7,12 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,82 +22,78 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Save
-
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Edit
-
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spellbook.data.CharacterLssCodec
 import com.example.spellbook.data.model.Character
-import com.example.spellbook.ui.screens.EmptySpellList
-import com.example.spellbook.ui.screens.AddSpellFab
 import com.example.spellbook.data.model.Spell
-import com.example.spellbook.ui.ProvideAppLocale
-import com.example.spellbook.ui.Screen
 import com.example.spellbook.ui.LibraryDownloadProgress
 import com.example.spellbook.ui.LibraryDownloadReport
+import com.example.spellbook.ui.ProvideAppLocale
+import com.example.spellbook.ui.Screen
 import com.example.spellbook.ui.SpellBookViewModel
-import com.example.spellbook.ui.Tab
 import com.example.spellbook.ui.components.CharacterSection
 import com.example.spellbook.ui.components.CharacterSectionsBar
-
-import com.example.spellbook.ui.screens.SettingsScreen
 import com.example.spellbook.ui.components.SpellBookBottomBar
+import com.example.spellbook.ui.screens.AddSpellFab
 import com.example.spellbook.ui.screens.AddSpellsScreen
 import com.example.spellbook.ui.screens.CharacterFormScreen
 import com.example.spellbook.ui.screens.CharactersScreen
 import com.example.spellbook.ui.screens.ComboEditorScreen
 import com.example.spellbook.ui.screens.ComboListScreen
 import com.example.spellbook.ui.screens.ComboResultScreen
-import com.example.spellbook.ui.screens.InventoryScreen
+import com.example.spellbook.ui.screens.EmptySpellList
 import com.example.spellbook.ui.screens.FabAction
-import com.example.spellbook.ui.screens.PrepareSpellsScreen
-import com.example.spellbook.util.DiceRoller
-import com.example.spellbook.ui.screens.AddFeatsScreen
+import com.example.spellbook.ui.screens.FeatDetailsScreen
 import com.example.spellbook.ui.screens.FeatsScreen
+import com.example.spellbook.ui.screens.InventoryScreen
+import com.example.spellbook.ui.screens.LibraryFeatsScreen
+import com.example.spellbook.ui.screens.LibraryHubScreen
 import com.example.spellbook.ui.screens.NotesScreen
-import com.example.spellbook.ui.screens.SpellSlotsScreen
-import com.example.spellbook.ui.screens.StatsScreen
+import com.example.spellbook.ui.screens.PrepareSpellsScreen
+import com.example.spellbook.ui.screens.SettingsScreen
 import com.example.spellbook.ui.screens.SpellDetailsScreen
 import com.example.spellbook.ui.screens.SpellFormScreen
 import com.example.spellbook.ui.screens.SpellListScreen
+import com.example.spellbook.ui.screens.SpellSlotsScreen
+import com.example.spellbook.ui.screens.StatsScreen
 import com.example.spellbook.ui.screens.StepLibraryScreen
 import com.example.spellbook.ui.theme.SpellBookTheme
+import com.example.spellbook.util.DiceRoller
 
 class MainActivity : ComponentActivity() {
 
@@ -155,8 +142,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Что выгружается в файл: заклинание, лист персонажа или вся библиотека. */
-private enum class ExportKind { SPELL, CHARACTER, LIBRARY }
+/** Что выгружается в файл: заклинание, черта, лист персонажа или вся библиотека. */
+private enum class ExportKind { SPELL, FEAT, CHARACTER, LIBRARY }
 
 /** Извлекает первую http(s)-ссылку из произвольного текста (браузеры часто шлют «название + URL»). */
 private fun extractUrl(text: String?): String? {
@@ -247,6 +234,7 @@ private fun SpellBookApp(
         }.isSuccess
         val successRes = when (pendingExportKind) {
             ExportKind.SPELL -> R.string.export_spell_done
+            ExportKind.FEAT -> R.string.export_feat_done
             ExportKind.CHARACTER -> R.string.export_character_done
             ExportKind.LIBRARY -> R.string.export_library_done
         }
@@ -336,6 +324,10 @@ private fun SpellBookApp(
                 viewModel.exitCharacterSection(screen.characterId, CharacterSection.COMBOS)
             is Screen.Inventory ->
                 viewModel.exitCharacterSection(screen.characterId, CharacterSection.INVENTORY)
+            // Разделы библиотеки возвращают к выбору раздела, а не закрывают приложение.
+            Screen.LibrarySpells, Screen.LibraryFeats -> viewModel.openLibrary()
+            is Screen.FeatDetails -> viewModel.openLibraryFeats()
+            is Screen.AddFeatDetails -> viewModel.openAddFeats(screen.characterId)
             is Screen.AddSpells -> viewModel.openCharacterSpells(screen.characterId)
             is Screen.AddFeats -> viewModel.openFeats(screen.characterId)
             is Screen.ComboEditor -> viewModel.openCombos(screen.characterId)
@@ -370,8 +362,64 @@ private fun SpellBookApp(
             bottomBar = bottomBar,
         )
 
-        Screen.Library -> SpellListScreen(
-            title = stringResource(R.string.tab_library),
+        // Корень библиотеки: выбор между заклинаниями и чертами.
+        Screen.Library -> LibraryHubScreen(
+            spellCount = state.librarySpells.size,
+            featCount = state.libraryFeats.size,
+            onOpenSpells = viewModel::openLibrarySpells,
+            onOpenFeats = viewModel::openLibraryFeats,
+            bottomBar = bottomBar,
+        )
+
+        Screen.LibraryFeats -> LibraryFeatsScreen(
+            feats = state.libraryFeats,
+            query = viewModel.featsQuery,
+            onQueryChange = viewModel::updateFeatsQuery,
+            filters = viewModel.featsFilters,
+            onFiltersChange = viewModel::updateFeatsFilters,
+            onFeatClick = viewModel::openFeatDetails,
+            onBack = viewModel::openLibrary,
+            bottomBar = bottomBar,
+            initialScrollIndex = viewModel.featsScrollIndex,
+            initialScrollOffset = viewModel.featsScrollOffset,
+            onScrollChanged = viewModel::saveFeatsScroll,
+        )
+
+        is Screen.FeatDetails -> {
+            val feat = viewModel.getLibraryFeat(screen.featId)
+            if (feat == null) {
+                // Черту могли удалить с другого экрана — возвращаемся к списку.
+                LaunchedEffect(screen.featId) { viewModel.openLibraryFeats() }
+            } else {
+                FeatDetailsScreen(
+                    feat = feat,
+                    onBack = viewModel::openLibraryFeats,
+                    // Из библиотеки правка всегда общая, поэтому scope не спрашивается.
+                    onEdit = { name, description, _ ->
+                        viewModel.editLibraryFeat(feat.id, name, description)
+                    },
+                    onExport = {
+                        val json = viewModel.exportFeatJson(feat.id)
+                        if (json != null) {
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.FEAT
+                            exportLauncher.launch(suggestFileName(feat.name))
+                        }
+                    },
+                    onShare = {
+                        val json = viewModel.exportFeatJson(feat.id)
+                        if (json != null) shareSpellJson(context, json, suggestFileName(feat.name))
+                    },
+                    onDelete = {
+                        viewModel.deleteFeat(feat.id)
+                        viewModel.openLibraryFeats()
+                    },
+                )
+            }
+        }
+
+        Screen.LibrarySpells -> SpellListScreen(
+            title = stringResource(R.string.library_section_spells),
             spells = state.librarySpells,
             query = viewModel.listQuery,
             onQueryChange = viewModel::updateListQuery,
@@ -384,6 +432,14 @@ private fun SpellBookApp(
             initialScrollOffset = viewModel.listScrollOffset,
             onScrollChanged = viewModel::saveListScroll,
             bottomBar = bottomBar,
+            navigationIcon = {
+                IconButton(onClick = viewModel::openLibrary) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.action_back),
+                    )
+                }
+            },
             headerContent = {
                 // Пока идёт массовая загрузка — показываем прогресс над списком.
                 state.libraryProgress?.let { progress ->
@@ -578,35 +634,97 @@ private fun SpellBookApp(
             },
         )
 
-        is Screen.Feats -> FeatsScreen(
-            feats = state.feats,
-            onAddFeat = { name, description -> viewModel.addFeat(screen.characterId, name, description) },
-            onSaveFeat = viewModel::saveFeat,
-            onToggleCollapsed = { featId, collapsed ->
-                viewModel.toggleFeatCollapsed(screen.characterId, featId, collapsed)
+        is Screen.Feats -> {
+            val character = viewModel.getCharacter(screen.characterId)
+            FeatsScreen(
+                feats = state.feats,
+                characterName = character?.name?.ifBlank {
+                    stringResource(R.string.character_unnamed)
+                }.orEmpty(),
+                onAddFeat = { name, description ->
+                    viewModel.addFeat(screen.characterId, name, description)
+                },
+                onSaveFeat = { featId, name, description, scope ->
+                    viewModel.editCharacterFeat(screen.characterId, featId, name, description, scope)
+                },
+                onToggleCollapsed = { featId, collapsed ->
+                    viewModel.toggleFeatCollapsed(screen.characterId, featId, collapsed)
+                },
+                onRemoveFromCharacter = { featId ->
+                    viewModel.removeFeatFromCharacter(screen.characterId, featId)
+                },
+                onReorder = { orderedIds -> viewModel.reorderFeats(screen.characterId, orderedIds) },
+                onLoadFromDndSu = { url -> viewModel.importFeatFromDndSu(screen.characterId, url) },
+                onAddFromLibrary = { viewModel.openAddFeats(screen.characterId) },
+                onDiceClick = { formula -> DiceRoller.roll(formula) },
+                onBack = {
+                    viewModel.exitCharacterSection(screen.characterId, CharacterSection.FEATS)
+                },
+                sectionsBar = {
+                    CharacterSections(viewModel, screen.characterId, CharacterSection.FEATS)
+                },
+            )
+        }
+
+        // Добавление черт персонажу — тот же список, что и в библиотеке:
+        // с поиском, фильтрами и группировкой по книгам-источникам.
+        is Screen.AddFeats -> LibraryFeatsScreen(
+            feats = state.libraryFeats,
+            title = stringResource(R.string.feats_add_title),
+            query = viewModel.featsQuery,
+            onQueryChange = viewModel::updateFeatsQuery,
+            filters = viewModel.featsFilters,
+            onFiltersChange = viewModel::updateFeatsFilters,
+            onFeatClick = { featId ->
+                viewModel.openAddFeatDetails(screen.characterId, featId)
             },
-            onRemoveFromCharacter = { featId ->
-                viewModel.removeFeatFromCharacter(screen.characterId, featId)
-            },
-            onReorder = { orderedIds -> viewModel.reorderFeats(screen.characterId, orderedIds) },
-            onLoadFromDndSu = { url -> viewModel.importFeatFromDndSu(screen.characterId, url) },
-            onAddFromLibrary = { viewModel.openAddFeats(screen.characterId) },
-            onDiceClick = { formula -> DiceRoller.roll(formula) },
-            onBack = { viewModel.exitCharacterSection(screen.characterId, CharacterSection.FEATS) },
-            sectionsBar = {
-                CharacterSections(viewModel, screen.characterId, CharacterSection.FEATS)
-            },
+            onBack = { viewModel.openFeats(screen.characterId) },
+            initialScrollIndex = viewModel.featsScrollIndex,
+            initialScrollOffset = viewModel.featsScrollOffset,
+            onScrollChanged = viewModel::saveFeatsScroll,
         )
 
-        is Screen.AddFeats -> AddFeatsScreen(
-            libraryFeats = state.libraryFeats,
-            selectedIds = state.currentCharacterFeatIds,
-            onToggle = { featId, add ->
-                viewModel.toggleFeatForCharacter(screen.characterId, featId, add)
-            },
-            onDeleteFromLibrary = viewModel::deleteFeat,
-            onBack = { viewModel.openFeats(screen.characterId) },
-        )
+        is Screen.AddFeatDetails -> {
+            val feat = viewModel.getLibraryFeat(screen.featId)
+            if (feat == null) {
+                // Черту могли удалить из библиотеки — возвращаемся к списку.
+                LaunchedEffect(screen.featId) { viewModel.openAddFeats(screen.characterId) }
+            } else {
+                val alreadyAdded = feat.id in state.currentCharacterFeatIds
+                FeatDetailsScreen(
+                    feat = feat,
+                    onBack = { viewModel.openAddFeats(screen.characterId) },
+                    onEdit = { name, description, _ ->
+                        viewModel.editLibraryFeat(feat.id, name, description)
+                    },
+                    onExport = {
+                        val json = viewModel.exportFeatJson(feat.id)
+                        if (json != null) {
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.FEAT
+                            exportLauncher.launch(suggestFileName(feat.name))
+                        }
+                    },
+                    onShare = {
+                        val json = viewModel.exportFeatJson(feat.id)
+                        if (json != null) shareSpellJson(context, json, suggestFileName(feat.name))
+                    },
+                    onDelete = {
+                        viewModel.deleteFeat(feat.id)
+                        viewModel.openAddFeats(screen.characterId)
+                    },
+                    // Кнопка внизу: сразу после прочтения можно взять черту персонажу.
+                    addedToCharacter = alreadyAdded,
+                    onToggleForCharacter = {
+                        viewModel.toggleFeatForCharacter(
+                            screen.characterId,
+                            feat.id,
+                            !alreadyAdded,
+                        )
+                    },
+                )
+            }
+        }
 
         is Screen.Combos -> ComboListScreen(
             combos = state.combos,
@@ -719,10 +837,22 @@ private fun SpellBookApp(
 
         is Screen.SpellForm -> {
             val existing = viewModel.getSpell(screen.spellId)
+            // Форма, открытая из набора персонажа, спрашивает область сохранения правки.
+            val editingCharacter = screen.characterId?.let { viewModel.getCharacter(it) }
             SpellFormScreen(
                 initial = existing ?: Spell(),
                 isNew = existing == null,
-                onSave = viewModel::saveSpell,
+                characterName = editingCharacter?.name?.ifBlank {
+                    stringResource(R.string.character_unnamed)
+                },
+                onSave = { spell, scope ->
+                    val characterId = editingCharacter?.id
+                    if (scope == null || characterId == null) {
+                        viewModel.saveSpell(spell)
+                    } else {
+                        viewModel.editCharacterSpell(characterId, spell, scope)
+                    }
+                },
                 onBack = if (existing != null) {
                     { viewModel.openDetails(existing.id) }
                 } else {

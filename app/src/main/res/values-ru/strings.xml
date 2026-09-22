@@ -14,6 +14,26 @@
     <string name="tab_characters">Персонажи</string>
     <string name="tab_library">Библиотека</string>
 
+    <!-- Разделы библиотеки -->
+    <string name="library_section_spells">Заклинания</string>
+    <string name="library_section_feats">Черты</string>
+    <string name="library_feats_title">Черты</string>
+    <string name="library_feats_search">Название черты</string>
+    <string name="library_feats_no_results">По запросу ничего не найдено</string>
+    <string name="library_feats_other_book">Прочее</string>
+    <string name="library_feats_delete_text">Черта «%1$s» будет удалена из библиотеки и у всех персонажей, у которых она взята.</string>
+    <string name="library_feats_filter_ability">Повышает характеристику</string>
+
+    <!-- Область правки, сделанной с экрана персонажа -->
+    <string name="edit_scope_title">Куда сохранить изменение?</string>
+    <string name="edit_scope_text">Эта запись взята из общей библиотеки. Можно изменить её для всех или оставить свою версию только этому персонажу.</string>
+    <string name="edit_scope_character">Только для %1$s</string>
+    <string name="edit_scope_everyone">Для всех (библиотека)</string>
+    <string name="edit_personal_badge">Своя версия</string>
+    <string name="feats_add_to_character">Добавить персонажу</string>
+    <string name="feats_remove_from_character">Убрать у персонажа</string>
+
+
     <!-- Общие действия -->
     <string name="action_back">Назад</string>
     <string name="action_cancel">Отмена</string>
@@ -226,6 +246,7 @@
     <string name="file_read_failed">Не удалось прочитать файл</string>
     <string name="file_save_failed">Не удалось сохранить файл</string>
     <string name="export_spell_done">Заклинание выгружено</string>
+    <string name="export_feat_done">Черта выгружена</string>
     <string name="export_character_done">Лист персонажа выгружен</string>
     <string name="export_library_done">Библиотека выгружена</string>
     <string name="exit_confirm">Нажмите ещё раз для выхода</string>
@@ -661,6 +682,12 @@
         <item quantity="few">%1$d заклинания</item>
         <item quantity="many">%1$d заклинаний</item>
         <item quantity="other">%1$d заклинания</item>
+    </plurals>
+    <plurals name="feat_count">
+        <item quantity="one">%1$d черта</item>
+        <item quantity="few">%1$d черты</item>
+        <item quantity="many">%1$d черт</item>
+        <item quantity="other">%1$d черты</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d минута</item>

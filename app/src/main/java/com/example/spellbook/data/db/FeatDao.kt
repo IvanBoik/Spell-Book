@@ -23,6 +23,9 @@ interface FeatDao {
     @Query("SELECT * FROM feats WHERE name = :name COLLATE NOCASE LIMIT 1")
     suspend fun findByName(name: String): Feat?
 
+    @Query("SELECT * FROM feats WHERE id = :featId LIMIT 1")
+    suspend fun getById(featId: String): Feat?
+
     @Upsert
     suspend fun upsertFeat(feat: Feat)
 
@@ -33,10 +36,18 @@ interface FeatDao {
 
     // region Черты персонажа
 
+    /**
+     * Черты персонажа. Персональная правка перекрывает текст библиотеки,
+     * поэтому подмена делается сразу в запросе — UI не знает о двойном хранении.
+     */
     @Query(
         """
-        SELECT f.id AS id, f.name AS name, f.description AS description, f.source AS source,
-               f.createdAt AS createdAt, cf.collapsed AS collapsed, cf.sortOrder AS sortOrder
+        SELECT f.id AS id,
+               COALESCE(cf.nameOverride, f.name) AS name,
+               COALESCE(cf.descriptionOverride, f.description) AS description,
+               f.source AS source, f.book AS book, f.createdAt AS createdAt,
+               cf.collapsed AS collapsed, cf.sortOrder AS sortOrder,
+               (cf.nameOverride IS NOT NULL OR cf.descriptionOverride IS NOT NULL) AS hasPersonalEdit
         FROM feats f
         INNER JOIN character_feats cf ON cf.featId = f.id
         WHERE cf.characterId = :characterId
@@ -44,6 +55,24 @@ interface FeatDao {
         """,
     )
     fun observeFeatsForCharacter(characterId: String): Flow<List<CharacterFeat>>
+
+    /**
+     * Сохраняет персональную правку черты. null в обоих полях возвращает
+     * черту к тексту из библиотеки.
+     */
+    @Query(
+        """
+        UPDATE character_feats
+        SET nameOverride = :name, descriptionOverride = :description
+        WHERE characterId = :characterId AND featId = :featId
+        """,
+    )
+    suspend fun updateOverrides(
+        characterId: String,
+        featId: String,
+        name: String?,
+        description: String?,
+    )
 
     @Query("SELECT featId FROM character_feats WHERE characterId = :characterId")
     fun observeFeatIdsForCharacter(characterId: String): Flow<List<String>>
