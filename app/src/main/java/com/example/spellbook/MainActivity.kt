@@ -82,7 +82,11 @@ import com.example.spellbook.ui.screens.FeatDetailsScreen
 import com.example.spellbook.ui.screens.FeatsScreen
 import com.example.spellbook.ui.screens.InventoryScreen
 import com.example.spellbook.ui.screens.LibraryFeatsScreen
+import com.example.spellbook.ui.components.ConfirmDeleteDialog
+import com.example.spellbook.ui.screens.FeatEditorDialog
 import com.example.spellbook.ui.screens.LibraryHubScreen
+import com.example.spellbook.ui.screens.LibraryRacesScreen
+import com.example.spellbook.ui.screens.RaceDetailsScreen
 import com.example.spellbook.ui.screens.NotesScreen
 import com.example.spellbook.ui.screens.PrepareSpellsScreen
 import com.example.spellbook.ui.screens.SettingsScreen
@@ -143,7 +147,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Что выгружается в файл: заклинание, черта, лист персонажа или вся библиотека. */
-private enum class ExportKind { SPELL, FEAT, CHARACTER, LIBRARY }
+private enum class ExportKind { SPELL, FEAT, RACE, CHARACTER, LIBRARY }
 
 /** Извлекает первую http(s)-ссылку из произвольного текста (браузеры часто шлют «название + URL»). */
 private fun extractUrl(text: String?): String? {
@@ -235,6 +239,7 @@ private fun SpellBookApp(
         val successRes = when (pendingExportKind) {
             ExportKind.SPELL -> R.string.export_spell_done
             ExportKind.FEAT -> R.string.export_feat_done
+            ExportKind.RACE -> R.string.race_export_success
             ExportKind.CHARACTER -> R.string.export_character_done
             ExportKind.LIBRARY -> R.string.export_library_done
         }
@@ -325,8 +330,9 @@ private fun SpellBookApp(
             is Screen.Inventory ->
                 viewModel.exitCharacterSection(screen.characterId, CharacterSection.INVENTORY)
             // Разделы библиотеки возвращают к выбору раздела, а не закрывают приложение.
-            Screen.LibrarySpells, Screen.LibraryFeats -> viewModel.openLibrary()
+            Screen.LibrarySpells, Screen.LibraryFeats, Screen.LibraryRaces -> viewModel.openLibrary()
             is Screen.FeatDetails -> viewModel.openLibraryFeats()
+            is Screen.RaceDetails -> viewModel.backToLibraryRaces()
             is Screen.AddFeatDetails -> viewModel.openAddFeats(screen.characterId)
             is Screen.AddSpells -> viewModel.openCharacterSpells(screen.characterId)
             is Screen.AddFeats -> viewModel.openFeats(screen.characterId)
@@ -362,14 +368,86 @@ private fun SpellBookApp(
             bottomBar = bottomBar,
         )
 
-        // Корень библиотеки: выбор между заклинаниями и чертами.
+        // Корень библиотеки: выбор между заклинаниями, чертами и расами.
         Screen.Library -> LibraryHubScreen(
             spellCount = state.librarySpells.size,
             featCount = state.libraryFeats.size,
+            raceCount = state.libraryRaces.size,
             onOpenSpells = viewModel::openLibrarySpells,
             onOpenFeats = viewModel::openLibraryFeats,
+            onOpenRaces = viewModel::openLibraryRaces,
             bottomBar = bottomBar,
         )
+
+        Screen.LibraryRaces -> LibraryRacesScreen(
+            races = state.libraryRaces,
+            query = viewModel.racesQuery,
+            onQueryChange = viewModel::updateRacesQuery,
+            filters = viewModel.racesFilters,
+            onFiltersChange = viewModel::updateRacesFilters,
+            onRaceClick = viewModel::openRaceDetails,
+            onBack = viewModel::openLibrary,
+            bottomBar = bottomBar,
+            initialScrollIndex = viewModel.racesScrollIndex,
+            initialScrollOffset = viewModel.racesScrollOffset,
+            onScrollChanged = viewModel::saveRacesScroll,
+        )
+
+        is Screen.RaceDetails -> {
+            val race = viewModel.getLibraryRace(screen.raceId)
+            if (race == null) {
+                // Расу могли удалить с другого экрана — возвращаемся к списку.
+                LaunchedEffect(screen.raceId) { viewModel.openLibraryRaces() }
+            } else {
+                var editingRace by remember(race.id) { mutableStateOf(false) }
+                var confirmDeleteRace by remember(race.id) { mutableStateOf(false) }
+
+                RaceDetailsScreen(
+                    race = race,
+                    onBack = viewModel::backToLibraryRaces,
+                    onEdit = { editingRace = true },
+                    onExport = {
+                        val json = viewModel.exportRaceJson(race.id)
+                        if (json != null) {
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.RACE
+                            exportLauncher.launch(suggestFileName(race.name))
+                        }
+                    },
+                    onShare = {
+                        val json = viewModel.exportRaceJson(race.id)
+                        if (json != null) shareSpellJson(context, json, suggestFileName(race.name))
+                    },
+                    onDelete = { confirmDeleteRace = true },
+                )
+
+                if (editingRace) {
+                    // У расы те же поля, что и у черты, — название и описание.
+                    FeatEditorDialog(
+                        title = stringResource(R.string.race_edit),
+                        initialName = race.name,
+                        initialDescription = race.description,
+                        onDismiss = { editingRace = false },
+                        onConfirm = { name, description ->
+                            editingRace = false
+                            viewModel.editLibraryRace(race.id, name, description)
+                        },
+                    )
+                }
+                if (confirmDeleteRace) {
+                    ConfirmDeleteDialog(
+                        title = stringResource(R.string.race_delete_title),
+                        text = stringResource(R.string.race_delete_text, race.name),
+                        onDismiss = { confirmDeleteRace = false },
+                        onConfirm = {
+                            confirmDeleteRace = false
+                            viewModel.deleteRace(race.id)
+                            viewModel.backToLibraryRaces()
+                        },
+                    )
+                }
+            }
+        }
 
         Screen.LibraryFeats -> LibraryFeatsScreen(
             feats = state.libraryFeats,

@@ -21,6 +21,24 @@ object HtmlUtils {
     /** Префикс заголовка внутри описания. */
     const val HEADING_PREFIX = "## "
 
+    /**
+     * Префикс подзаголовка — заголовка внутри раздела.
+     *
+     * На dnd.su глубокие заголовки (`h4` и ниже) подписывают части одного раздела —
+     * например, отдельные таблицы внутри «Таблиц эльфов». Их нельзя превращать
+     * в самостоятельные разделы, иначе единый блок рассыпается на десяток кусков.
+     */
+    const val SUBHEADING_PREFIX = "### "
+
+    /**
+     * Префикс строки художественной врезки (`<blockquote>`).
+     *
+     * Такими цитатами начинается описание многих рас; без отдельной пометки
+     * они сливаются с основным текстом.
+     */
+    const val QUOTE_PREFIX = "> "
+
+
     /** Префикс пункта маркированного списка. */
     const val BULLET_PREFIX = "- "
 
@@ -92,11 +110,25 @@ object HtmlUtils {
         return result.joinToString("\n").trim()
     }
 
-    /** Является ли строка заголовком. */
-    fun isHeading(line: String): Boolean = line.startsWith(HEADING_PREFIX)
+    /** Является ли строка заголовком раздела. */
+    fun isHeading(line: String): Boolean =
+        line.startsWith(HEADING_PREFIX) && !isSubheading(line)
 
     /** Текст заголовка без префикса. */
     fun headingText(line: String): String = line.removePrefix(HEADING_PREFIX).trim()
+
+    /** Является ли строка подзаголовком внутри раздела. */
+    fun isSubheading(line: String): Boolean = line.startsWith(SUBHEADING_PREFIX)
+
+    /** Текст подзаголовка без префикса. */
+    fun subheadingText(line: String): String = line.removePrefix(SUBHEADING_PREFIX).trim()
+
+    /** Является ли строка частью художественной врезки-цитаты. */
+    fun isQuote(line: String): Boolean = line.startsWith(QUOTE_PREFIX)
+
+    /** Текст цитаты без маркера. */
+    fun quoteText(line: String): String = line.removePrefix(QUOTE_PREFIX).trim()
+
 
     /** Является ли строка пунктом маркированного списка. */
     fun isBulletItem(line: String): Boolean = line.startsWith(BULLET_PREFIX)
@@ -162,8 +194,24 @@ object HtmlUtils {
                 }
 
                 isHeading(line) -> {
-                    html.append("<h4>").append(inlineToHtml(headingText(line))).append("</h4>")
+                    html.append("<h3>").append(inlineToHtml(headingText(line))).append("</h3>")
                     index++
+                }
+
+                isSubheading(line) -> {
+                    // Уровнем ниже заголовка, чтобы при обратном разборе остаться подзаголовком.
+                    html.append("<h4>").append(inlineToHtml(subheadingText(line))).append("</h4>")
+                    index++
+                }
+
+                isQuote(line) -> {
+                    // Соседние строки цитаты — одна врезка.
+                    html.append("<blockquote>")
+                    while (index < lines.size && isQuote(lines[index])) {
+                        html.append("<p>").append(inlineToHtml(quoteText(lines[index]))).append("</p>")
+                        index++
+                    }
+                    html.append("</blockquote>")
                 }
 
                 isTableRow(line) -> {
@@ -247,7 +295,20 @@ object HtmlUtils {
 
     /** Врезка dnd.su со справочной информацией и её заголовок. */
     private val HTML_CALLOUT_REGEX = Regex("(?is)<div[^>]*class=\"[^\"]*additionalInfo[^\"]*\"[^>]*>(.*?)</div\\s*>")
-    private val HTML_HEADING_REGEX = Regex("(?is)<h[1-6][^>]*>(.*?)</h[1-6]\\s*>")
+
+    /** Заголовок любого уровня: группа 1 — уровень, группа 2 — содержимое. */
+    private val HTML_HEADING_REGEX = Regex("(?is)<h([1-6])[^>]*>(.*?)</h\\1\\s*>")
+
+    /** Художественная врезка-цитата в начале описания. */
+    private val HTML_QUOTE_REGEX = Regex("(?is)<blockquote[^>]*>(.*?)</blockquote\\s*>")
+
+    /**
+     * До какого уровня заголовок считается началом раздела, а не подзаголовком внутри него.
+     *
+     * На dnd.su разделы статьи размечены тегами `h2`–`h3`, а `h4` и ниже подписывают
+     * части одного раздела — например, отдельные таблицы внутри «Таблиц эльфов».
+     */
+    private const val TOP_HEADING_MAX_LEVEL = 3
 
     /** Предел вложенности выделений — защита от бесконечного цикла на битой разметке. */
     private const val MAX_INLINE_NESTING = 5
@@ -283,9 +344,15 @@ object HtmlUtils {
             val numbered = match.groupValues[1].equals("ol", ignoreCase = true)
             "\n" + htmlListToPlain(match.groupValues[2], numbered) + "\n"
         }
-        val withHeadings = withLists.replace(HTML_HEADING_REGEX) { match ->
-            val title = stripTags(match.groupValues[1])
-            if (title.isBlank()) "" else "\n$HEADING_PREFIX$title\n"
+        val withQuotes = withLists.replace(HTML_QUOTE_REGEX) { match ->
+            "\n" + htmlQuoteToPlain(match.groupValues[1]) + "\n"
+        }
+        val withHeadings = withQuotes.replace(HTML_HEADING_REGEX) { match ->
+            // Группа 1 — уровень заголовка, группа 2 — его содержимое.
+            val title = stripTags(match.groupValues[2])
+            val level = match.groupValues[1].toIntOrNull() ?: TOP_HEADING_MAX_LEVEL
+            val prefix = if (level <= TOP_HEADING_MAX_LEVEL) HEADING_PREFIX else SUBHEADING_PREFIX
+            if (title.isBlank()) "" else "\n$prefix$title\n"
         }
         val withInline = applyInlineMarkup(withHeadings)
         val withBreaks = withInline
@@ -296,7 +363,9 @@ object HtmlUtils {
         val noLinks = noTags
             .replace(LINK_WITH_LABEL) { "[[ref ${it.groupValues[1]}]]" }
             .replace(LINK_WITHOUT_LABEL) { "[[ref ${it.groupValues[1].substringAfterLast('.')}]]" }
-        return unescape(noLinks)
+        // Склеиваем выделения только здесь: до удаления тегов маркеры разделены
+        // остатками разметки и ещё не стоят рядом.
+        return mergeAdjacentEmphasis(unescape(noLinks))
             .replace("\r\n", "\n")
             .split("\n")
             .map { it.trim() }
@@ -304,15 +373,48 @@ object HtmlUtils {
             .joinToString("\n")
     }
 
+    /**
+     * Склеивает соседние выделения в одно.
+     *
+     * На dnd.su одно и то же название часто разбито на несколько тегов подряд —
+     * например `<em>Р</em><em>евенант</em>` после правки текста редактором сайта.
+     * Каждый тег даёт свою пару маркеров, и на стыке получается `***Р******евенант***`:
+     * лишние звёздочки видны на экране. Закрывающий и сразу за ним открывающий
+     * маркеры взаимно уничтожаются.
+     */
+    private fun mergeAdjacentEmphasis(text: String): String = text
+        // Стык маркеров внутри слова: закрывающий и тут же открывающий взаимно избыточны.
+        .replace(Regex("(?<=\\S)\\*{4,}(?=\\S)"), "")
+        // Стык двух жирных курсивов (`***` + `***`) или двух жирных (`**` + `**`).
+        .replace(Regex("\\*{6}"), "")
+        .replace(Regex("\\*{4}"), "")
+        // Внутри жирного курсива парный `**` невозможен — это остаток вложенного тега.
+        .replace(Regex("\\*{3}(.+?)\\*{3}")) { match ->
+            "***" + match.groupValues[1].replace("**", "") + "***"
+        }
+
     /** Превращает содержимое врезки в текст: заголовок уходит в открывающий маркер. */
     private fun calloutHtmlToPlain(calloutHtml: String): String {
         val heading = HTML_HEADING_REGEX.find(calloutHtml)
-        val title = heading?.let { stripTags(it.groupValues[1]) }.orEmpty()
+        // Группа 1 — уровень заголовка, группа 2 — его текст.
+        val title = heading?.let { stripTags(it.groupValues[2]) }.orEmpty()
         val body = heading?.let { calloutHtml.removeRange(it.range) } ?: calloutHtml
         // Тело врезки обрабатываем обычным путём, чтобы внутри работали списки и выделения.
         val plainBody = htmlToPlain(body)
         return if (title.isBlank()) "\n$plainBody" else " $title\n$plainBody"
     }
+
+    /**
+     * Превращает содержимое `<blockquote>` в строки с маркером цитаты.
+     *
+     * Внутри цитаты встречаются абзацы и выделения, поэтому тело разбирается
+     * обычным путём, а маркер ставится на каждую строку результата.
+     */
+    private fun htmlQuoteToPlain(quoteHtml: String): String =
+        htmlToPlain(quoteHtml)
+            .lineSequence()
+            .filter { it.isNotBlank() }
+            .joinToString("\n") { "$QUOTE_PREFIX$it" }
 
     /** Превращает содержимое `<ul>`/`<ol>` в строки с маркерами. */
     private fun htmlListToPlain(listHtml: String, numbered: Boolean): String =
@@ -340,31 +442,63 @@ object HtmlUtils {
 
     /**
      * Оборачивает текст маркером выделения с учётом уже расставленных внутри маркеров.
-     * Знаки препинания вне выделения сохраняются, но сами не выделяются.
+     *
+     * Знаки препинания по краям выносятся за маркеры. Это важно для расовых
+     * способностей: на dnd.su они размечены как `<strong><em>Название</em>.</strong>` —
+     * точка стоит внутри жирного, но вне курсива. Без выноса такой текст считался
+     * «выделенным частично», внешний маркер терялся, и названия способностей
+     * оставались одним курсивом, сливаясь с остальным текстом.
      */
     private fun wrapEmphasis(rawText: String, bold: Boolean, depth: Int): String {
         // Сначала разбираем вложенные теги, иначе stripTags вырежет их вместе с выделением.
         val text = stripTags(applyInlineMarkup(rawText, depth + 1))
         if (text.isBlank()) return ""
 
-        // Внутри уже есть выделение: добавлять второй слой нельзя — запись станет нечитаемой.
-        val innerBoldItalic = BOLD_ITALIC_REGEX.matchEntire(text)
-        val innerBold = BOLD_REGEX.matchEntire(text)
-        val innerItalic = ITALIC_REGEX.matchEntire(text)
-        return when {
+        // Знаки препинания по краям сами не выделяются, но и не мешают выделить остальное.
+        val leading = text.takeWhile { it in EDGE_PUNCTUATION }
+        val trailing = text.drop(leading.length).takeLastWhile { it in EDGE_PUNCTUATION }
+        val core = text.drop(leading.length).dropLast(trailing.length).trim()
+        if (core.isEmpty()) return text
+
+        // stripTags срезает крайние пробелы, а в разметке сайта пробел после названия
+        // способности часто записан как `&nbsp;` внутри тега. Без восстановления
+        // текст слипался: «Наследие Диса.Начиная с 3-го уровня…».
+        val tailSpace = if (unescape(rawText).let { it != it.trimEnd() }) " " else ""
+
+        val innerBoldItalic = BOLD_ITALIC_REGEX.matchEntire(core)
+        val innerBold = BOLD_REGEX.matchEntire(core)
+        val innerItalic = ITALIC_REGEX.matchEntire(core)
+        val wrapped = when {
+            // Жирный курсив уже расставлен — второй слой маркеров не нужен.
+            innerBoldItalic != null -> core
             // Текст целиком выделен противоположным маркером — объединяем в жирный курсив.
             bold && innerItalic != null -> "***${innerItalic.groupValues[1]}***"
             !bold && innerBold != null -> "***${innerBold.groupValues[1]}***"
-            // Жирный курсив уже расставлен либо выделение частичное (как `<em><strong>X</strong>.</em>`):
-            // сохраняем то, что есть, без второго слоя маркеров.
-            innerBoldItalic != null || text.contains('*') -> text
-            bold -> "**$text**"
-            else -> "*$text*"
+            // Выделена лишь часть текста: второй слой сделал бы запись неразборчивой.
+            core.contains('*') -> core
+            bold -> "**$core**"
+            else -> "*$core*"
         }
+        return leading + wrapped + trailing + tailSpace
     }
 
-    /** Убирает теги и лишние пробелы, оставляя чистый текст. */
-    private fun stripTags(html: String): String = html
+    /**
+     * Знаки препинания, которые выносятся за маркеры выделения.
+     *
+     * Помимо обычного пробела сюда входит неразрывный (U+00A0): именно им
+     * раскрывается `&nbsp;` в исходной разметке сайта.
+     */
+    private const val EDGE_PUNCTUATION = ".,:;!? \u00A0"
+
+    /**
+     * Убирает теги и лишние пробелы, оставляя чистый текст.
+     *
+     * `&nbsp;` раскрывается сразу: иначе он не считается пробелом при разборе
+     * выделений. На dnd.su встречается `<strong><em>Название</em>.&nbsp;</strong>` —
+     * без раскрытия сущности хвост не попадал в знаки препинания, внешний жирный
+     * терялся, и название способности оставалось одним курсивом («Наследие Диса» и подобные).
+     */
+    private fun stripTags(html: String): String = unescape(html)
         .replace(Regex("(?i)<br\\s*/?>"), " ")
         .replace(Regex("<[^>]*>"), "")
         .replace(Regex("\\s+"), " ")

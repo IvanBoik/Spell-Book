@@ -80,7 +80,9 @@ class HtmlUtilsTest {
 
     @Test
     fun `plainToHtml converts headings and lists`() {
-        assertEquals("<h4>Итог</h4>", HtmlUtils.plainToHtml("## Итог"))
+        // Разделы — h3, подзаголовки внутри раздела — h4, как на dnd.su.
+        assertEquals("<h3>Итог</h3>", HtmlUtils.plainToHtml("## Итог"))
+        assertEquals("<h4>Подробности</h4>", HtmlUtils.plainToHtml("### Подробности"))
         assertEquals("<ul><li>Первый</li><li>Второй</li></ul>", HtmlUtils.plainToHtml("- Первый\n- Второй"))
         assertEquals("<ol><li>Первый</li><li>Второй</li></ol>", HtmlUtils.plainToHtml("1. Первый\n2. Второй"))
     }
@@ -167,10 +169,11 @@ class HtmlUtilsTest {
 
     @Test
     fun `htmlToPlain leaves no stray asterisks on partial nesting`() {
-        // Точка стоит вне жирного, но внутри курсива — раньше это давало нечитаемое `***X**.*`.
+        // Точка стоит вне жирного, но внутри курсива — когда-то это давало нечитаемое `***X**.*`.
+        // Знаки препинания выносятся за маркеры, поэтому оба порядка тегов дают жирный курсив.
         val result = HtmlUtils.htmlToPlain("<em><strong>1. Красный</strong>.</em>")
 
-        assertEquals("**1. Красный**.", result)
+        assertEquals("***1. Красный***.", result)
     }
 
     @Test
@@ -225,7 +228,13 @@ class HtmlUtilsTest {
 
     @Test
     fun `htmlToPlain converts headings`() {
-        assertEquals("## Итог", HtmlUtils.htmlToPlain("<h4>Итог</h4>"))
+        assertEquals("## Итог", HtmlUtils.htmlToPlain("<h3>Итог</h3>"))
+    }
+
+    @Test
+    fun `htmlToPlain keeps deep headings as subheadings`() {
+        // Иначе подписи к таблицам рвут единый раздел на десяток кусков.
+        assertEquals("### Эльфийские безделушки", HtmlUtils.htmlToPlain("<h4>Эльфийские безделушки</h4>"))
     }
 
     @Test
@@ -254,6 +263,58 @@ class HtmlUtilsTest {
         val text = "**Жирный** и *курсив*\n- Пункт\n## Заголовок"
 
         assertEquals(text, HtmlUtils.htmlToPlain(HtmlUtils.plainToHtml(text)))
+    }
+
+    @Test
+    fun `subheading survives round trip through html`() {
+        val text = "## Раздел\n### Подзаголовок\nТекст"
+
+        assertEquals(text, HtmlUtils.htmlToPlain(HtmlUtils.plainToHtml(text)))
+    }
+
+    @Test
+    fun `blockquote becomes quote lines`() {
+        // Художественная врезка в начале описания расы.
+        assertEquals("> Цитата", HtmlUtils.htmlToPlain("<blockquote>Цитата</blockquote>"))
+    }
+
+    @Test
+    fun `quote survives round trip through html`() {
+        val text = "> Первая строка\n> Вторая строка"
+
+        assertEquals(text, HtmlUtils.htmlToPlain(HtmlUtils.plainToHtml(text)))
+    }
+
+    @Test
+    fun `ability name keeps bold italic when separated by nbsp`() {
+        // На dnd.su часть способностей размечена с `&nbsp;` внутри жирного («Наследие Диса»).
+        // Сущность не считалась пробелом, внешний маркер терялся и оставался один курсив.
+        val result = HtmlUtils.htmlToPlain("<p><strong><em>Наследие Диса</em>.&nbsp;</strong>Начиная с 3-го.</p>")
+
+        assertEquals("***Наследие Диса***. Начиная с 3-го.", result)
+    }
+
+    @Test
+    fun `split emphasis does not leave stray asterisks`() {
+        // Редактор сайта иногда рвёт одно название на два соседних тега — на стыке
+        // получалось `***Р******евенант***`, и звёздочки были видны на экране.
+        val html = "<p><strong><em>Р</em></strong><strong><em>евенант</em></strong>. Текст.</p>"
+
+        assertEquals("***Ревенант***. Текст.", HtmlUtils.htmlToPlain(html))
+    }
+
+    @Test
+    fun `nbsp does not survive as entity`() {
+        assertEquals("А Б", HtmlUtils.htmlToPlain("<p>А&nbsp;Б</p>"))
+    }
+
+    @Test
+    fun `ability name keeps bold italic with trailing dot outside`() {
+        // Расовые способности на dnd.su: точка внутри жирного, но вне курсива.
+        // Без выноса знаков препинания название оставалось одним курсивом.
+        val result = HtmlUtils.htmlToPlain("<p><strong><em>Увеличение характеристик</em>.</strong> Текст.</p>")
+
+        assertEquals("***Увеличение характеристик***. Текст.", result)
     }
 
     @Test

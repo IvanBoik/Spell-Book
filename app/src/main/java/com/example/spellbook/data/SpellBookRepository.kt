@@ -13,6 +13,7 @@ import com.example.spellbook.data.model.CharacterFeatCrossRef
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
+import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.data.model.SpellOrigin
 import kotlinx.coroutines.Dispatchers
@@ -41,6 +42,7 @@ class SpellBookRepository(
     private val inventoryDao = db.inventoryDao()
     private val noteDao = db.noteDao()
     private val featDao = db.featDao()
+    private val raceDao = db.raceDao()
 
     // region Заклинания
 
@@ -287,6 +289,65 @@ class SpellBookRepository(
 
     // endregion
 
+    // region Расы
+
+    fun observeAllRaces(): Flow<List<Race>> = raceDao.observeAll()
+
+    /** Раса библиотеки по идентификатору или null. */
+    suspend fun getRace(raceId: String): Race? = raceDao.getById(raceId)
+
+    suspend fun saveRace(race: Race) = raceDao.upsert(race)
+
+    suspend fun deleteRace(raceId: String) = raceDao.delete(raceId)
+
+    /**
+     * Сохраняет официальную расу, не создавая дублей.
+     *
+     * Сверяемся по ссылке, а не по названию: у рас встречаются одноимённые варианты
+     * из разных книг, и по имени они затирали бы друг друга. Записи без ссылки
+     * созданы пользователем вручную — их текст не трогаем.
+     *
+     * @return была ли запись добавлена или обновлена.
+     */
+    suspend fun saveOfficialRace(race: Race): Boolean {
+        if (race.name.isBlank()) return false
+        val existing = race.source.takeIf { it.isNotBlank() }?.let { raceDao.findBySource(it) }
+            ?: run {
+                raceDao.upsert(race)
+                return true
+            }
+        raceDao.upsert(race.copy(id = existing.id, createdAt = existing.createdAt))
+        return true
+    }
+
+    /**
+     * Импортирует набор рас, вложенный в приложение как файл в `assets`.
+     *
+     * В отличие от заклинаний и черт, набор рас синхронизируется целиком: расы,
+     * загруженные предыдущей версией и исчезнувшие из файла, удаляются. Иначе
+     * исключённые из библиотеки записи (например, homebrew) навсегда остаются в базе
+     * и попадают в раздел «Прочее». Созданные вручную расы (без ссылки) сохраняются.
+     *
+     * @return сколько записей добавлено или обновлено; 0 — если файла нет.
+     */
+    suspend fun importBundledRaces(): Int = withContext(Dispatchers.IO) {
+        val json = readAsset(BUNDLED_RACES_ASSET) ?: return@withContext 0
+
+        val races = RaceLibraryCodec.decodeAll(json)
+        if (races.isEmpty()) return@withContext 0
+
+        // Сначала чистим устаревшее: так исчезнувшие из набора расы не останутся в базе.
+        raceDao.deleteMissingFromBundle(races.map { it.source }.filter { it.isNotBlank() })
+
+        var saved = 0
+        races.forEach { race ->
+            if (saveOfficialRace(race)) saved++
+        }
+        saved
+    }
+
+    // endregion
+
     /**
      * Разовая миграция: если библиотека пуста
      * переносим заклинания в БД и удаляем файл.
@@ -354,5 +415,8 @@ class SpellBookRepository(
 
         /** Файл со встроенной библиотекой черт; там же. */
         const val BUNDLED_FEATS_ASSET = "feats-library.json"
+
+        /** Файл со встроенной библиотекой рас; там же. */
+        const val BUNDLED_RACES_ASSET = "races-library.json"
     }
 }

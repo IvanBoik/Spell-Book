@@ -48,6 +48,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
@@ -78,6 +79,9 @@ private val CALLOUT_STRIPE_WIDTH = 4.dp
 
 /** Увеличенная высота строки: длинные описания читаются легче. */
 private val DESCRIPTION_LINE_HEIGHT = 22.sp
+
+/** Отступ слева у художественной врезки: она уже основного текста и прижата вправо. */
+private val QUOTE_INDENT = 32.dp
 
 
 /**
@@ -244,6 +248,14 @@ private fun DescriptionBlocks(blocks: List<DescriptionBlock>, onDiceClick: (Stri
                     color = MaterialTheme.colorScheme.primary,
                 )
 
+                // Подзаголовок тише заголовка: он членит раздел, а не начинает новый.
+                is DescriptionBlock.Subheading -> Text(
+                    text = annotatedDescription(block.text, onDiceClick),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+
+                is DescriptionBlock.Quote -> DescriptionQuote(block, onDiceClick)
                 is DescriptionBlock.ListBlock -> DescriptionList(block, onDiceClick)
                 is DescriptionBlock.Table -> DescriptionTable(block, onDiceClick)
                 is DescriptionBlock.Callout -> DescriptionCallout(block, onDiceClick)
@@ -310,6 +322,25 @@ private fun DescriptionCallout(callout: DescriptionBlock.Callout, onDiceClick: (
             }
         }
     }
+}
+
+/**
+ * Художественная врезка: курсив с прижатием к правому краю, как на dnd.su.
+ *
+ * Такими цитатами начинается описание многих рас; без отдельного оформления
+ * они читаются как часть справочного текста.
+ */
+@Composable
+private fun DescriptionQuote(quote: DescriptionBlock.Quote, onDiceClick: (String) -> Unit) {
+    Text(
+        text = annotatedDescription(quote.text, onDiceClick),
+        style = MaterialTheme.typography.bodyMedium,
+        fontStyle = FontStyle.Italic,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        lineHeight = DESCRIPTION_LINE_HEIGHT,
+        textAlign = TextAlign.End,
+        modifier = Modifier.fillMaxWidth().padding(start = QUOTE_INDENT),
+    )
 }
 
 /** Строит текст с костями, словами-ссылками и инлайновыми выделениями. */
@@ -421,12 +452,18 @@ private fun TableRow(cells: List<String>, isHeader: Boolean, onDiceClick: (Strin
     }
 }
 
-/** Блок описания: текст, заголовок, список, таблица или справочная врезка. */
+/** Блок описания: текст, заголовок, список, таблица, цитата или справочная врезка. */
 private sealed interface DescriptionBlock {
     data class Paragraphs(val text: String) : DescriptionBlock
     data class Heading(val text: String) : DescriptionBlock
+
+    /** Подзаголовок внутри раздела — например, подпись к таблице. */
+    data class Subheading(val text: String) : DescriptionBlock
     data class ListBlock(val items: List<String>, val numbered: Boolean) : DescriptionBlock
     data class Table(val header: List<String>?, val rows: List<List<String>>) : DescriptionBlock
+
+    /** Художественная врезка-цитата в начале описания расы. */
+    data class Quote(val text: String) : DescriptionBlock
     data class Callout(val title: String, val blocks: List<DescriptionBlock>) : DescriptionBlock
 }
 
@@ -469,6 +506,24 @@ private fun splitDescriptionBlocks(description: String): List<DescriptionBlock> 
                 blocks += DescriptionBlock.Heading(HtmlUtils.headingText(line))
                 index++
             }
+
+            HtmlUtils.isSubheading(line) -> {
+                flushParagraph()
+                blocks += DescriptionBlock.Subheading(HtmlUtils.subheadingText(line))
+                index++
+            }
+
+            HtmlUtils.isQuote(line) -> {
+                flushParagraph()
+                // Соседние строки цитаты — один блок: внутри врезки бывает несколько абзацев.
+                val quoteLines = mutableListOf<String>()
+                while (index < lines.size && HtmlUtils.isQuote(lines[index])) {
+                    quoteLines += HtmlUtils.quoteText(lines[index])
+                    index++
+                }
+                blocks += DescriptionBlock.Quote(quoteLines.joinToString("\n"))
+            }
+
 
             HtmlUtils.isTableRow(line) -> {
                 flushParagraph()

@@ -22,6 +22,21 @@
     <string name="library_feats_no_results">По запросу ничего не найдено</string>
     <string name="library_feats_other_book">Прочее</string>
     <string name="library_feats_delete_text">Черта «%1$s» будет удалена из библиотеки и у всех персонажей, у которых она взята.</string>
+
+    <!-- Расы -->
+    <string name="library_section_races">Расы</string>
+    <string name="library_races_title">Расы</string>
+    <string name="library_races_search">Название расы</string>
+    <string name="library_races_no_results">Нет рас, подходящих под поиск</string>
+    <string name="library_races_other_book">Прочее</string>
+    <string name="library_races_filter_book">Книга-источник</string>
+    <string name="library_races_empty">Библиотека рас пуста</string>
+    <string name="race_sections_title">Разделы</string>
+
+    <string name="race_edit">Редактирование расы</string>
+    <string name="race_delete_title">Удалить расу?</string>
+    <string name="race_delete_text">Раса «%1$s» будет удалена из библиотеки.</string>
+    <string name="race_export_success">Раса сохранена в файл</string>
     <string name="library_feats_filter_ability">Повышает характеристику</string>
 
     <!-- Область правки, сделанной с экрана персонажа -->
@@ -688,6 +703,12 @@
         <item quantity="few">%1$d черты</item>
         <item quantity="many">%1$d черт</item>
         <item quantity="other">%1$d черты</item>
+    </plurals>
+    <plurals name="race_count">
+        <item quantity="one">%1$d раса</item>
+        <item quantity="few">%1$d расы</item>
+        <item quantity="many">%1$d рас</item>
+        <item quantity="other">%1$d расы</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d минута</item>

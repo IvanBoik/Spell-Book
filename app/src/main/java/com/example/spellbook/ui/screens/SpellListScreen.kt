@@ -1,5 +1,6 @@
 package com.example.spellbook.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -444,6 +445,8 @@ private fun SpellListTopBar(
 /**
  * Поле поиска в шапке: прозрачный фон. Фокус запрашивается только при [autoFocus]
  * (явном открытии поиска). При потере фокуса (нажатие вне поля) вызывается [onFocusLost].
+ *
+ * @param placeholderRes подсказка в пустом поле: у разных списков свой текст.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -453,6 +456,7 @@ internal fun SearchField(
     autoFocus: Boolean,
     onAutoFocusConsumed: () -> Unit,
     onFocusLost: () -> Unit,
+    @StringRes placeholderRes: Int = R.string.search_placeholder,
 ) {
     val focusRequester = remember { FocusRequester() }
     var wasFocused by remember { mutableStateOf(false) }
@@ -468,7 +472,7 @@ internal fun SearchField(
         value = query,
         onValueChange = onQueryChange,
         placeholder = {
-            Text(stringResource(R.string.search_placeholder), color = onColor.copy(alpha = 0.6f))
+            Text(stringResource(placeholderRes), color = onColor.copy(alpha = 0.6f))
         },
         singleLine = true,
         colors = TextFieldDefaults.colors(

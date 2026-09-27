@@ -16,6 +16,7 @@ import com.example.spellbook.data.model.CharacterFeatCrossRef
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
+import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.Spell
 
 /** Единая база данных приложения: библиотека заклинаний, персонажи и их связи. */
@@ -31,8 +32,9 @@ import com.example.spellbook.data.model.Spell
         NoteBlock::class,
         Feat::class,
         CharacterFeatCrossRef::class,
+        Race::class,
     ],
-    version = 23,
+    version = 25,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -44,6 +46,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
     abstract fun inventoryDao(): InventoryDao
     abstract fun noteDao(): NoteDao
     abstract fun featDao(): FeatDao
+    abstract fun raceDao(): RaceDao
 
     companion object {
         private const val DB_NAME = "spellbook.db"
@@ -332,6 +335,31 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v23 → v24: библиотека рас. */
+        private val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS races (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        source TEXT NOT NULL DEFAULT '',
+                        book TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /** v24 → v25: раздел каталога у расы — по нему строятся блоки библиотеки. */
+        private val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE races ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -364,6 +392,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_20_21,
                     MIGRATION_21_22,
                     MIGRATION_22_23,
+                    MIGRATION_23_24,
+                    MIGRATION_24_25,
                 ).build()
             }
     }

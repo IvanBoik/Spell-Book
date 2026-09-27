@@ -24,6 +24,21 @@
     <string name="library_feats_no_results">No feats match your search</string>
     <string name="library_feats_other_book">Other</string>
     <string name="library_feats_delete_text">Feat “%1$s” will be deleted from the library and removed from every character who has it.</string>
+
+    <!-- Races -->
+    <string name="library_section_races">Races</string>
+    <string name="library_races_title">Races</string>
+    <string name="library_races_search">Race name</string>
+    <string name="library_races_no_results">No races match your search</string>
+    <string name="library_races_other_book">Other</string>
+    <string name="library_races_filter_book">Source book</string>
+    <string name="library_races_empty">The race library is empty</string>
+    <string name="race_sections_title">Sections</string>
+
+    <string name="race_edit">Edit race</string>
+    <string name="race_delete_title">Delete race?</string>
+    <string name="race_delete_text">Race “%1$s” will be deleted from the library.</string>
+    <string name="race_export_success">Race saved to file</string>
     <string name="library_feats_filter_ability">Increases ability</string>
 
     <!-- Scope of an edit made from a character screen -->
@@ -686,6 +701,10 @@
     <plurals name="feat_count">
         <item quantity="one">%1$d feat</item>
         <item quantity="other">%1$d feats</item>
+    </plurals>
+    <plurals name="race_count">
+        <item quantity="one">%1$d race</item>
+        <item quantity="other">%1$d races</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d minute</item>

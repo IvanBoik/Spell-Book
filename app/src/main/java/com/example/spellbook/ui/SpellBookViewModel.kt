@@ -2,6 +2,7 @@ package com.example.spellbook.ui
 
 import android.app.Application
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
@@ -44,6 +45,9 @@ import com.example.spellbook.data.model.CharacterFeat
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
+import com.example.spellbook.data.RaceFilters
+import com.example.spellbook.data.RaceLibraryCodec
+import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.util.DiceRoller
@@ -93,6 +97,19 @@ private const val LIBRARY_DOWNLOAD_PARALLELISM = 8
  */
 private const val BUNDLED_FEATS_VERSION = 2
 
+/**
+ * Версия встроенного набора рас; повышается при обновлении `assets/races-library.json`.
+ *
+ * v2 — файл пересобран парсером с разделением заголовков и подзаголовков,
+ * разметкой художественных врезок и исправленным выделением названий способностей.
+ * v3 — только официальные расы (без homebrew), у каждой есть раздел каталога,
+ * починены `&nbsp;` и лишние звёздочки на стыке соседних выделений.
+ * v4 — импорт удаляет расы, исчезнувшие из набора: без этого homebrew-расы
+ * из предыдущей версии оставались в базе и попадали в раздел «Прочее».
+ * Без повышения версии у тех, кто уже выполнил импорт, остались бы старые данные.
+ */
+private const val BUNDLED_RACES_VERSION = 4
+
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
     /** Персонаж, которому принадлежит экран; null у общих экранов (библиотека, настройки). */
@@ -101,13 +118,17 @@ sealed interface Screen {
     data object Characters : Screen
     data class CharacterSpells(override val characterId: String) : Screen
 
-    /** Корень библиотеки: выбор между заклинаниями и чертами. */
+    /** Корень библиотеки: выбор между заклинаниями, чертами и расами. */
     data object Library : Screen
     data object LibrarySpells : Screen
     data object LibraryFeats : Screen
+    data object LibraryRaces : Screen
 
     /** Просмотр черты из библиотеки. */
     data class FeatDetails(val featId: String) : Screen
+
+    /** Просмотр расы из библиотеки. */
+    data class RaceDetails(val raceId: String) : Screen
 
     /** Просмотр черты при добавлении её персонажу: внизу есть кнопка «Добавить». */
     data class AddFeatDetails(
@@ -154,6 +175,8 @@ data class SpellBookUiState(
     val feats: List<CharacterFeat> = emptyList(),
     /** Общая библиотека черт. */
     val libraryFeats: List<Feat> = emptyList(),
+    /** Общая библиотека рас. */
+    val libraryRaces: List<Race> = emptyList(),
     /** id черт, входящих в набор текущего персонажа. */
     val currentCharacterFeatIds: Set<String> = emptySet(),
     /** Последний бросок d20: показывается небольшой плашкой слева внизу. */
@@ -298,6 +321,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             repository.migrateLegacyIfNeeded()
             importBundledLibraryOnce()
             importBundledFeatsOnce()
+            importBundledRacesOnce()
             restoreLastCharacter()
         }
         repository.observeCharacters()
@@ -313,6 +337,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             .launchIn(viewModelScope)
         repository.observeAllFeats()
             .onEach { uiState = uiState.copy(libraryFeats = it) }
+            .launchIn(viewModelScope)
+        repository.observeAllRaces()
+            .onEach { uiState = uiState.copy(libraryRaces = it) }
             .launchIn(viewModelScope)
     }
 
@@ -406,6 +433,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         if (prefs.bundledFeatsVersion >= BUNDLED_FEATS_VERSION) return
         repository.importBundledFeats()
         prefs.bundledFeatsVersion = BUNDLED_FEATS_VERSION
+    }
+
+    /** Загружает встроенные расы по тем же правилам, что и черты. */
+    private suspend fun importBundledRacesOnce() {
+        if (prefs.bundledRacesVersion >= BUNDLED_RACES_VERSION) return
+        repository.importBundledRaces()
+        prefs.bundledRacesVersion = BUNDLED_RACES_VERSION
     }
 
     /** При старте открываем главную страницу последнего персонажа, если он ещё существует. */
@@ -613,6 +647,75 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         resetFeatControls()
         uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryFeats)
     }
+
+    /**
+     * Раздел библиотеки с расами: поиск и прокрутка начинаются с чистого листа.
+     *
+     * Вызывается при входе из корня библиотеки. Для возврата с экрана расы
+     * есть [backToLibraryRaces]: там позицию списка надо сохранить.
+     */
+    fun openLibraryRaces() {
+        racesQuery = ""
+        racesFilters = RaceFilters()
+        racesScrollIndex = 0
+        racesScrollOffset = 0
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryRaces)
+    }
+
+    /** Возврат к списку рас с сохранёнными поиском и позицией прокрутки. */
+    fun backToLibraryRaces() {
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryRaces)
+    }
+
+    /** Открывает расу отдельным экраном. */
+    fun openRaceDetails(raceId: String) {
+        uiState = uiState.copy(screen = Screen.RaceDetails(raceId))
+    }
+
+    /** Раса библиотеки по идентификатору или null. */
+    fun getLibraryRace(raceId: String): Race? =
+        uiState.libraryRaces.firstOrNull { it.id == raceId }
+
+    /** Поиск по библиотеке рас; хранится здесь, чтобы переживать поворот экрана. */
+    var racesQuery by mutableStateOf("")
+        private set
+
+    fun updateRacesQuery(query: String) { racesQuery = query }
+
+    /** Фильтры библиотеки рас (книга-источник). */
+    var racesFilters by mutableStateOf(RaceFilters())
+        private set
+
+    fun updateRacesFilters(filters: RaceFilters) { racesFilters = filters }
+
+    /** Позиция прокрутки списка рас: возврат с экрана расы открывает список на том же месте. */
+    var racesScrollIndex by mutableIntStateOf(0)
+        private set
+    var racesScrollOffset by mutableIntStateOf(0)
+        private set
+
+    fun saveRacesScroll(index: Int, offset: Int) {
+        racesScrollIndex = index
+        racesScrollOffset = offset
+    }
+
+    /** Сохраняет правку расы в библиотеке. */
+    fun editLibraryRace(raceId: String, name: String, description: String) {
+        viewModelScope.launch {
+            val race = repository.getRace(raceId) ?: return@launch
+            repository.saveRace(
+                race.copy(name = name.trim(), description = description.trim()),
+            )
+        }
+    }
+
+    fun deleteRace(raceId: String) {
+        viewModelScope.launch { repository.deleteRace(raceId) }
+    }
+
+    /** JSON расы для выгрузки в файл или отправки; null — если расы уже нет. */
+    fun exportRaceJson(raceId: String): String? =
+        getLibraryRace(raceId)?.let { RaceLibraryCodec.encode(it) }
 
     /**
      * Сбрасывает поиск и фильтры черт.
