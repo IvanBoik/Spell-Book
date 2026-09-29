@@ -33,6 +33,21 @@
     <string name="library_races_empty">Библиотека рас пуста</string>
     <string name="race_sections_title">Разделы</string>
 
+    <!-- Классы -->
+    <string name="library_section_classes">Классы</string>
+    <string name="library_classes_title">Классы</string>
+    <string name="library_classes_search">Название класса</string>
+    <string name="library_classes_no_results">Нет классов, подходящих под поиск</string>
+    <string name="library_classes_empty">Библиотека классов пуста</string>
+    <string name="class_delete_title">Удалить класс?</string>
+    <string name="class_delete_text">Класс «%1$s» будет удалён из библиотеки.</string>
+    <string name="class_edit">Редактирование класса</string>
+    <string name="class_export_success">Класс сохранён в файл</string>
+    <string name="entries_sort_title">Сортировка:</string>
+    <string name="entries_sort_original">Как в книге</string>
+    <string name="entries_sort_name">По названию</string>
+    <string name="entries_sort_level">По уровню</string>
+
     <string name="race_edit">Редактирование расы</string>
     <string name="race_delete_title">Удалить расу?</string>
     <string name="race_delete_text">Раса «%1$s» будет удалена из библиотеки.</string>
@@ -709,6 +724,12 @@
         <item quantity="few">%1$d расы</item>
         <item quantity="many">%1$d рас</item>
         <item quantity="other">%1$d расы</item>
+    </plurals>
+    <plurals name="class_count">
+        <item quantity="one">%1$d класс</item>
+        <item quantity="few">%1$d класса</item>
+        <item quantity="many">%1$d классов</item>
+        <item quantity="other">%1$d класса</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d минута</item>

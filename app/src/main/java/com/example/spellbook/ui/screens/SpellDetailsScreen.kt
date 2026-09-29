@@ -2,6 +2,7 @@ package com.example.spellbook.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -221,17 +222,25 @@ private fun InfoRow(label: String, value: String) {
  * а токены `[[ref Рывок]]` — на подсвеченное фоном слово, чтобы за него цеплялся глаз.
  */
 @Composable
-internal fun DescriptionText(description: String, onDiceClick: (String) -> Unit) {
+internal fun DescriptionText(
+    description: String,
+    onDiceClick: (String) -> Unit,
+    onFeatureClick: ((String) -> Unit)? = null,
+) {
     // Очищаем при отображении: в уже сохранённых заклинаниях вставки маскота ещё есть.
     val blocks = remember(description) {
         splitDescriptionBlocks(HtmlUtils.removeMascotNotes(description))
     }
-    DescriptionBlocks(blocks, onDiceClick)
+    DescriptionBlocks(blocks, onDiceClick, onFeatureClick)
 }
 
 /** Рисует разобранные блоки описания друг за другом. */
 @Composable
-private fun DescriptionBlocks(blocks: List<DescriptionBlock>, onDiceClick: (String) -> Unit) {
+private fun DescriptionBlocks(
+    blocks: List<DescriptionBlock>,
+    onDiceClick: (String) -> Unit,
+    onFeatureClick: ((String) -> Unit)? = null,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(DESCRIPTION_BLOCK_SPACING)) {
         blocks.forEach { block ->
             when (block) {
@@ -257,7 +266,7 @@ private fun DescriptionBlocks(blocks: List<DescriptionBlock>, onDiceClick: (Stri
 
                 is DescriptionBlock.Quote -> DescriptionQuote(block, onDiceClick)
                 is DescriptionBlock.ListBlock -> DescriptionList(block, onDiceClick)
-                is DescriptionBlock.Table -> DescriptionTable(block, onDiceClick)
+                is DescriptionBlock.Table -> DescriptionTable(block, onDiceClick, onFeatureClick)
                 is DescriptionBlock.Callout -> DescriptionCallout(block, onDiceClick)
             }
         }
@@ -404,10 +413,31 @@ private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit) = 
     append(text.substring(lastIndex))
 }
 
-/** Таблица из описания: шапка выделена фоном, колонки делят ширину поровну. */
+/**
+ * Таблица из описания: шапка выделена фоном, колонки делят ширину поровну.
+ *
+ * Две таблицы из книг ведут себя особым образом:
+ * - если первая колонка подписана костью («к8»), шапка становится кнопкой броска,
+ *   а выпавший вариант подсвечивается;
+ * - в таблице развития класса названия умений ведут к их описанию.
+ */
 @Composable
-private fun DescriptionTable(table: DescriptionBlock.Table, onDiceClick: (String) -> Unit) {
+private fun DescriptionTable(
+    table: DescriptionBlock.Table,
+    onDiceClick: (String) -> Unit,
+    onFeatureClick: ((String) -> Unit)? = null,
+) {
     val shape = RoundedCornerShape(8.dp)
+    // Выпавшее значение кости; null — броска ещё не было.
+    var rolled by remember(table) { mutableStateOf<Int?>(null) }
+
+    val diceFormula = table.header?.firstOrNull()?.let { TableDice.formulaOrNull(it) }
+    val featureColumn = table.header?.indexOfFirst { it.trim().equals(FEATURES_COLUMN, ignoreCase = true) }
+        ?.takeIf { it >= 0 && onFeatureClick != null }
+    val columnWeights = remember(table) { tableColumnWeights(table) }
+    // Расшифровка сокращения столбца; null — подсказка скрыта.
+    var abbreviationHint by remember(table) { mutableStateOf<String?>(null) }
+
     Surface(
         shape = shape,
         color = MaterialTheme.colorScheme.surface,
@@ -416,39 +446,222 @@ private fun DescriptionTable(table: DescriptionBlock.Table, onDiceClick: (String
     ) {
         Column {
             table.header?.let { header ->
-                TableRow(cells = header, isHeader = true, onDiceClick = onDiceClick)
+                // Подсказка стоит над шапкой, как на сайте.
+                abbreviationHint?.let { hint ->
+                    AbbreviationHint(text = hint, onDismiss = { abbreviationHint = null })
+                }
+                TableRow(
+                    cells = header,
+                    isHeader = true,
+                    onDiceClick = onDiceClick,
+                    columnWeights = columnWeights,
+                    // Шапка с костью бросает её и подсвечивает строку с результатом.
+                    onRollDice = diceFormula?.let { formula ->
+                        { DiceRoller.roll(formula)?.let { rolled = it.total } }
+                    },
+                    onAbbreviationClick = { full ->
+                        // Повторное нажатие по тому же столбцу прячет подсказку.
+                        abbreviationHint = full.takeIf { it != abbreviationHint && it.isNotBlank() }
+                    },
+                )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             table.rows.forEachIndexed { index, row ->
                 if (index > 0) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
-                TableRow(cells = row, isHeader = false, onDiceClick = onDiceClick)
+                TableRow(
+                    cells = row,
+                    isHeader = false,
+                    onDiceClick = onDiceClick,
+                    columnWeights = columnWeights,
+                    highlighted = rolled != null && TableDice.matches(row.firstOrNull(), rolled),
+                    featureColumn = featureColumn,
+                    onFeatureClick = onFeatureClick,
+                )
             }
         }
     }
 }
 
+/** Всплывающая расшифровка сокращённой подписи столбца. */
 @Composable
-private fun TableRow(cells: List<String>, isHeader: Boolean, onDiceClick: (String) -> Unit) {
+private fun AbbreviationHint(text: String, onDismiss: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onDismiss),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+@Composable
+private fun TableRow(
+    cells: List<String>,
+    isHeader: Boolean,
+    onDiceClick: (String) -> Unit,
+    columnWeights: List<Float>,
+    highlighted: Boolean = false,
+    onRollDice: (() -> Unit)? = null,
+    featureColumn: Int? = null,
+    onFeatureClick: ((String) -> Unit)? = null,
+    onAbbreviationClick: ((String) -> Unit)? = null,
+) {
+    val background = when {
+        highlighted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+        isHeader -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        else -> Color.Transparent
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                if (isHeader) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                else Color.Transparent,
-            )
+            .background(background)
             .padding(horizontal = 10.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        cells.forEach { cell ->
+        cells.forEachIndexed { index, cell ->
+            val abbreviation = HtmlUtils.ABBR_TOKEN_REGEX.matchEntire(cell.trim())
+            val text = when {
+                // Сокращённая подпись столбца: полное название показываем по нажатию.
+                abbreviation != null && onAbbreviationClick != null -> annotatedAction(
+                    text = abbreviation.groupValues[1],
+                    underline = false,
+                ) { onAbbreviationClick(abbreviation.groupValues[2]) }
+                // Кость в шапке бросается целиком, а не как обычная формула в тексте.
+                isHeader && index == 0 && onRollDice != null -> annotatedAction(cell, onClick = onRollDice)
+                index == featureColumn && onFeatureClick != null -> annotatedFeatures(cell, onFeatureClick)
+                else -> annotatedDescription(cell, onDiceClick)
+            }
             Text(
-                text = annotatedDescription(cell, onDiceClick),
+                text = text,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-                modifier = Modifier.weight(1f),
+                textAlign = if (columnWeights.getOrElse(index) { 1f } <= NARROW_COLUMN_WEIGHT) {
+                    TextAlign.Center
+                } else {
+                    TextAlign.Start
+                },
+                modifier = Modifier.weight(columnWeights.getOrElse(index) { 1f }),
             )
         }
+    }
+}
+
+/**
+ * Доли ширины столбцов по самому длинному содержимому.
+ *
+ * Без этого все столбцы равные, и у заклинателей девять колонок с одной цифрой
+ * съедают большую часть ширины, а столбец с умениями сжимается в столбик букв.
+ * Длина считается по самому длинному слову ячейки: текст всё равно переносится по словам,
+ * и длинный перечень умений не должен забирать всю строку.
+ */
+private fun tableColumnWeights(table: DescriptionBlock.Table): List<Float> {
+    val rows = listOfNotNull(table.header) + table.rows
+    val columns = rows.maxOfOrNull { it.size } ?: return emptyList()
+    return List(columns) { column ->
+        val longestWord = rows.maxOfOrNull { row ->
+            val cell = row.getOrNull(column).orEmpty()
+            // В шапке считаем то, что видно: сокращение, а не его расшифровку.
+            val visible = HtmlUtils.ABBR_TOKEN_REGEX.matchEntire(cell.trim())?.groupValues?.get(1) ?: cell
+            visible.split(' ', '\u00A0').maxOfOrNull { it.length } ?: 0
+        } ?: 0
+        longestWord.coerceIn(MIN_COLUMN_CHARS, MAX_COLUMN_CHARS).toFloat()
+    }
+}
+
+/** Минимальная и максимальная учитываемая ширина столбца в символах. */
+private const val MIN_COLUMN_CHARS = 2
+private const val MAX_COLUMN_CHARS = 12
+
+/** До этой доли столбец считается узким и выравнивается по центру. */
+private const val NARROW_COLUMN_WEIGHT = 4f
+
+/** Подпись колонки с умениями в таблице развития класса. */
+private const val FEATURES_COLUMN = "Умения"
+
+/** Одна кликабельная надпись целиком — например, кость или сокращение в шапке таблицы. */
+@Composable
+private fun annotatedAction(
+    text: String,
+    underline: Boolean = true,
+    onClick: () -> Unit,
+) = buildAnnotatedString {
+    withLink(
+        LinkAnnotation.Clickable(
+            tag = "action",
+            styles = TextLinkStyles(
+                style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    textDecoration = if (underline) TextDecoration.Underline else TextDecoration.None,
+                ),
+            ),
+            linkInteractionListener = { onClick() },
+        ),
+    ) {
+        append(text)
+    }
+}
+
+/**
+ * Ячейка со списком умений: каждое название ведёт к своему описанию.
+ *
+ * Умения в ячейке перечислены через запятую, поэтому ссылка строится на каждый
+ * элемент отдельно, а разделители остаются обычным текстом.
+ */
+@Composable
+private fun annotatedFeatures(cell: String, onFeatureClick: (String) -> Unit) = buildAnnotatedString {
+    val linkStyles = TextLinkStyles(
+        style = SpanStyle(
+            color = MaterialTheme.colorScheme.primary,
+            textDecoration = TextDecoration.Underline,
+        ),
+    )
+    cell.split(',').forEachIndexed { index, part ->
+        if (index > 0) append(", ")
+        val name = part.trim()
+        if (name.isEmpty()) return@forEachIndexed
+        withLink(
+            LinkAnnotation.Clickable(
+                tag = "feature",
+                styles = linkStyles,
+                linkInteractionListener = { onFeatureClick(name) },
+            ),
+        ) {
+            append(name)
+        }
+    }
+}
+
+/** Разбор таблиц со случайными вариантами: кость в шапке и диапазоны в строках. */
+private object TableDice {
+
+    /** Подпись колонки вида «к8», «д100» или «d20». */
+    private val HEADER_REGEX = Regex("^\\s*(\\d*)\\s*[кдd]\\s*(\\d+)\\s*$", RegexOption.IGNORE_CASE)
+
+    /** Значение строки: отдельное число («7») или диапазон («2-3», «01—50»). */
+    private val RANGE_REGEX = Regex("^\\s*(\\d+)\\s*(?:[-–—]\\s*(\\d+))?\\s*$")
+
+    /** Формула броска из подписи колонки; null — колонка не про кость. */
+    fun formulaOrNull(header: String): String? {
+        val match = HEADER_REGEX.find(header) ?: return null
+        val count = match.groupValues[1].ifEmpty { "1" }
+        return count + "d" + match.groupValues[2]
+    }
+
+    /** Попадает ли выпавшее значение в диапазон строки. */
+    fun matches(cell: String?, rolled: Int?): Boolean {
+        if (cell == null || rolled == null) return false
+        val match = RANGE_REGEX.find(cell) ?: return false
+        val from = match.groupValues[1].toIntOrNull() ?: return false
+        val to = match.groupValues[2].toIntOrNull() ?: from
+        return rolled in from..to
     }
 }
 

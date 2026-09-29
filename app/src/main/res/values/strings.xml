@@ -35,6 +35,21 @@
     <string name="library_races_empty">The race library is empty</string>
     <string name="race_sections_title">Sections</string>
 
+    <!-- Classes -->
+    <string name="library_section_classes">Classes</string>
+    <string name="library_classes_title">Classes</string>
+    <string name="library_classes_search">Class name</string>
+    <string name="library_classes_no_results">No classes match your search</string>
+    <string name="library_classes_empty">The class library is empty</string>
+    <string name="class_delete_title">Delete class?</string>
+    <string name="class_delete_text">Class “%1$s” will be deleted from the library.</string>
+    <string name="class_edit">Edit class</string>
+    <string name="class_export_success">Class saved to file</string>
+    <string name="entries_sort_title">Sort:</string>
+    <string name="entries_sort_original">As in book</string>
+    <string name="entries_sort_name">By name</string>
+    <string name="entries_sort_level">By level</string>
+
     <string name="race_edit">Edit race</string>
     <string name="race_delete_title">Delete race?</string>
     <string name="race_delete_text">Race “%1$s” will be deleted from the library.</string>
@@ -705,6 +720,10 @@
     <plurals name="race_count">
         <item quantity="one">%1$d race</item>
         <item quantity="other">%1$d races</item>
+    </plurals>
+    <plurals name="class_count">
+        <item quantity="one">%1$d class</item>
+        <item quantity="other">%1$d classes</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d minute</item>

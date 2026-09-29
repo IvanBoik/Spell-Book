@@ -13,6 +13,7 @@ import com.example.spellbook.data.model.CharacterFeatCrossRef
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
+import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.data.model.SpellOrigin
@@ -43,6 +44,7 @@ class SpellBookRepository(
     private val noteDao = db.noteDao()
     private val featDao = db.featDao()
     private val raceDao = db.raceDao()
+    private val charClassDao = db.charClassDao()
 
     // region Заклинания
 
@@ -348,6 +350,61 @@ class SpellBookRepository(
 
     // endregion
 
+    // region Классы
+
+    fun observeAllClasses(): Flow<List<CharClass>> = charClassDao.observeAll()
+
+    suspend fun getCharClass(classId: String): CharClass? = charClassDao.getById(classId)
+
+    suspend fun saveCharClass(charClass: CharClass) = charClassDao.upsert(charClass)
+
+    suspend fun deleteCharClass(classId: String) = charClassDao.delete(classId)
+
+    /**
+     * Сохраняет официальный класс, не создавая дублей.
+     *
+     * Сверяемся по ссылке, как и у рас: так при обновлении набора у записи
+     * сохраняется идентификатор.
+     *
+     * @return была ли запись добавлена или обновлена.
+     */
+    suspend fun saveOfficialClass(charClass: CharClass): Boolean {
+        if (charClass.name.isBlank()) return false
+        val existing = charClass.source.takeIf { it.isNotBlank() }
+            ?.let { charClassDao.findBySource(it) }
+            ?: run {
+                charClassDao.upsert(charClass)
+                return true
+            }
+        charClassDao.upsert(charClass.copy(id = existing.id, createdAt = existing.createdAt))
+        return true
+    }
+
+    /**
+     * Импортирует набор классов из `assets`.
+     *
+     * Набор синхронизируется целиком, как у рас: исчезнувшие из файла записи
+     * удаляются, иначе исключённые из библиотеки классы останутся в базе навсегда.
+     *
+     * @return сколько записей добавлено или обновлено; 0 — если файла нет.
+     */
+    suspend fun importBundledClasses(): Int = withContext(Dispatchers.IO) {
+        val json = readAsset(BUNDLED_CLASSES_ASSET) ?: return@withContext 0
+
+        val classes = ClassLibraryCodec.decodeAll(json)
+        if (classes.isEmpty()) return@withContext 0
+
+        charClassDao.deleteMissingFromBundle(classes.map { it.source }.filter { it.isNotBlank() })
+
+        var saved = 0
+        classes.forEach { charClass ->
+            if (saveOfficialClass(charClass)) saved++
+        }
+        saved
+    }
+
+    // endregion
+
     /**
      * Разовая миграция: если библиотека пуста
      * переносим заклинания в БД и удаляем файл.
@@ -418,5 +475,6 @@ class SpellBookRepository(
 
         /** Файл со встроенной библиотекой рас; там же. */
         const val BUNDLED_RACES_ASSET = "races-library.json"
+        const val BUNDLED_CLASSES_ASSET = "classes-library.json"
     }
 }

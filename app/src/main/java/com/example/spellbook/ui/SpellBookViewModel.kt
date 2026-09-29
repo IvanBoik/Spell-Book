@@ -46,7 +46,9 @@ import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.RaceFilters
+import com.example.spellbook.data.ClassLibraryCodec
 import com.example.spellbook.data.RaceLibraryCodec
+import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.Spell
@@ -110,6 +112,20 @@ private const val BUNDLED_FEATS_VERSION = 2
  */
 private const val BUNDLED_RACES_VERSION = 4
 
+/**
+ * Версия встроенного набора классов; повышение вызывает повторный импорт.
+ *
+ * v2 — сворачиваются только те разделы, которые сворачиваются и на dnd.su
+ * (подклассы, инфузии), а способности класса стали подзаголовками внутри раздела.
+ * v3 — крупные части («Создание», «Классовые умения») больше не сворачиваются,
+ * homebrew вырезается по группам (включая Midgard), шапка таблицы учитывает слияние ячеек,
+ * а текст волшебника больше не слипается в одну строку.
+ * v4 — убрана превью-строка свёрнутой врезки (дублировала художественный текст),
+ * а подписи столбцов хранятся сокращением с расшифровкой вместо склеенного «Заговорыиз».
+ * Без повышения версии у тех, кто уже выполнил импорт, осталась бы старая разбивка.
+ */
+private const val BUNDLED_CLASSES_VERSION = 4
+
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
     /** Персонаж, которому принадлежит экран; null у общих экранов (библиотека, настройки). */
@@ -118,17 +134,21 @@ sealed interface Screen {
     data object Characters : Screen
     data class CharacterSpells(override val characterId: String) : Screen
 
-    /** Корень библиотеки: выбор между заклинаниями, чертами и расами. */
+    /** Корень библиотеки: выбор между заклинаниями, чертами, расами и классами. */
     data object Library : Screen
     data object LibrarySpells : Screen
     data object LibraryFeats : Screen
     data object LibraryRaces : Screen
+    data object LibraryClasses : Screen
 
     /** Просмотр черты из библиотеки. */
     data class FeatDetails(val featId: String) : Screen
 
     /** Просмотр расы из библиотеки. */
     data class RaceDetails(val raceId: String) : Screen
+
+    /** Просмотр класса из библиотеки. */
+    data class ClassDetails(val classId: String) : Screen
 
     /** Просмотр черты при добавлении её персонажу: внизу есть кнопка «Добавить». */
     data class AddFeatDetails(
@@ -177,6 +197,8 @@ data class SpellBookUiState(
     val libraryFeats: List<Feat> = emptyList(),
     /** Общая библиотека рас. */
     val libraryRaces: List<Race> = emptyList(),
+    /** Общая библиотека классов. */
+    val libraryClasses: List<CharClass> = emptyList(),
     /** id черт, входящих в набор текущего персонажа. */
     val currentCharacterFeatIds: Set<String> = emptySet(),
     /** Последний бросок d20: показывается небольшой плашкой слева внизу. */
@@ -322,6 +344,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             importBundledLibraryOnce()
             importBundledFeatsOnce()
             importBundledRacesOnce()
+            importBundledClassesOnce()
             restoreLastCharacter()
         }
         repository.observeCharacters()
@@ -340,6 +363,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             .launchIn(viewModelScope)
         repository.observeAllRaces()
             .onEach { uiState = uiState.copy(libraryRaces = it) }
+            .launchIn(viewModelScope)
+        repository.observeAllClasses()
+            .onEach { uiState = uiState.copy(libraryClasses = it) }
             .launchIn(viewModelScope)
     }
 
@@ -440,6 +466,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         if (prefs.bundledRacesVersion >= BUNDLED_RACES_VERSION) return
         repository.importBundledRaces()
         prefs.bundledRacesVersion = BUNDLED_RACES_VERSION
+    }
+
+    /** Загружает встроенные классы по тем же правилам, что и расы. */
+    private suspend fun importBundledClassesOnce() {
+        if (prefs.bundledClassesVersion >= BUNDLED_CLASSES_VERSION) return
+        repository.importBundledClasses()
+        prefs.bundledClassesVersion = BUNDLED_CLASSES_VERSION
     }
 
     /** При старте открываем главную страницу последнего персонажа, если он ещё существует. */
@@ -698,6 +731,68 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         racesScrollIndex = index
         racesScrollOffset = offset
     }
+
+    /**
+     * Раздел библиотеки с классами: поиск и прокрутка начинаются с чистого листа.
+     *
+     * Для возврата с экрана класса есть [backToLibraryClasses]: там позицию списка
+     * надо сохранить.
+     */
+    fun openLibraryClasses() {
+        classesQuery = ""
+        classesScrollIndex = 0
+        classesScrollOffset = 0
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryClasses)
+    }
+
+    /** Возврат к списку классов с сохранёнными поиском и позицией прокрутки. */
+    fun backToLibraryClasses() {
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryClasses)
+    }
+
+    /** Открывает класс отдельным экраном. */
+    fun openClassDetails(classId: String) {
+        uiState = uiState.copy(screen = Screen.ClassDetails(classId))
+    }
+
+    /** Класс библиотеки по идентификатору или null. */
+    fun getLibraryClass(classId: String): CharClass? =
+        uiState.libraryClasses.firstOrNull { it.id == classId }
+
+    /** Поиск по библиотеке классов; хранится здесь, чтобы переживать поворот экрана. */
+    var classesQuery by mutableStateOf("")
+        private set
+
+    fun updateClassesQuery(query: String) { classesQuery = query }
+
+    /** Позиция прокрутки списка классов. */
+    var classesScrollIndex by mutableIntStateOf(0)
+        private set
+    var classesScrollOffset by mutableIntStateOf(0)
+        private set
+
+    fun saveClassesScroll(index: Int, offset: Int) {
+        classesScrollIndex = index
+        classesScrollOffset = offset
+    }
+
+    /** Сохраняет правку класса в библиотеке. */
+    fun editLibraryClass(classId: String, name: String, description: String) {
+        viewModelScope.launch {
+            val charClass = repository.getCharClass(classId) ?: return@launch
+            repository.saveCharClass(
+                charClass.copy(name = name.trim(), description = description.trim()),
+            )
+        }
+    }
+
+    fun deleteCharClass(classId: String) {
+        viewModelScope.launch { repository.deleteCharClass(classId) }
+    }
+
+    /** JSON класса для выгрузки в файл или отправки; null — если класса уже нет. */
+    fun exportClassJson(classId: String): String? =
+        getLibraryClass(classId)?.let { ClassLibraryCodec.encode(it) }
 
     /** Сохраняет правку расы в библиотеке. */
     fun editLibraryRace(raceId: String, name: String, description: String) {

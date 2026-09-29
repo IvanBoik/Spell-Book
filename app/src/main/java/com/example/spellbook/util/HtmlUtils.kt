@@ -22,6 +22,14 @@ object HtmlUtils {
     const val HEADING_PREFIX = "## "
 
     /**
+     * Префикс заголовка крупной части статьи, которая не сворачивается.
+     *
+     * На странице класса так оформлены «Создание варвара» и «Классовые умения»: они
+     * членят текст, но читаются обычными абзацами, в отличие от сворачиваемых [HEADING_PREFIX].
+     */
+    const val TOP_HEADING_PREFIX = "# "
+
+    /**
      * Префикс подзаголовка — заголовка внутри раздела.
      *
      * На dnd.su глубокие заголовки (`h4` и ниже) подписывают части одного раздела —
@@ -116,6 +124,12 @@ object HtmlUtils {
 
     /** Текст заголовка без префикса. */
     fun headingText(line: String): String = line.removePrefix(HEADING_PREFIX).trim()
+
+    /** Является ли строка заголовком несворачиваемой части статьи. */
+    fun isTopHeading(line: String): Boolean = line.startsWith(TOP_HEADING_PREFIX)
+
+    /** Текст заголовка части без префикса. */
+    fun topHeadingText(line: String): String = line.removePrefix(TOP_HEADING_PREFIX).trim()
 
     /** Является ли строка подзаголовком внутри раздела. */
     fun isSubheading(line: String): Boolean = line.startsWith(SUBHEADING_PREFIX)
@@ -288,6 +302,24 @@ object HtmlUtils {
      */
     val REF_TOKEN_REGEX = Regex("\\[\\[ref\\s+(.+?)\\]\\]")
 
+    /**
+     * Токен сокращения с расшифровкой: `[[abbr из::Известные заговоры]]`.
+     *
+     * Группа 1 — сокращение для показа, группа 2 — полное название для всплывающей подсказки.
+     * Так подписаны столбцы таблицы развития класса, где ширины на полное название не хватает.
+     *
+     * Разделитель — [ABBR_SEPARATOR], а не `|`: вертикальная черта разорвала бы строку таблицы
+     * и потому заменяется при разборе ячеек.
+     */
+    val ABBR_TOKEN_REGEX = Regex("\\[\\[abbr\\s+(.+?)::(.*?)\\]\\]")
+
+    /** Разделитель сокращения и полного названия в токене. */
+    private const val ABBR_SEPARATOR = "::"
+
+    /** Собирает токен [ABBR_TOKEN_REGEX] из сокращения и полного названия. */
+    fun abbreviationToken(abbreviation: String, full: String): String =
+        "[[abbr $abbreviation$ABBR_SEPARATOR${full.replace(ABBR_SEPARATOR, " ")}]]"
+
     /** Парные инлайновые выделения: `***жирный курсив***`, `**жирный**` и `*курсив*`. */
     val BOLD_ITALIC_REGEX = Regex("\\*\\*\\*(.+?)\\*\\*\\*")
     val BOLD_REGEX = Regex("\\*\\*(.+?)\\*\\*")
@@ -312,6 +344,15 @@ object HtmlUtils {
 
     /** Предел вложенности выделений — защита от бесконечного цикла на битой разметке. */
     private const val MAX_INLINE_NESTING = 5
+
+    /** Блочные теги: инлайновое выделение поверх них — признак незакрытого тега. */
+    private val BLOCK_TAG_REGEX = Regex("(?i)</?(p|div|h[1-6]|table|tr|ul|ol|li|blockquote|br)\\b")
+
+    /**
+     * Строка, уже превращённая в структурную разметку: заголовок, строка таблицы,
+     * пункт списка, цитата или граница врезки. Выделение поверх таких строк нельзя склеивать.
+     */
+    private val STRUCTURE_LINE_REGEX = Regex("\\n\\s*(#{1,3} |\\||- |> |:::)")
 
     /** Таблица целиком и её строки/ячейки — для разбора страниц dnd.su. */
     private val HTML_TABLE_REGEX = Regex("(?is)<table[^>]*>(.*?)</table\\s*>")
@@ -450,6 +491,13 @@ object HtmlUtils {
      * оставались одним курсивом, сливаясь с остальным текстом.
      */
     private fun wrapEmphasis(rawText: String, bold: Boolean, depth: Int): String {
+        // Выделение поверх блочной разметки — это незакрытый тег сайта, а не настоящий
+        // курсив. У волшебника такой `<em>` тянется через половину страницы, и без этой
+        // проверки stripTags склеивал все абзацы, заголовки и таблицы в одну строку.
+        // Такой тег просто снимаем, сохраняя разметку внутри.
+        if (BLOCK_TAG_REGEX.containsMatchIn(rawText) || STRUCTURE_LINE_REGEX.containsMatchIn(rawText)) {
+            return applyInlineMarkup(rawText, depth + 1)
+        }
         // Сначала разбираем вложенные теги, иначе stripTags вырежет их вместе с выделением.
         val text = stripTags(applyInlineMarkup(rawText, depth + 1))
         if (text.isBlank()) return ""
@@ -504,7 +552,22 @@ object HtmlUtils {
         .replace(Regex("\\s+"), " ")
         .trim()
 
-    /** Превращает содержимое `<table>` в строки с `|` и разделителем шапки. */
+    /** Слияние ячеек в шапке таблицы. */
+    private val ROWSPAN_REGEX = Regex("(?i)rowspan\\s*=\\s*[\"']?(\\d+)")
+    private val COLSPAN_REGEX = Regex("(?i)colspan\\s*=\\s*[\"']?(\\d+)")
+
+    /** Ячейка HTML-таблицы с учётом слияния. */
+    private data class HtmlCell(val text: String, val rowSpan: Int, val colSpan: Int)
+
+    /**
+     * Превращает содержимое `<table>` в строки с `|` и разделителем шапки.
+     *
+     * Многострочная шапка сводится в одну строку с учётом `rowspan`/`colspan`. У классов
+     * шапка двухэтажная: «Умения» занимают обе строки, а «Ячейки заклинаний» распадаются
+     * на девять колонок по кругам. Без развёртки вторая строка шапки («1 | 2 | … 9»)
+     * считалась строкой данных, колонки съезжали, и подпись «Умения» оказывалась
+     * над чужим столбцом.
+     */
     private fun htmlTableToPlain(tableHtml: String): String {
         val rows = HTML_ROW_REGEX.findAll(tableHtml).map { rowMatch ->
             val attributes = rowMatch.groupValues[1]
@@ -513,25 +576,58 @@ object HtmlUtils {
             val isHeader = attributes.contains("table_header", ignoreCase = true) ||
                 body.contains("<th", ignoreCase = true)
             val cells = HTML_CELL_REGEX.findAll(body).map { cellMatch ->
+                val cellAttributes = cellMatch.value.substringBefore('>')
                 // Внутри ячейки встречаются `<br>` — склеиваем строки в одну, чтобы не ломать таблицу.
                 val text = stripTags(applyInlineMarkup(cellMatch.groupValues[2]))
-                // Вертикальная черта внутри текста разорвала бы разметку строки.
-                unescape(text).replace('|', '/').trim()
+                HtmlCell(
+                    // Вертикальная черта внутри текста разорвала бы разметку строки.
+                    text = unescape(text).replace('|', '/').trim(),
+                    rowSpan = ROWSPAN_REGEX.find(cellAttributes)?.groupValues?.get(1)?.toIntOrNull() ?: 1,
+                    colSpan = COLSPAN_REGEX.find(cellAttributes)?.groupValues?.get(1)?.toIntOrNull() ?: 1,
+                )
             }.toList()
             isHeader to cells
         }.filter { it.second.isNotEmpty() }.toList()
 
         if (rows.isEmpty()) return ""
+        val headerRows = rows.takeWhile { it.first }.map { it.second }
+        val bodyRows = rows.drop(headerRows.size).map { (_, cells) -> cells.flatMap { cell -> List(cell.colSpan) { cell.text } } }
+
         val result = StringBuilder()
-        rows.forEachIndexed { index, (isHeader, cells) ->
-            result.append(buildTableRow(cells)).append('\n')
-            // Разделитель ставим один раз — сразу после последней строки шапки.
-            val nextIsBody = rows.getOrNull(index + 1)?.first == false
-            if (isHeader && nextIsBody) {
-                result.append(buildTableRow(cells.map { "---" })).append('\n')
+        if (headerRows.isNotEmpty()) {
+            val header = mergeHeaderRows(headerRows)
+            result.append(buildTableRow(header)).append('\n')
+            if (bodyRows.isNotEmpty()) result.append(buildTableRow(header.map { "---" })).append('\n')
+        }
+        bodyRows.forEach { result.append(buildTableRow(it)).append('\n') }
+        return result.toString().trimEnd('\n')
+    }
+
+    /**
+     * Сводит несколько строк шапки в одну.
+     *
+     * Ячейка с `rowspan` занимает свою колонку во всех строках шапки, ячейка с `colspan` —
+     * несколько колонок. Итоговая подпись колонки — нижняя ячейка над ней: так девять
+     * колонок ячеек заклинаний получают подписи «1»…«9», а «Умения» остаются «Умениями».
+     */
+    private fun mergeHeaderRows(headerRows: List<List<HtmlCell>>): List<String> {
+        val grid = mutableMapOf<Pair<Int, Int>, String>()
+        headerRows.forEachIndexed { rowIndex, cells ->
+            var column = 0
+            cells.forEach { cell ->
+                // Пропускаем колонки, уже занятые ячейками из верхних строк.
+                while (grid.containsKey(rowIndex to column)) column++
+                repeat(cell.rowSpan) { dy ->
+                    repeat(cell.colSpan) { dx -> grid[(rowIndex + dy) to (column + dx)] = cell.text }
+                }
+                column += cell.colSpan
             }
         }
-        return result.toString().trimEnd('\n')
+        val width = (grid.keys.maxOfOrNull { it.second } ?: -1) + 1
+        val lastRow = headerRows.lastIndex
+        return List(width) { column ->
+            (lastRow downTo 0).firstNotNullOfOrNull { row -> grid[row to column] }.orEmpty()
+        }
     }
 
     // endregion

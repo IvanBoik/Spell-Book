@@ -8,7 +8,7 @@ plugins {
  * Флаги ручного запуска генераторов встроенных библиотек
  * (см. BundledFeatLibraryGenerator и BundledRaceLibraryGenerator).
  */
-val GENERATOR_PROPERTIES = listOf("generate.feats", "generate.races")
+val GENERATOR_PROPERTIES = listOf("generate.feats", "generate.races", "generate.classes")
 
 android {
     namespace = "com.example.spellbook"

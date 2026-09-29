@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,10 +39,11 @@ private val CONTENT_PADDING = 16.dp
 private val SECTION_ICON_SIZE = 40.dp
 
 /**
- * Корневой экран библиотеки: выбор между заклинаниями, чертами и расами.
+ * Корневой экран библиотеки: выбор между заклинаниями, чертами, расами и классами.
  *
  * Разделы разведены по отдельным экранам, потому что списки живут по разным правилам:
- * у заклинаний — фильтры и сортировка, у черт и рас — группировка по книгам-источникам.
+ * у заклинаний — фильтры и сортировка, у черт и рас — группировка по книгам-источникам,
+ * у классов — простой список с поиском.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,9 +51,11 @@ fun LibraryHubScreen(
     spellCount: Int,
     featCount: Int,
     raceCount: Int,
+    classCount: Int,
     onOpenSpells: () -> Unit,
     onOpenFeats: () -> Unit,
     onOpenRaces: () -> Unit,
+    onOpenClasses: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
 ) {
     Scaffold(
@@ -85,6 +89,14 @@ fun LibraryHubScreen(
                     subtitle = pluralStringResource(R.plurals.race_count, raceCount, raceCount),
                     icon = Icons.Default.Groups,
                     onClick = onOpenRaces,
+                )
+            }
+            item {
+                LibrarySectionCard(
+                    titleRes = R.string.library_section_classes,
+                    subtitle = pluralStringResource(R.plurals.class_count, classCount, classCount),
+                    icon = Icons.Default.Shield,
+                    onClick = onOpenClasses,
                 )
             }
         }

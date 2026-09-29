@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
@@ -33,8 +34,9 @@ import com.example.spellbook.data.model.Spell
         Feat::class,
         CharacterFeatCrossRef::class,
         Race::class,
+        CharClass::class,
     ],
-    version = 25,
+    version = 26,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -47,6 +49,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
     abstract fun noteDao(): NoteDao
     abstract fun featDao(): FeatDao
     abstract fun raceDao(): RaceDao
+    abstract fun charClassDao(): CharClassDao
 
     companion object {
         private const val DB_NAME = "spellbook.db"
@@ -360,6 +363,24 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v25 → v26: библиотека классов персонажа. */
+        private val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS char_classes (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        source TEXT NOT NULL DEFAULT '',
+                        book TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -394,6 +415,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_22_23,
                     MIGRATION_23_24,
                     MIGRATION_24_25,
+                    MIGRATION_25_26,
                 ).build()
             }
     }

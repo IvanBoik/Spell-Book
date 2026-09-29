@@ -43,6 +43,11 @@ class AppPreferences(context: Context) {
         get() = prefs.getInt(KEY_BUNDLED_RACES_VERSION, 0)
         set(value) = prefs.edit().putInt(KEY_BUNDLED_RACES_VERSION, value).apply()
 
+    /** Версия уже импортированного набора классов; 0 — импорта ещё не было. */
+    var bundledClassesVersion: Int
+        get() = prefs.getInt(KEY_BUNDLED_CLASSES_VERSION, 0)
+        set(value) = prefs.edit().putInt(KEY_BUNDLED_CLASSES_VERSION, value).apply()
+
     /** Язык интерфейса; по умолчанию — системный. */
     var language: AppLanguage
         get() = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, null))
@@ -117,6 +122,7 @@ class AppPreferences(context: Context) {
         const val KEY_BUNDLED_LIBRARY = "bundled_library_imported"
         const val KEY_BUNDLED_FEATS_VERSION = "bundled_feats_version"
         const val KEY_BUNDLED_RACES_VERSION = "bundled_races_version"
+        const val KEY_BUNDLED_CLASSES_VERSION = "bundled_classes_version"
         const val KEY_LANGUAGE = "app_language"
         const val KEY_THEME = "app_theme"
         const val KEY_GLOBAL_SECTIONS = "sections_global"
