@@ -43,6 +43,19 @@
     <string name="class_delete_text">Класс «%1$s» будет удалён из библиотеки.</string>
     <string name="class_edit">Редактирование класса</string>
     <string name="class_export_success">Класс сохранён в файл</string>
+
+    <!-- Предыстории -->
+    <string name="library_section_backgrounds">Предыстории</string>
+    <string name="library_backgrounds_title">Предыстории</string>
+    <string name="library_backgrounds_search">Название предыстории</string>
+    <string name="library_backgrounds_no_results">Нет предысторий, подходящих под поиск</string>
+    <string name="library_backgrounds_empty">Библиотека предысторий пуста</string>
+    <string name="library_backgrounds_other_book">Прочее</string>
+    <string name="background_delete_title">Удалить предысторию?</string>
+    <string name="background_delete_text">Предыстория «%1$s» будет удалена из библиотеки.</string>
+    <string name="background_edit">Редактирование предыстории</string>
+    <string name="background_export_success">Предыстория сохранена в файл</string>
+
     <string name="entries_sort_title">Сортировка:</string>
     <string name="entries_sort_original">Как в книге</string>
     <string name="entries_sort_name">По названию</string>
@@ -730,6 +743,12 @@
         <item quantity="few">%1$d класса</item>
         <item quantity="many">%1$d классов</item>
         <item quantity="other">%1$d класса</item>
+    </plurals>
+    <plurals name="background_count">
+        <item quantity="one">%1$d предыстория</item>
+        <item quantity="few">%1$d предыстории</item>
+        <item quantity="many">%1$d предысторий</item>
+        <item quantity="other">%1$d предыстории</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d минута</item>

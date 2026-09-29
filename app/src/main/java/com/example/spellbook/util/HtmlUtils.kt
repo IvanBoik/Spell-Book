@@ -77,6 +77,33 @@ object HtmlUtils {
     fun buildTableRow(cells: List<String>): String = cells.joinToString(" | ", "| ", " |")
 
     /**
+     * Разрезает сплошной блок строк таблицы на отдельные таблицы по шапкам.
+     *
+     * На dnd.su идущие подряд таблицы не разделены текстом — например, в блоке
+     * «Персонализация» у предысторий четыре таблицы подряд (черта характера, идеал,
+     * привязанность, слабость). Без разреза они слипаются в одну длинную таблицу,
+     * в которой шапки соседних таблиц читаются как обычные строки.
+     *
+     * Новая таблица начинается с каждого очередного разделителя шапки: строка
+     * перед ним — её заголовок. Если разделитель всего один (или его нет),
+     * блок возвращается как есть.
+     *
+     * @param block строки таблицы подряд, включая разделители шапки.
+     */
+    fun splitTableBlocks(block: List<String>): List<List<String>> {
+        val separators = block.indices.filter { isTableSeparator(block[it]) }
+        if (separators.size < 2) return listOf(block)
+
+        // Старт каждой таблицы — строка шапки, то есть перед разделителем.
+        // Первый разделитель пропускаем: с него идёт самая первая таблица.
+        val starts = listOf(0) + separators.drop(1).map { it - 1 }.filter { it > 0 }
+        return starts.mapIndexed { index, start ->
+            val end = starts.getOrNull(index + 1) ?: block.size
+            block.subList(start, end)
+        }.filter { it.isNotEmpty() }
+    }
+
+    /**
      * Подпись маскота dnd.su. Его комментарии — пояснения сайта, а не текст заклинания,
      * поэтому такие врезки в описание не попадают.
      */
@@ -166,6 +193,15 @@ object HtmlUtils {
     /** Заголовок врезки из открывающей строки; пустая строка, если заголовка нет. */
     fun calloutTitle(line: String): String = line.removePrefix(CALLOUT_MARKER).trim()
 
+    /**
+     * Является ли строка границей врезки — открывающей или закрывающей.
+     *
+     * У врезки без заголовка обе границы выглядят одинаково (`:::`), поэтому по одной
+     * строке начало от конца не отличить — нужно считать границы по порядку.
+     * Такие врезки встречаются на dnd.su: `additionalInfo` без собственного заголовка.
+     */
+    fun isCalloutBoundary(line: String): Boolean = isCalloutStart(line) || isCalloutEnd(line)
+
     // endregion
 
     // region plainToHtml
@@ -188,8 +224,9 @@ object HtmlUtils {
         while (index < lines.size) {
             val line = lines[index]
             when {
-                isCalloutStart(line) -> {
+                isCalloutBoundary(line) -> {
                     // Содержимое врезки собираем отдельно и обрабатываем рекурсивно.
+                    // Граница без заголовка тоже открывает врезку: иначе маркер утекал бы в текст.
                     val title = calloutTitle(line)
                     val body = mutableListOf<String>()
                     index++
@@ -234,7 +271,8 @@ object HtmlUtils {
                         block += lines[index]
                         index++
                     }
-                    html.append(tableToHtml(block))
+                    // Идущие подряд таблицы остаются отдельными и в HTML.
+                    splitTableBlocks(block).forEach { html.append(tableToHtml(it)) }
                 }
 
                 isBulletItem(line) || isNumberedItem(line) -> {

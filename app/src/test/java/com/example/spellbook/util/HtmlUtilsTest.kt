@@ -71,6 +71,58 @@ class HtmlUtilsTest {
     }
 
     @Test
+    fun `splitTableBlocks separates tables joined by their headers`() {
+        // Как в «Персонализации» предысторий: таблицы идут подряд без текста между ними.
+        val block = listOf(
+            "| к8 | Черта характера |",
+            "| --- | --- |",
+            "| 1 | Первая |",
+            "| к6 | Идеал |",
+            "| --- | --- |",
+            "| 1 | Второй |",
+        )
+
+        val parts = HtmlUtils.splitTableBlocks(block)
+
+        assertEquals(2, parts.size)
+        assertEquals("| к8 | Черта характера |", parts[0].first())
+        assertEquals("| к6 | Идеал |", parts[1].first())
+    }
+
+    @Test
+    fun `splitTableBlocks keeps a single table intact`() {
+        val block = listOf("| к8 | Черта |", "| --- | --- |", "| 1 | Первая |")
+
+        assertEquals(listOf(block), HtmlUtils.splitTableBlocks(block))
+    }
+
+    @Test
+    fun `plainToHtml keeps stacked tables separate`() {
+        val text = "| к8 | Черта |\n| --- | --- |\n| 1 | А |\n| к6 | Идеал |\n| --- | --- |\n| 1 | Б |"
+
+        val html = HtmlUtils.plainToHtml(text)
+
+        assertEquals(2, Regex("<table>").findAll(html).count())
+    }
+
+    @Test
+    fun `callout without a title is recognised by both boundaries`() {
+        // У врезки без заголовка обе границы выглядят одинаково.
+        assertTrue(HtmlUtils.isCalloutBoundary(":::"))
+        assertTrue(HtmlUtils.isCalloutBoundary("::: Заголовок"))
+        assertEquals(false, HtmlUtils.isCalloutBoundary("Обычный текст"))
+    }
+
+    @Test
+    fun `plainToHtml wraps an untitled callout into a block`() {
+        val html = HtmlUtils.plainToHtml(":::\nТекст врезки.\n:::")
+
+        assertTrue(html.contains("additionalInfo"))
+        // Маркеры не должны протекать в видимый текст.
+        assertEquals(false, html.contains("<p>:::</p>"))
+    }
+
+    @Test
     fun `plainToHtml converts inline emphasis`() {
         assertEquals(
             "<p><strong>Жирный</strong> и <em>курсив</em></p>",

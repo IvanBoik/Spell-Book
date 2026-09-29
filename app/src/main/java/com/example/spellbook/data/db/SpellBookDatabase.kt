@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.spellbook.data.model.Background
 import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterSpellCrossRef
@@ -35,8 +36,9 @@ import com.example.spellbook.data.model.Spell
         CharacterFeatCrossRef::class,
         Race::class,
         CharClass::class,
+        Background::class,
     ],
-    version = 26,
+    version = 28,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -50,6 +52,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
     abstract fun featDao(): FeatDao
     abstract fun raceDao(): RaceDao
     abstract fun charClassDao(): CharClassDao
+    abstract fun backgroundDao(): BackgroundDao
 
     companion object {
         private const val DB_NAME = "spellbook.db"
@@ -381,6 +384,31 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v26 → v27: библиотека предысторий. */
+        private val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS backgrounds (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        source TEXT NOT NULL DEFAULT '',
+                        book TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /** v27 → v28: блок каталога у предыстории — по нему строятся блоки библиотеки. */
+        private val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE backgrounds ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -416,6 +444,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_23_24,
                     MIGRATION_24_25,
                     MIGRATION_25_26,
+                    MIGRATION_26_27,
+                    MIGRATION_27_28,
                 ).build()
             }
     }

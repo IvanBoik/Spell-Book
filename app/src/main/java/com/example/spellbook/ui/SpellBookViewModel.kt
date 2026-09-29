@@ -46,8 +46,10 @@ import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.RaceFilters
+import com.example.spellbook.data.BackgroundLibraryCodec
 import com.example.spellbook.data.ClassLibraryCodec
 import com.example.spellbook.data.RaceLibraryCodec
+import com.example.spellbook.data.model.Background
 import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.NoteParagraph
@@ -126,6 +128,17 @@ private const val BUNDLED_RACES_VERSION = 4
  */
 private const val BUNDLED_CLASSES_VERSION = 4
 
+/**
+ * Версия встроенного набора предысторий; повышение вызывает повторный импорт.
+ *
+ * v1 — первая выгрузка официальных предысторий с dnd.su.
+ * v2 — у каждой записи есть блок каталога, по которому строятся блоки библиотеки.
+ * Без повышения версии у тех, кто уже выполнил импорт, все записи остались бы в «Прочем».
+ * v3 — владения и снаряжение вынесены во врезку, а не идут сплошным текстом
+ * вместе с художественным описанием.
+ */
+private const val BUNDLED_BACKGROUNDS_VERSION = 3
+
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
     /** Персонаж, которому принадлежит экран; null у общих экранов (библиотека, настройки). */
@@ -134,12 +147,13 @@ sealed interface Screen {
     data object Characters : Screen
     data class CharacterSpells(override val characterId: String) : Screen
 
-    /** Корень библиотеки: выбор между заклинаниями, чертами, расами и классами. */
+    /** Корень библиотеки: выбор между заклинаниями, чертами, расами, классами и предысториями. */
     data object Library : Screen
     data object LibrarySpells : Screen
     data object LibraryFeats : Screen
     data object LibraryRaces : Screen
     data object LibraryClasses : Screen
+    data object LibraryBackgrounds : Screen
 
     /** Просмотр черты из библиотеки. */
     data class FeatDetails(val featId: String) : Screen
@@ -149,6 +163,9 @@ sealed interface Screen {
 
     /** Просмотр класса из библиотеки. */
     data class ClassDetails(val classId: String) : Screen
+
+    /** Просмотр предыстории из библиотеки. */
+    data class BackgroundDetails(val backgroundId: String) : Screen
 
     /** Просмотр черты при добавлении её персонажу: внизу есть кнопка «Добавить». */
     data class AddFeatDetails(
@@ -199,6 +216,8 @@ data class SpellBookUiState(
     val libraryRaces: List<Race> = emptyList(),
     /** Общая библиотека классов. */
     val libraryClasses: List<CharClass> = emptyList(),
+    /** Общая библиотека предысторий. */
+    val libraryBackgrounds: List<Background> = emptyList(),
     /** id черт, входящих в набор текущего персонажа. */
     val currentCharacterFeatIds: Set<String> = emptySet(),
     /** Последний бросок d20: показывается небольшой плашкой слева внизу. */
@@ -345,6 +364,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             importBundledFeatsOnce()
             importBundledRacesOnce()
             importBundledClassesOnce()
+            importBundledBackgroundsOnce()
             restoreLastCharacter()
         }
         repository.observeCharacters()
@@ -366,6 +386,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             .launchIn(viewModelScope)
         repository.observeAllClasses()
             .onEach { uiState = uiState.copy(libraryClasses = it) }
+            .launchIn(viewModelScope)
+        repository.observeAllBackgrounds()
+            .onEach { uiState = uiState.copy(libraryBackgrounds = it) }
             .launchIn(viewModelScope)
     }
 
@@ -473,6 +496,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         if (prefs.bundledClassesVersion >= BUNDLED_CLASSES_VERSION) return
         repository.importBundledClasses()
         prefs.bundledClassesVersion = BUNDLED_CLASSES_VERSION
+    }
+
+    /** Загружает встроенные предыстории по тем же правилам, что и классы. */
+    private suspend fun importBundledBackgroundsOnce() {
+        if (prefs.bundledBackgroundsVersion >= BUNDLED_BACKGROUNDS_VERSION) return
+        repository.importBundledBackgrounds()
+        prefs.bundledBackgroundsVersion = BUNDLED_BACKGROUNDS_VERSION
     }
 
     /** При старте открываем главную страницу последнего персонажа, если он ещё существует. */
@@ -793,6 +823,68 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     /** JSON класса для выгрузки в файл или отправки; null — если класса уже нет. */
     fun exportClassJson(classId: String): String? =
         getLibraryClass(classId)?.let { ClassLibraryCodec.encode(it) }
+
+    /**
+     * Раздел библиотеки с предысториями: поиск и прокрутка начинаются с чистого листа.
+     *
+     * Для возврата с экрана предыстории есть [backToLibraryBackgrounds]: там позицию
+     * списка надо сохранить.
+     */
+    fun openLibraryBackgrounds() {
+        backgroundsQuery = ""
+        backgroundsScrollIndex = 0
+        backgroundsScrollOffset = 0
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryBackgrounds)
+    }
+
+    /** Возврат к списку предысторий с сохранёнными поиском и позицией прокрутки. */
+    fun backToLibraryBackgrounds() {
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryBackgrounds)
+    }
+
+    /** Открывает предысторию отдельным экраном. */
+    fun openBackgroundDetails(backgroundId: String) {
+        uiState = uiState.copy(screen = Screen.BackgroundDetails(backgroundId))
+    }
+
+    /** Предыстория библиотеки по идентификатору или null. */
+    fun getLibraryBackground(backgroundId: String): Background? =
+        uiState.libraryBackgrounds.firstOrNull { it.id == backgroundId }
+
+    /** Поиск по библиотеке предысторий; хранится здесь, чтобы переживать поворот экрана. */
+    var backgroundsQuery by mutableStateOf("")
+        private set
+
+    fun updateBackgroundsQuery(query: String) { backgroundsQuery = query }
+
+    /** Позиция прокрутки списка предысторий. */
+    var backgroundsScrollIndex by mutableIntStateOf(0)
+        private set
+    var backgroundsScrollOffset by mutableIntStateOf(0)
+        private set
+
+    fun saveBackgroundsScroll(index: Int, offset: Int) {
+        backgroundsScrollIndex = index
+        backgroundsScrollOffset = offset
+    }
+
+    /** Сохраняет правку предыстории в библиотеке. */
+    fun editLibraryBackground(backgroundId: String, name: String, description: String) {
+        viewModelScope.launch {
+            val background = repository.getBackground(backgroundId) ?: return@launch
+            repository.saveBackground(
+                background.copy(name = name.trim(), description = description.trim()),
+            )
+        }
+    }
+
+    fun deleteBackground(backgroundId: String) {
+        viewModelScope.launch { repository.deleteBackground(backgroundId) }
+    }
+
+    /** JSON предыстории для выгрузки в файл или отправки; null — если записи уже нет. */
+    fun exportBackgroundJson(backgroundId: String): String? =
+        getLibraryBackground(backgroundId)?.let { BackgroundLibraryCodec.encode(it) }
 
     /** Сохраняет правку расы в библиотеке. */
     fun editLibraryRace(raceId: String, name: String, description: String) {

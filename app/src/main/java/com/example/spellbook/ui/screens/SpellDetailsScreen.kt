@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -67,6 +68,24 @@ import com.example.spellbook.ui.spellLevelLabel
 import com.example.spellbook.ui.spellOptionLabel
 import com.example.spellbook.util.DiceRoller
 import com.example.spellbook.util.HtmlUtils
+
+/**
+ * Насколько заметно выделять термины-ссылки `[[ref …]]` — навыки, инструменты, языки.
+ *
+ * В заклинаниях и расах такой термин встречается изредка, и жирный курсив помогает
+ * за него зацепиться взглядом. Во владениях предысторий такие термины идут сплошным
+ * перечнем рядом с жирной подписью — жирного становится слишком много, и текст рябит.
+ */
+enum class RefEmphasis {
+    /** Жирный курсив — поведение по умолчанию. */
+    STRONG,
+
+    /** Только курсив: термин остаётся отличим, но не спорит с подписями рядом. */
+    SUBTLE,
+}
+
+/** Выделение терминов-ссылок для текущего экрана. */
+val LocalRefEmphasis = staticCompositionLocalOf { RefEmphasis.STRONG }
 
 /** Расстояние между блоками описания и пунктами списка. */
 private val DESCRIPTION_BLOCK_SPACING = 8.dp
@@ -362,7 +381,10 @@ private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit) = 
             textDecoration = TextDecoration.Underline,
         ),
     )
-    val refStyle = SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+    val refStyle = when (LocalRefEmphasis.current) {
+        RefEmphasis.STRONG -> SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+        RefEmphasis.SUBTLE -> SpanStyle(fontStyle = FontStyle.Italic)
+    }
 
     // Собираем токены всех типов и сортируем по позиции, чтобы пройтись по тексту один раз.
     // Жирный курсив идёт первым: его диапазон поглощает вложенные совпадения жирного и курсива.
@@ -700,8 +722,9 @@ private fun splitDescriptionBlocks(description: String): List<DescriptionBlock> 
     while (index < lines.size) {
         val line = lines[index]
         when {
-            HtmlUtils.isCalloutStart(line) -> {
+            HtmlUtils.isCalloutBoundary(line) -> {
                 flushParagraph()
+                // Граница без заголовка тоже открывает врезку: иначе маркер виден в тексте.
                 val title = HtmlUtils.calloutTitle(line)
                 val body = mutableListOf<String>()
                 index++
@@ -740,23 +763,15 @@ private fun splitDescriptionBlocks(description: String): List<DescriptionBlock> 
 
             HtmlUtils.isTableRow(line) -> {
                 flushParagraph()
-                val rows = mutableListOf<List<String>>()
-                var headerSize = 0
+                val tableLines = mutableListOf<String>()
                 while (index < lines.size && HtmlUtils.isTableRow(lines[index])) {
-                    if (HtmlUtils.isTableSeparator(lines[index])) {
-                        // Разделитель говорит, что всё собранное выше — шапка.
-                        headerSize = rows.size
-                    } else {
-                        rows += HtmlUtils.parseTableRow(lines[index])
-                    }
+                    tableLines += lines[index]
                     index++
                 }
-                if (rows.isNotEmpty()) {
-                    val header = rows.firstOrNull()?.takeIf { headerSize > 0 }
-                    blocks += DescriptionBlock.Table(
-                        header = header,
-                        rows = if (header != null) rows.drop(1) else rows,
-                    )
+                // Идущие подряд таблицы без текста между ними остаются отдельными:
+                // в «Персонализации» предысторий их четыре подряд.
+                HtmlUtils.splitTableBlocks(tableLines).forEach { part ->
+                    blocks += buildTableBlock(part) ?: return@forEach
                 }
             }
 
@@ -782,6 +797,30 @@ private fun splitDescriptionBlocks(description: String): List<DescriptionBlock> 
     }
     flushParagraph()
     return blocks
+}
+
+/**
+ * Собирает таблицу из строк; null — если содержательных строк нет.
+ *
+ * Шапка — строка перед разделителем `| --- |`; без разделителя таблица идёт без заголовка.
+ */
+private fun buildTableBlock(tableLines: List<String>): DescriptionBlock.Table? {
+    val rows = mutableListOf<List<String>>()
+    var headerSize = 0
+    tableLines.forEach { line ->
+        if (HtmlUtils.isTableSeparator(line)) {
+            // Разделитель говорит, что всё собранное выше — шапка.
+            headerSize = rows.size
+        } else {
+            rows += HtmlUtils.parseTableRow(line)
+        }
+    }
+    if (rows.isEmpty()) return null
+    val header = rows.firstOrNull()?.takeIf { headerSize > 0 }
+    return DescriptionBlock.Table(
+        header = header,
+        rows = if (header != null) rows.drop(1) else rows,
+    )
 }
 
 /** Размеченный фрагмент описания: бросок костей или выделенная ссылка-слово. */

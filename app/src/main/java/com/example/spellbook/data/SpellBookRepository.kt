@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.spellbook.data.db.CharacterSpellCount
 import com.example.spellbook.data.db.SpellBookDatabase
 import com.example.spellbook.data.model.Character
+import com.example.spellbook.data.model.Background
 import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboStep
@@ -45,6 +46,7 @@ class SpellBookRepository(
     private val featDao = db.featDao()
     private val raceDao = db.raceDao()
     private val charClassDao = db.charClassDao()
+    private val backgroundDao = db.backgroundDao()
 
     // region Заклинания
 
@@ -405,6 +407,64 @@ class SpellBookRepository(
 
     // endregion
 
+    // region Предыстории
+
+    fun observeAllBackgrounds(): Flow<List<Background>> = backgroundDao.observeAll()
+
+    suspend fun getBackground(backgroundId: String): Background? = backgroundDao.getById(backgroundId)
+
+    suspend fun saveBackground(background: Background) = backgroundDao.upsert(background)
+
+    suspend fun deleteBackground(backgroundId: String) = backgroundDao.delete(backgroundId)
+
+    /**
+     * Сохраняет официальную предысторию, не создавая дублей.
+     *
+     * Сверяемся по ссылке, как у рас и классов: так при обновлении набора
+     * у записи сохраняется идентификатор. Одноимённые предыстории из разных книг
+     * («Артист» и «Артист Врат Балдура») по имени затирали бы друг друга.
+     *
+     * @return была ли запись добавлена или обновлена.
+     */
+    suspend fun saveOfficialBackground(background: Background): Boolean {
+        if (background.name.isBlank()) return false
+        val existing = background.source.takeIf { it.isNotBlank() }
+            ?.let { backgroundDao.findBySource(it) }
+            ?: run {
+                backgroundDao.upsert(background)
+                return true
+            }
+        backgroundDao.upsert(background.copy(id = existing.id, createdAt = existing.createdAt))
+        return true
+    }
+
+    /**
+     * Импортирует набор предысторий из `assets`.
+     *
+     * Набор синхронизируется целиком, как у рас и классов: исчезнувшие из файла
+     * записи удаляются, иначе исключённые из библиотеки предыстории останутся навсегда.
+     *
+     * @return сколько записей добавлено или обновлено; 0 — если файла нет.
+     */
+    suspend fun importBundledBackgrounds(): Int = withContext(Dispatchers.IO) {
+        val json = readAsset(BUNDLED_BACKGROUNDS_ASSET) ?: return@withContext 0
+
+        val backgrounds = BackgroundLibraryCodec.decodeAll(json)
+        if (backgrounds.isEmpty()) return@withContext 0
+
+        backgroundDao.deleteMissingFromBundle(
+            backgrounds.map { it.source }.filter { it.isNotBlank() },
+        )
+
+        var saved = 0
+        backgrounds.forEach { background ->
+            if (saveOfficialBackground(background)) saved++
+        }
+        saved
+    }
+
+    // endregion
+
     /**
      * Разовая миграция: если библиотека пуста
      * переносим заклинания в БД и удаляем файл.
@@ -476,5 +536,8 @@ class SpellBookRepository(
         /** Файл со встроенной библиотекой рас; там же. */
         const val BUNDLED_RACES_ASSET = "races-library.json"
         const val BUNDLED_CLASSES_ASSET = "classes-library.json"
+
+        /** Файл со встроенной библиотекой предысторий; там же. */
+        const val BUNDLED_BACKGROUNDS_ASSET = "backgrounds-library.json"
     }
 }

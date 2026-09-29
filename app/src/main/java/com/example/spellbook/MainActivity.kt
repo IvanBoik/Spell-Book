@@ -84,7 +84,9 @@ import com.example.spellbook.ui.screens.InventoryScreen
 import com.example.spellbook.ui.screens.LibraryFeatsScreen
 import com.example.spellbook.ui.components.ConfirmDeleteDialog
 import com.example.spellbook.ui.screens.FeatEditorDialog
+import com.example.spellbook.ui.screens.BackgroundDetailsScreen
 import com.example.spellbook.ui.screens.ClassDetailsScreen
+import com.example.spellbook.ui.screens.LibraryBackgroundsScreen
 import com.example.spellbook.ui.screens.LibraryClassesScreen
 import com.example.spellbook.ui.screens.LibraryHubScreen
 import com.example.spellbook.ui.screens.LibraryRacesScreen
@@ -149,7 +151,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Что выгружается в файл: заклинание, черта, лист персонажа или вся библиотека. */
-private enum class ExportKind { SPELL, FEAT, RACE, CLASS, CHARACTER, LIBRARY }
+private enum class ExportKind { SPELL, FEAT, RACE, CLASS, BACKGROUND, CHARACTER, LIBRARY }
 
 /** Извлекает первую http(s)-ссылку из произвольного текста (браузеры часто шлют «название + URL»). */
 private fun extractUrl(text: String?): String? {
@@ -243,6 +245,7 @@ private fun SpellBookApp(
             ExportKind.FEAT -> R.string.export_feat_done
             ExportKind.RACE -> R.string.race_export_success
             ExportKind.CLASS -> R.string.class_export_success
+            ExportKind.BACKGROUND -> R.string.background_export_success
             ExportKind.CHARACTER -> R.string.export_character_done
             ExportKind.LIBRARY -> R.string.export_library_done
         }
@@ -333,9 +336,11 @@ private fun SpellBookApp(
             is Screen.Inventory ->
                 viewModel.exitCharacterSection(screen.characterId, CharacterSection.INVENTORY)
             // Разделы библиотеки возвращают к выбору раздела, а не закрывают приложение.
-            Screen.LibrarySpells, Screen.LibraryFeats, Screen.LibraryRaces, Screen.LibraryClasses ->
-                viewModel.openLibrary()
+            Screen.LibrarySpells, Screen.LibraryFeats, Screen.LibraryRaces,
+            Screen.LibraryClasses, Screen.LibraryBackgrounds,
+            -> viewModel.openLibrary()
             is Screen.ClassDetails -> viewModel.backToLibraryClasses()
+            is Screen.BackgroundDetails -> viewModel.backToLibraryBackgrounds()
             is Screen.FeatDetails -> viewModel.openLibraryFeats()
             is Screen.RaceDetails -> viewModel.backToLibraryRaces()
             is Screen.AddFeatDetails -> viewModel.openAddFeats(screen.characterId)
@@ -379,10 +384,12 @@ private fun SpellBookApp(
             featCount = state.libraryFeats.size,
             raceCount = state.libraryRaces.size,
             classCount = state.libraryClasses.size,
+            backgroundCount = state.libraryBackgrounds.size,
             onOpenSpells = viewModel::openLibrarySpells,
             onOpenFeats = viewModel::openLibraryFeats,
             onOpenRaces = viewModel::openLibraryRaces,
             onOpenClasses = viewModel::openLibraryClasses,
+            onOpenBackgrounds = viewModel::openLibraryBackgrounds,
             bottomBar = bottomBar,
         )
 
@@ -450,6 +457,76 @@ private fun SpellBookApp(
                             confirmDeleteClass = false
                             viewModel.deleteCharClass(charClass.id)
                             viewModel.backToLibraryClasses()
+                        },
+                    )
+                }
+            }
+        }
+
+        Screen.LibraryBackgrounds -> LibraryBackgroundsScreen(
+            backgrounds = state.libraryBackgrounds,
+            query = viewModel.backgroundsQuery,
+            onQueryChange = viewModel::updateBackgroundsQuery,
+            onBackgroundClick = viewModel::openBackgroundDetails,
+            onBack = viewModel::openLibrary,
+            bottomBar = bottomBar,
+            initialScrollIndex = viewModel.backgroundsScrollIndex,
+            initialScrollOffset = viewModel.backgroundsScrollOffset,
+            onScrollChanged = viewModel::saveBackgroundsScroll,
+        )
+
+        is Screen.BackgroundDetails -> {
+            val background = viewModel.getLibraryBackground(screen.backgroundId)
+            if (background == null) {
+                // Предысторию могли удалить с другого экрана — возвращаемся к списку.
+                LaunchedEffect(screen.backgroundId) { viewModel.openLibraryBackgrounds() }
+            } else {
+                var editingBackground by remember(background.id) { mutableStateOf(false) }
+                var confirmDeleteBackground by remember(background.id) { mutableStateOf(false) }
+
+                BackgroundDetailsScreen(
+                    background = background,
+                    onBack = viewModel::backToLibraryBackgrounds,
+                    onEdit = { editingBackground = true },
+                    onExport = {
+                        val json = viewModel.exportBackgroundJson(background.id)
+                        if (json != null) {
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.BACKGROUND
+                            exportLauncher.launch(suggestFileName(background.name))
+                        }
+                    },
+                    onShare = {
+                        val json = viewModel.exportBackgroundJson(background.id)
+                        if (json != null) {
+                            shareSpellJson(context, json, suggestFileName(background.name))
+                        }
+                    },
+                    onDelete = { confirmDeleteBackground = true },
+                )
+
+                if (editingBackground) {
+                    // У предыстории те же поля, что и у черты, — название и описание.
+                    FeatEditorDialog(
+                        title = stringResource(R.string.background_edit),
+                        initialName = background.name,
+                        initialDescription = background.description,
+                        onDismiss = { editingBackground = false },
+                        onConfirm = { name, description ->
+                            editingBackground = false
+                            viewModel.editLibraryBackground(background.id, name, description)
+                        },
+                    )
+                }
+                if (confirmDeleteBackground) {
+                    ConfirmDeleteDialog(
+                        title = stringResource(R.string.background_delete_title),
+                        text = stringResource(R.string.background_delete_text, background.name),
+                        onDismiss = { confirmDeleteBackground = false },
+                        onConfirm = {
+                            confirmDeleteBackground = false
+                            viewModel.deleteBackground(background.id)
+                            viewModel.backToLibraryBackgrounds()
                         },
                     )
                 }

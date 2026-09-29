@@ -44,9 +44,11 @@ data class DescriptionSection(
                 result += current.joinToString("\n")
                 current.clear()
             }
+            // У врезки без заголовка обе границы одинаковы, поэтому просто переключаемся:
+            // иначе закрывающий маркер считался бы концом ещё не начатой врезки.
             when {
                 HtmlUtils.isCalloutStart(trimmed) -> insideCallout = true
-                HtmlUtils.isCalloutEnd(trimmed) -> insideCallout = false
+                HtmlUtils.isCalloutEnd(trimmed) -> insideCallout = !insideCallout
             }
             current += line
         }

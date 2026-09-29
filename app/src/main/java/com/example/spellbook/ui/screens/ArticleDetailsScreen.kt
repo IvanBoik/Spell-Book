@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -149,9 +150,9 @@ private fun EntrySortOrder.labelRes(): Int = when (this) {
 }
 
 /**
- * Экран длинной статьи библиотеки: расы или класса.
+ * Экран длинной статьи библиотеки: расы, класса или предыстории.
  *
- * Страницы рас и классов на dnd.su устроены одинаково — большой текст, разбитый
+ * Страницы этих разделов на dnd.su устроены одинаково — большой текст, разбитый
  * заголовками, — поэтому экран общий и повторяет удобные элементы оригинала:
  * - меню-навигация по разделам: нажатие прокручивает список к нужному разделу;
  * - сворачивается только то, что сворачивается на сайте: подклассы, инфузии,
@@ -161,6 +162,10 @@ private fun EntrySortOrder.labelRes(): Int = when (this) {
  *
  * @param articleId идентификатор записи: при его смене сбрасываются свёрнутые разделы.
  * @param book книга-источник; пустая строка убирает строку с подписью.
+ * @param showSectionMenu показывать ли в шапке меню быстрого перехода по разделам.
+ * У коротких статей вроде предысторий оно лишнее: весь текст и так в паре экранов,
+ * а ряд чипов оттесняет начало описания вниз.
+ * @param refEmphasis насколько заметно выделять термины-ссылки внутри текста.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -174,11 +179,14 @@ fun ArticleDetailsScreen(
     onExport: () -> Unit,
     onShare: () -> Unit,
     onDelete: () -> Unit,
+    showSectionMenu: Boolean = true,
+    refEmphasis: RefEmphasis = RefEmphasis.STRONG,
 ) {
     var rollResult by remember { mutableStateOf<DiceRoller.Result?>(null) }
 
     val sections = remember(description) { splitDescriptionSections(description) }
-    val items = remember(sections) { buildArticleItems(sections) }
+    val withHeader = needsHeader(book, showSectionMenu)
+    val items = remember(sections, withHeader) { buildArticleItems(sections, withHeader) }
     val navigableSections = remember(sections) { sections.indices.filterNot { sections[it].isIntro } }
 
     // Раскрытые блоки хранятся номерами: заголовки повторяются («Unearthed Arcana» и т. п.).
@@ -210,73 +218,85 @@ fun ArticleDetailsScreen(
             )
         },
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(CONTENT_PADDING),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(items.size, key = { items[it].key }) { index ->
-                    val onDiceClick: (String) -> Unit = { formula -> rollResult = DiceRoller.roll(formula) }
-                    // Названия умений в таблице развития ведут к их описанию.
-                    val onFeatureClick: (String) -> Unit = { feature ->
-                        sections.findFeature(feature)?.let { scrollTo(it.sectionIndex, it.subheadingIndex) }
+        // Выделение терминов задаётся на весь экран: текст рисуется в десятках мест,
+        // и протаскивать флаг параметром через всю иерархию было бы шумно.
+        CompositionLocalProvider(LocalRefEmphasis provides refEmphasis) {
+            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(CONTENT_PADDING),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(items.size, key = { items[it].key }) { index ->
+                        val onDiceClick: (String) -> Unit = { formula ->
+                            rollResult = DiceRoller.roll(formula)
+                        }
+                        // Названия умений в таблице развития ведут к их описанию.
+                        val onFeatureClick: (String) -> Unit = { feature ->
+                            sections.findFeature(feature)?.let {
+                                scrollTo(it.sectionIndex, it.subheadingIndex)
+                            }
+                        }
+                        when (val item = items[index]) {
+                            ArticleItem.Header -> ArticleHeader(
+                                book = book,
+                                titles = if (showSectionMenu) {
+                                    navigableSections.map { sections[it].title }
+                                } else {
+                                    emptyList()
+                                },
+                                onSectionClick = { position -> scrollTo(navigableSections[position]) },
+                            )
+
+                            is ArticleItem.PartTitle -> ArticlePartTitle(sections[item.sectionIndex])
+
+                            is ArticleItem.Chunk -> DescriptionText(
+                                description = item.text,
+                                onDiceClick = onDiceClick,
+                                onFeatureClick = onFeatureClick,
+                            )
+
+                            is ArticleItem.Collapsible -> CollapsibleSectionCard(
+                                section = sections[item.sectionIndex],
+                                collapsed = item.sectionIndex !in expandedSections,
+                                onToggle = {
+                                    expandedSections = expandedSections.toMutableSet().apply {
+                                        if (!add(item.sectionIndex)) remove(item.sectionIndex)
+                                    }
+                                },
+                                onDiceClick = onDiceClick,
+                                onFeatureClick = onFeatureClick,
+                            )
+                        }
                     }
-                    when (val item = items[index]) {
-                        ArticleItem.Header -> ArticleHeader(
-                            book = book,
-                            titles = navigableSections.map { sections[it].title },
-                            onSectionClick = { position -> scrollTo(navigableSections[position]) },
-                        )
 
-                        is ArticleItem.PartTitle -> ArticlePartTitle(sections[item.sectionIndex])
-
-                        is ArticleItem.Chunk -> DescriptionText(
-                            description = item.text,
-                            onDiceClick = onDiceClick,
-                            onFeatureClick = onFeatureClick,
-                        )
-
-                        is ArticleItem.Collapsible -> CollapsibleSectionCard(
-                            section = sections[item.sectionIndex],
-                            collapsed = item.sectionIndex !in expandedSections,
-                            onToggle = {
-                                expandedSections = expandedSections.toMutableSet().apply {
-                                    if (!add(item.sectionIndex)) remove(item.sectionIndex)
-                                }
-                            },
-                            onDiceClick = onDiceClick,
-                            onFeatureClick = onFeatureClick,
-                        )
-                    }
+                    // Место под плавающий блок действий: внизу он оказывается ниже текста.
+                    item { Spacer(Modifier.height(DetailsActionBarReservedHeight)) }
                 }
 
-                // Место под плавающий блок действий: внизу он оказывается ниже текста.
-                item { Spacer(Modifier.height(DetailsActionBarReservedHeight)) }
-            }
-
-            DetailsActionBar(
-                onEdit = onEdit,
-                onDelete = onDelete,
-                onShare = onShare,
-                onExport = onExport,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
-
-            rollResult?.let { result ->
-                DiceResultCard(
-                    result = result,
-                    onClose = { rollResult = null },
-                    // Поднимаем плашку над блоком действий, чтобы они не перекрывались.
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(
-                            start = CONTENT_PADDING,
-                            end = CONTENT_PADDING,
-                            bottom = DetailsActionBarReservedHeight,
-                        ),
+                DetailsActionBar(
+                    onEdit = onEdit,
+                    onDelete = onDelete,
+                    onShare = onShare,
+                    onExport = onExport,
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
+
+                rollResult?.let { result ->
+                    DiceResultCard(
+                        result = result,
+                        onClose = { rollResult = null },
+                        // Поднимаем плашку над блоком действий, чтобы они не перекрывались.
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(
+                                start = CONTENT_PADDING,
+                                end = CONTENT_PADDING,
+                                bottom = DetailsActionBarReservedHeight,
+                            ),
+                    )
+                }
             }
         }
     }
@@ -309,9 +329,25 @@ private sealed interface ArticleItem {
     }
 }
 
-/** Раскладывает разделы статьи в плоский список для `LazyColumn`. */
-private fun buildArticleItems(sections: List<DescriptionSection>): List<ArticleItem> = buildList {
-    add(ArticleItem.Header)
+/**
+ * Нужна ли шапка статьи.
+ *
+ * Шапка несёт книгу-источник и меню разделов. Если нет ни того, ни другого,
+ * элемент не добавляется вовсе: пустой блок оставил бы лишний отступ над текстом.
+ */
+internal fun needsHeader(book: String, showSectionMenu: Boolean): Boolean =
+    book.isNotBlank() || showSectionMenu
+
+/**
+ * Раскладывает разделы статьи в плоский список для `LazyColumn`.
+ *
+ * @param withHeader нужна ли шапка с книгой и меню разделов.
+ */
+private fun buildArticleItems(
+    sections: List<DescriptionSection>,
+    withHeader: Boolean = true,
+): List<ArticleItem> = buildList {
+    if (withHeader) add(ArticleItem.Header)
     sections.forEachIndexed { sectionIndex, section ->
         if (section.isCollapsible) {
             add(ArticleItem.Collapsible(sectionIndex))

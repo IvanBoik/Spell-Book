@@ -45,6 +45,19 @@
     <string name="class_delete_text">Class “%1$s” will be deleted from the library.</string>
     <string name="class_edit">Edit class</string>
     <string name="class_export_success">Class saved to file</string>
+
+    <!-- Backgrounds -->
+    <string name="library_section_backgrounds">Backgrounds</string>
+    <string name="library_backgrounds_title">Backgrounds</string>
+    <string name="library_backgrounds_search">Background name</string>
+    <string name="library_backgrounds_no_results">No backgrounds match your search</string>
+    <string name="library_backgrounds_empty">The background library is empty</string>
+    <string name="library_backgrounds_other_book">Other</string>
+    <string name="background_delete_title">Delete background?</string>
+    <string name="background_delete_text">Background “%1$s” will be deleted from the library.</string>
+    <string name="background_edit">Edit background</string>
+    <string name="background_export_success">Background saved to file</string>
+
     <string name="entries_sort_title">Sort:</string>
     <string name="entries_sort_original">As in book</string>
     <string name="entries_sort_name">By name</string>
@@ -724,6 +737,10 @@
     <plurals name="class_count">
         <item quantity="one">%1$d class</item>
         <item quantity="other">%1$d classes</item>
+    </plurals>
+    <plurals name="background_count">
+        <item quantity="one">%1$d background</item>
+        <item quantity="other">%1$d backgrounds</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d minute</item>

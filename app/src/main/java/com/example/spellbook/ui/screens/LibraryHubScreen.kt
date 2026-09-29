@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Shield
@@ -39,11 +40,12 @@ private val CONTENT_PADDING = 16.dp
 private val SECTION_ICON_SIZE = 40.dp
 
 /**
- * Корневой экран библиотеки: выбор между заклинаниями, чертами, расами и классами.
+ * Корневой экран библиотеки: выбор между заклинаниями, чертами, расами,
+ * классами и предысториями.
  *
  * Разделы разведены по отдельным экранам, потому что списки живут по разным правилам:
  * у заклинаний — фильтры и сортировка, у черт и рас — группировка по книгам-источникам,
- * у классов — простой список с поиском.
+ * у классов и предысторий — простой список с поиском.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,10 +54,12 @@ fun LibraryHubScreen(
     featCount: Int,
     raceCount: Int,
     classCount: Int,
+    backgroundCount: Int,
     onOpenSpells: () -> Unit,
     onOpenFeats: () -> Unit,
     onOpenRaces: () -> Unit,
     onOpenClasses: () -> Unit,
+    onOpenBackgrounds: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
 ) {
     Scaffold(
@@ -97,6 +101,18 @@ fun LibraryHubScreen(
                     subtitle = pluralStringResource(R.plurals.class_count, classCount, classCount),
                     icon = Icons.Default.Shield,
                     onClick = onOpenClasses,
+                )
+            }
+            item {
+                LibrarySectionCard(
+                    titleRes = R.string.library_section_backgrounds,
+                    subtitle = pluralStringResource(
+                        R.plurals.background_count,
+                        backgroundCount,
+                        backgroundCount,
+                    ),
+                    icon = Icons.AutoMirrored.Filled.MenuBook,
+                    onClick = onOpenBackgrounds,
                 )
             }
         }
