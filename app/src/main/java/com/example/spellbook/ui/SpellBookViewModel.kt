@@ -16,6 +16,7 @@ import com.example.spellbook.data.SectionLayout
 import com.example.spellbook.ui.components.CharacterSection
 import com.example.spellbook.ui.components.EditScope
 import com.example.spellbook.data.CharacterLssCodec
+import com.example.spellbook.data.DEFAULT_INITIATIVE_FORMULA
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.withRecalculatedResources
 import com.example.spellbook.data.DndSuException
@@ -322,6 +323,20 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     var listScrollOffset: Int = 0
         private set
 
+    /**
+     * Видны ли панели списка (шапка разделов и нижняя навигация).
+     *
+     * Хранится рядом с позицией прокрутки и по тем же причинам: иначе при возврате
+     * с экрана заклинания панели всегда возвращались бы, сдвигая список, и открытое
+     * заклинание оказывалось не на своём месте.
+     */
+    var listChromeVisible: Boolean = true
+        private set
+
+    fun saveListChromeVisible(visible: Boolean) {
+        listChromeVisible = visible
+    }
+
     /** Джобы подписок на данные текущего персонажа. */
     private var characterSpellsJob: Job? = null
     private var combosJob: Job? = null
@@ -365,7 +380,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             importBundledRacesOnce()
             importBundledClassesOnce()
             importBundledBackgroundsOnce()
-            restoreLastCharacter()
+            forgetDeletedLastCharacter()
         }
         repository.observeCharacters()
             .onEach { uiState = uiState.copy(characters = it) }
@@ -505,14 +520,17 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.bundledBackgroundsVersion = BUNDLED_BACKGROUNDS_VERSION
     }
 
-    /** При старте открываем главную страницу последнего персонажа, если он ещё существует. */
-    private suspend fun restoreLastCharacter() {
+    /**
+     * Сбрасывает ссылку на последнего персонажа, если его уже удалили.
+     *
+     * Сам персонаж при старте не открывается: приложение всегда начинается со списка
+     * персонажей. Раньше здесь был переход на его характеристики, и экран подменялся
+     * уже после отрисовки списка. Запись всё равно нужна — по ней работает возврат
+     * к персонажу внутри сессии (см. [navigateBackToList]).
+     */
+    private suspend fun forgetDeletedLastCharacter() {
         val lastId = prefs.lastCharacterId ?: return
-        if (repository.getCharacter(lastId) == null) {
-            prefs.lastCharacterId = null
-            return
-        }
-        openCharacterHome(lastId)
+        if (repository.getCharacter(lastId) == null) prefs.lastCharacterId = null
     }
 
     /** Джоба подписки на подготовленные заклинания текущего персонажа. */
@@ -590,6 +608,8 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     private fun resetListScroll() {
         listScrollIndex = 0
         listScrollOffset = 0
+        // Список открывается с начала — панели должны быть на месте.
+        listChromeVisible = true
     }
 
     private fun resetListControls() {
@@ -983,15 +1003,24 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Возврат из деталей заклинания. Если детали открывали с не-списочного экрана
-     * (например, переподготовки) — возвращаемся именно туда, иначе к списку вкладки.
+     * Возврат из деталей заклинания — ровно на тот экран, с которого их открыли.
+     *
+     * Список заклинаний персонажа восстанавливается через [openCharacterSpells] с `resetView = false`:
+     * так сохраняются поиск, фильтры и позиция прокрутки, а экран запоминается как точка
+     * возврата на вкладку «Персонажи».
      */
     fun navigateBackFromDetails() {
         when (val origin = detailsOrigin) {
+            is Screen.CharacterSpells -> {
+                detailsOrigin = null
+                openCharacterSpells(origin.characterId, resetView = false)
+            }
+
             is Screen.PrepareSpells, is Screen.AddSpells, is Screen.SpellSlots -> {
                 detailsOrigin = null
                 uiState = uiState.copy(screen = origin)
             }
+
             else -> navigateBackToList()
         }
     }
@@ -1956,6 +1985,24 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         val character = getCharacter(characterId) ?: return
         viewModelScope.launch {
             repository.upsertCharacter(character.copy(speed = value.coerceAtLeast(0)))
+        }
+    }
+
+    /**
+     * Сохраняет формулу бонуса инициативы.
+     *
+     * Пустая строка и формула по умолчанию хранятся одинаково — как пустое значение:
+     * так «сбросить к Ловкости» и «ввести ровно [dex]» дают один и тот же результат.
+     * Неразборчивое выражение не сохраняется: иначе бонус молча стал бы по умолчанию,
+     * а пользователь видел бы свою формулу в поле.
+     */
+    fun setInitiativeFormula(characterId: String, formula: String) {
+        val character = getCharacter(characterId) ?: return
+        val trimmed = formula.trim()
+        if (trimmed.isNotEmpty() && !StatFormula.isValid(trimmed)) return
+        val normalized = if (trimmed == DEFAULT_INITIATIVE_FORMULA) "" else trimmed
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(initiativeFormula = normalized))
         }
     }
 

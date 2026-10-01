@@ -28,6 +28,9 @@ object CharacterLssCodec {
     private const val MAX_SPELL_SLOT_LEVEL = 9
     private const val INDENT = 2
 
+    /** Ключ бонуса инициативы в блоке `vitality`. */
+    private const val INITIATIVE_KEY = "initiative"
+
     /** Ключи характеристик в формате LSS в порядке [AbilityType]. */
     private val ABILITY_KEYS = listOf("str", "dex", "con", "int", "wis", "cha")
 
@@ -141,6 +144,8 @@ object CharacterLssCodec {
         put("hp-temp", valueObject(character.tempHp))
         put("ac", valueObject(character.armorClass))
         put("speed", valueObject(character.speed))
+        // В лист пишется готовое число: формулы — наше расширение, LSS их не понимает.
+        put(INITIATIVE_KEY, valueObject(character.initiativeBonus))
     }
 
     private fun encodeSpellSlots(character: Character): JSONObject = JSONObject().apply {
@@ -242,6 +247,7 @@ object CharacterLssCodec {
             tempHp = vitality.valueInt("hp-temp", 0),
             armorClass = vitality.valueInt("ac", base.armorClass),
             speed = vitality.valueInt("speed", base.speed),
+            initiativeFormula = decodeInitiativeFormula(vitality, decodeStats(data), base),
             abilityScores = decodeStats(data) ?: base.abilityScores,
             saveProficiencies = decodeSaves(data) ?: base.saveProficiencies,
             skillProficiencies = decodeSkills(data) ?: base.skillProficiencies,
@@ -255,6 +261,35 @@ object CharacterLssCodec {
             otherWeaponProficiencies = decodeTextField(data, OTHER_WEAPON_LABELS)
                 ?: base.otherWeaponProficiencies,
         )
+    }
+
+    /**
+     * Формула инициативы по числу из листа.
+     *
+     * В LSS хранится итоговый бонус, поэтому восстанавливаем выражение относительно
+     * Ловкости: так бонус останется верным и после смены характеристики. Ровно
+     * модификатор Ловкости даёт пустую строку — поведение по умолчанию.
+     *
+     * @param scores разобранные характеристики листа; null — их в листе нет.
+     */
+    private fun decodeInitiativeFormula(
+        vitality: JSONObject?,
+        scores: Map<Int, Int>?,
+        base: Character,
+    ): String {
+        // Отсутствие поля и значение 0 различаются: без поля формулу не трогаем.
+        val node = vitality?.optJSONObject(INITIATIVE_KEY)?.takeIf { it.has("value") }
+            ?: return base.initiativeFormula
+        val total = node.optInt("value", 0)
+        val dexterity = scores?.get(AbilityType.DEXTERITY.ordinal)
+            ?.let { abilityModifier(it) }
+            ?: base.abilityModifierOf(AbilityType.DEXTERITY)
+        val extra = total - dexterity
+        return when {
+            extra == 0 -> ""
+            extra > 0 -> "$DEFAULT_INITIATIVE_FORMULA + $extra"
+            else -> "$DEFAULT_INITIATIVE_FORMULA - ${-extra}"
+        }
     }
 
     /** Быстрая проверка, что JSON похож на лист персонажа LSS. */

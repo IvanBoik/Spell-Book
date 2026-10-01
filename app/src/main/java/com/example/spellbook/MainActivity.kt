@@ -663,6 +663,8 @@ private fun SpellBookApp(
             initialScrollIndex = viewModel.listScrollIndex,
             initialScrollOffset = viewModel.listScrollOffset,
             onScrollChanged = viewModel::saveListScroll,
+            initialChromeVisible = viewModel.listChromeVisible,
+            onChromeVisibilityChanged = viewModel::saveListChromeVisible,
             bottomBar = bottomBar,
             navigationIcon = {
                 IconButton(onClick = viewModel::openLibrary) {
@@ -838,6 +840,9 @@ private fun SpellBookApp(
                     },
                     onSetArmorClass = { value -> viewModel.setArmorClass(screen.characterId, value) },
                     onSetSpeed = { value -> viewModel.setSpeed(screen.characterId, value) },
+                    onSetInitiativeFormula = { formula ->
+                        viewModel.setInitiativeFormula(screen.characterId, formula)
+                    },
                     onSetAbilityScore = { ability, value ->
                         viewModel.setAbilityScore(screen.characterId, ability, value)
                     },
@@ -1254,7 +1259,8 @@ private fun CharacterSpellsScreenContent(
         spells
     }
     SpellListScreen(
-        title = character.name.ifBlank { stringResource(R.string.character_fallback_title) },
+        // Имя персонажа стоит на его главной странице; здесь полезнее название раздела.
+        title = stringResource(R.string.section_spells),
         spells = displayedSpells,
         query = viewModel.listQuery,
         onQueryChange = viewModel::updateListQuery,
@@ -1291,6 +1297,8 @@ private fun CharacterSpellsScreenContent(
         initialScrollIndex = viewModel.listScrollIndex,
         initialScrollOffset = viewModel.listScrollOffset,
         onScrollChanged = viewModel::saveListScroll,
+        initialChromeVisible = viewModel.listChromeVisible,
+        onChromeVisibilityChanged = viewModel::saveListChromeVisible,
         bottomBar = bottomBar,
         floatingActionButton = {
             CharacterSpellsFab(

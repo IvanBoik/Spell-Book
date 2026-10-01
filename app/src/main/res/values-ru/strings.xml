@@ -619,7 +619,7 @@
     <string name="field_description">Описание</string>
 
     <!-- Характеристики -->
-    <string name="stats_title">Характеристики</string>
+
     <string name="stats_armor_class">Класс защиты</string>
     <string name="stats_speed_dialog">Скорость, футы</string>
     <string name="stats_hp">Хиты</string>
@@ -629,8 +629,11 @@
     <string name="stats_speed">Скорость</string>
     <string name="stats_speed_value">%1$d фт</string>
     <string name="stats_proficiency">Мастерство</string>
-    <string name="stats_ability_check">%1$d · проверка %2$s</string>
-    <string name="stats_edit_value">Значение</string>
+    <string name="stats_initiative">Инициатива</string>
+    <string name="stats_initiative_hint">По умолчанию равна модификатору Ловкости. Можно задать формулой, например [dex] + 5.</string>
+    <string name="stats_initiative_reset">По умолчанию</string>
+    <string name="stats_ability_check">проверка %1$s</string>
+
     <string name="stats_roll_result">к20: %1$d %2$s</string>
     <string name="stats_crit_success"> · крит!</string>
     <string name="stats_crit_failure"> · провал</string>

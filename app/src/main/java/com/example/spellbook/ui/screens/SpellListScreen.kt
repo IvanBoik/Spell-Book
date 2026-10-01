@@ -143,6 +143,9 @@ fun SpellListScreen(
     initialScrollIndex: Int = 0,
     initialScrollOffset: Int = 0,
     onScrollChanged: (index: Int, offset: Int) -> Unit = { _, _ -> },
+    /** Видны ли панели при открытии экрана; сохраняется снаружи вместе с позицией прокрутки. */
+    initialChromeVisible: Boolean = true,
+    onChromeVisibilityChanged: (visible: Boolean) -> Unit = {},
 ) {
     var searchActive by remember { mutableStateOf(query.isNotEmpty()) }
     // Автофокус выставляется только при явном открытии поиска, а не при восстановлении сохранённого запроса.
@@ -163,7 +166,10 @@ fun SpellListScreen(
     )
     // Панели реагируют на сам жест, а не на позицию элемента: изменение высоты панелей
     // больше не влияет на определение направления и не создаёт зацикливание/рывки.
-    var chromeVisible by remember { mutableStateOf(true) }
+    // Начальное значение приходит снаружи — так возврат с деталей не сдвигает список.
+    var chromeVisible by remember { mutableStateOf(initialChromeVisible) }
+    // Состояние панелей меняется редко, поэтому сообщаем наружу при каждой смене.
+    LaunchedEffect(chromeVisible) { onChromeVisibilityChanged(chromeVisible) }
     // Пока фильтры развёрнуты, состояние панелей заморожено: прокрутка его не меняет,
     // иначе вместе с верхним блоком сдвигалась и сама панель фильтров.
     val filtersOpen by rememberUpdatedState(showFilters)

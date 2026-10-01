@@ -621,7 +621,7 @@
     <string name="field_description">Description</string>
 
     <!-- Stats -->
-    <string name="stats_title">Stats</string>
+
     <string name="stats_armor_class">Armor class</string>
     <string name="stats_speed_dialog">Speed, feet</string>
     <string name="stats_hp">Hit points</string>
@@ -631,8 +631,11 @@
     <string name="stats_speed">Speed</string>
     <string name="stats_speed_value">%1$d ft</string>
     <string name="stats_proficiency">Proficiency</string>
-    <string name="stats_ability_check">%1$d · check %2$s</string>
-    <string name="stats_edit_value">Value</string>
+    <string name="stats_initiative">Initiative</string>
+    <string name="stats_initiative_hint">Defaults to the Dexterity modifier. You can set a formula, for example [dex] + 5.</string>
+    <string name="stats_initiative_reset">Default</string>
+    <string name="stats_ability_check">check %1$s</string>
+
     <string name="stats_roll_result">d20: %1$d %2$s</string>
     <string name="stats_crit_success"> · crit!</string>
     <string name="stats_crit_failure"> · miss</string>

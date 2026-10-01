@@ -8,6 +8,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -64,6 +65,9 @@ import androidx.compose.ui.unit.dp
 import com.example.spellbook.data.model.AbilityType
 import androidx.compose.ui.res.stringResource
 import com.example.spellbook.R
+import com.example.spellbook.data.DEFAULT_INITIATIVE_FORMULA
+import com.example.spellbook.data.StatFormula
+import com.example.spellbook.data.initiativeBonus
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.D20RollResult
 import com.example.spellbook.data.model.ProficiencyLevel
@@ -71,6 +75,7 @@ import com.example.spellbook.data.model.RollKind
 import com.example.spellbook.data.model.SkillType
 import com.example.spellbook.data.model.formatModifier
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.FormulaTextField
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -78,6 +83,9 @@ import kotlin.math.sin
 private const val ROLL_TOAST_DURATION_MS = 4_000L
 private val STATS_CARD_SHAPE = RoundedCornerShape(12.dp)
 private val STATS_CHIP_SHAPE = RoundedCornerShape(8.dp)
+
+/** Боковой отступ строки со значением: такой же, как у ячеек спасбросков и навыков. */
+private val STATS_ROW_PADDING = 10.dp
 
 
 /** Область нажатия и размер самого значка владения. */
@@ -88,6 +96,9 @@ private const val EXPERTISE_RAY_COUNT = 8
 /**
  * Экран характеристик персонажа: хиты и защита сверху, ниже характеристики,
  * спасброски и навыки. Нажатие на любую строку бросает d20 с её бонусом.
+ *
+ * Это главная страница персонажа, поэтому в шапке стоит его имя, а не название
+ * раздела: текущий раздел и так подсвечен в панели разделов под ней.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,6 +109,7 @@ fun StatsScreen(
     onSetHpValues: (tempHp: Int, maxHp: Int) -> Unit,
     onSetArmorClass: (Int) -> Unit,
     onSetSpeed: (Int) -> Unit,
+    onSetInitiativeFormula: (String) -> Unit,
     onSetAbilityScore: (AbilityType, Int) -> Unit,
     onToggleSave: (AbilityType) -> Unit,
     onCycleSkill: (SkillType) -> Unit,
@@ -109,12 +121,13 @@ fun StatsScreen(
     var showHpDialog by remember { mutableStateOf(false) }
     var editingArmor by remember { mutableStateOf(false) }
     var editingSpeed by remember { mutableStateOf(false) }
+    var editingInitiative by remember { mutableStateOf(false) }
     var editingAbility by remember { mutableStateOf<AbilityType?>(null) }
 
     Scaffold(
         topBar = {
             DndTopBar(
-                title = stringResource(R.string.stats_title),
+                title = character.name.ifBlank { stringResource(R.string.character_fallback_title) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -142,6 +155,8 @@ fun StatsScreen(
                             onHpClick = { showHpDialog = true },
                             onArmorClick = { editingArmor = true },
                             onSpeedClick = { editingSpeed = true },
+                            onInitiativeClick = { editingInitiative = true },
+                            onRoll = onRoll,
                         )
                     }
 
@@ -192,6 +207,13 @@ fun StatsScreen(
             onSave = { onSetSpeed(it); editingSpeed = false },
         )
     }
+    if (editingInitiative) {
+        InitiativeDialog(
+            initial = character.initiativeFormula,
+            onDismiss = { editingInitiative = false },
+            onSave = { onSetInitiativeFormula(it); editingInitiative = false },
+        )
+    }
     editingAbility?.let { ability ->
         NumberDialog(
             title = stringResource(ability.labelRes),
@@ -202,13 +224,20 @@ fun StatsScreen(
     }
 }
 
-/** Хиты, класс защиты и скорость. Хиты открывают расширенный диалог. */
+/**
+ * Хиты, класс защиты, скорость, инициатива и бонус мастерства.
+ *
+ * Хиты открывают расширенный диалог. Инициатива бросается по нажатию, как спасброски
+ * и навыки, а её формула меняется отдельной кнопкой: так бросок не мешает правке.
+ */
 @Composable
 private fun VitalsCard(
     character: Character,
     onHpClick: () -> Unit,
     onArmorClick: () -> Unit,
     onSpeedClick: () -> Unit,
+    onInitiativeClick: () -> Unit,
+    onRoll: (title: String, kind: RollKind, bonus: Int) -> Unit,
 ) {
     Card(
         shape = STATS_CARD_SHAPE,
@@ -277,8 +306,123 @@ private fun VitalsCard(
                     onClick = null,
                 )
             }
+            Spacer(Modifier.height(12.dp))
+            val initiativeLabel = stringResource(R.string.stats_initiative)
+            val initiativeBonus = character.initiativeBonus
+            EditableStatRow(
+                label = initiativeLabel,
+                value = formatModifier(initiativeBonus),
+                // Формула на экране не нужна: её видно в диалоге редактирования.
+                onRoll = { onRoll(initiativeLabel, RollKind.ABILITY, initiativeBonus) },
+                onEdit = onInitiativeClick,
+            )
         }
     }
+}
+
+/**
+ * Строка с редактируемым значением: название слева, значение справа.
+ *
+ * Общая раскладка для инициативы и характеристик: короткое нажатие бросает d20,
+ * долгое — открывает редактирование. Отдельной кнопки нет: правка нужна редко,
+ * а без неё строка читается спокойнее.
+ *
+ * Нажатие обрабатывается на всёй строке, а не только на названии, поэтому подсветка
+ * охватывает и значение. Углы скругляются до подсветки — иначе она выйдет за края карточки.
+ *
+ * @param subtitle мелкая подпись под названием; null — подписи нет.
+ */
+@Composable
+private fun EditableStatRow(
+    label: String,
+    value: String,
+    onRoll: () -> Unit,
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(STATS_CHIP_SHAPE)
+            .combinedClickable(
+                onClick = onRoll,
+                onLongClick = onEdit,
+                // Подсказка для скринридера: иначе правка ничем не обозначена.
+                onLongClickLabel = stringResource(R.string.action_edit),
+            )
+            .padding(horizontal = STATS_ROW_PADDING, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(
+            value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+/**
+ * Диалог формулы инициативы.
+ *
+ * Поле заполняется формулой по умолчанию, если своей ещё нет: проще дописать `+ 5`,
+ * чем набирать выражение с нуля. Кнопка сброса возвращает поведение по умолчанию.
+ */
+@Composable
+private fun InitiativeDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var formula by remember { mutableStateOf(initial.ifBlank { DEFAULT_INITIATIVE_FORMULA }) }
+    val valid = StatFormula.isValid(formula)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        title = { Text(stringResource(R.string.stats_initiative)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    stringResource(R.string.stats_initiative_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FormulaTextField(
+                    value = formula,
+                    onValueChange = { formula = it },
+                    label = stringResource(R.string.stats_initiative),
+                    placeholder = "$DEFAULT_INITIATIVE_FORMULA + 5",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TextButton(onClick = { formula = DEFAULT_INITIATIVE_FORMULA }) {
+                    Text(stringResource(R.string.stats_initiative_reset))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(formula) }, enabled = valid) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
 }
 
 @Composable
@@ -325,26 +469,18 @@ private fun AbilityBlock(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Заголовок: тап — проверка характеристики, кнопка — изменение значения.
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onRoll(abilityLabel, RollKind.ABILITY, abilityModifier) },
-                ) {
-                    Text(abilityLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(
-                        stringResource(
-                            R.string.stats_ability_check,
-                            character.abilityScore(ability),
-                            formatModifier(abilityModifier),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = onEditScore) { Text(stringResource(R.string.stats_edit_value)) }
-            }
+            // Заголовок: тап — проверка характеристики, карандаш — изменение значения.
+            // Справа стоит само значение характеристики, а бонус к её проверке — в подписи.
+            EditableStatRow(
+                label = abilityLabel,
+                value = character.abilityScore(ability).toString(),
+                subtitle = stringResource(
+                    R.string.stats_ability_check,
+                    formatModifier(abilityModifier),
+                ),
+                onRoll = { onRoll(abilityLabel, RollKind.ABILITY, abilityModifier) },
+                onEdit = onEditScore,
+            )
 
             // Спасбросок той же характеристики.
             StatChip(

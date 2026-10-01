@@ -38,7 +38,7 @@ import com.example.spellbook.data.model.Spell
         CharClass::class,
         Background::class,
     ],
-    version = 28,
+    version = 29,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -409,6 +409,18 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v28 → v29: формула бонуса инициативы.
+         *
+         * Пустая строка по умолчанию означает «модификатор Ловкости», поэтому у существующих
+         * персонажей поведение не меняется и данные мигрировать не нужно.
+         */
+        private val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN initiativeFormula TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -446,6 +458,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_25_26,
                     MIGRATION_26_27,
                     MIGRATION_27_28,
+                    MIGRATION_28_29,
                 ).build()
             }
     }
