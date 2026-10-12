@@ -56,6 +56,32 @@
     <string name="background_edit">Редактирование предыстории</string>
     <string name="background_export_success">Предыстория сохранена в файл</string>
 
+    <!-- Магические предметы -->
+    <string name="library_section_magic_items">Магические предметы</string>
+    <string name="library_magic_items_title">Магические предметы</string>
+    <string name="library_magic_items_search">Название предмета</string>
+    <string name="library_magic_items_no_results">Нет предметов, подходящих под поиск</string>
+    <string name="library_magic_items_empty">Библиотека магических предметов пуста</string>
+    <string name="library_magic_items_other_kind">Прочее</string>
+    <string name="magic_item_attunement_short">требуется настройка</string>
+    <string name="magic_item_price">Стоимость: %1$s</string>
+    <string name="magic_item_delete_title">Удалить предмет?</string>
+    <string name="magic_item_delete_text">Предмет «%1$s» будет удалён из библиотеки.</string>
+    <string name="magic_item_edit">Редактирование предмета</string>
+    <string name="magic_item_export_success">Предмет сохранён в файл</string>
+    <string name="library_magic_items_filter_rarity">Редкость</string>
+    <string name="library_magic_items_filter_attunement">Настройка</string>
+    <string name="library_magic_items_filter_book">Книга-источник</string>
+    <string name="magic_item_attunement_required">Требуется</string>
+    <string name="magic_item_attunement_not_required">Не требуется</string>
+    <string name="item_rarity_common">Обычный</string>
+    <string name="item_rarity_uncommon">Необычный</string>
+    <string name="item_rarity_rare">Редкий</string>
+    <string name="item_rarity_very_rare">Очень редкий</string>
+    <string name="item_rarity_legendary">Легендарный</string>
+    <string name="item_rarity_artifact">Артефакт</string>
+    <string name="item_rarity_varies">Редкость варьируется</string>
+
     <string name="entries_sort_title">Сортировка:</string>
     <string name="entries_sort_original">Как в книге</string>
     <string name="entries_sort_name">По названию</string>
@@ -752,6 +778,12 @@
         <item quantity="few">%1$d предыстории</item>
         <item quantity="many">%1$d предысторий</item>
         <item quantity="other">%1$d предыстории</item>
+    </plurals>
+    <plurals name="magic_item_count">
+        <item quantity="one">%1$d предмет</item>
+        <item quantity="few">%1$d предмета</item>
+        <item quantity="many">%1$d предметов</item>
+        <item quantity="other">%1$d предмета</item>
     </plurals>
     <plurals name="measure_minute">
         <item quantity="one">%1$d минута</item>

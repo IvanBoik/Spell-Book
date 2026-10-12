@@ -5,6 +5,7 @@ import com.example.spellbook.data.db.CharacterSpellCount
 import com.example.spellbook.data.db.SpellBookDatabase
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.Background
+import com.example.spellbook.data.model.MagicItem
 import com.example.spellbook.data.model.CharacterSpellCrossRef
 import com.example.spellbook.data.model.Combo
 import com.example.spellbook.data.model.ComboStep
@@ -47,6 +48,7 @@ class SpellBookRepository(
     private val raceDao = db.raceDao()
     private val charClassDao = db.charClassDao()
     private val backgroundDao = db.backgroundDao()
+    private val magicItemDao = db.magicItemDao()
 
     // region Заклинания
 
@@ -465,6 +467,64 @@ class SpellBookRepository(
 
     // endregion
 
+    // region Магические предметы
+
+    fun observeAllMagicItems(): Flow<List<MagicItem>> = magicItemDao.observeAll()
+
+    suspend fun getMagicItem(itemId: String): MagicItem? = magicItemDao.getById(itemId)
+
+    suspend fun saveMagicItem(item: MagicItem) = magicItemDao.upsert(item)
+
+    suspend fun deleteMagicItem(itemId: String) = magicItemDao.delete(itemId)
+
+    /**
+     * Сохраняет официальный предмет, не создавая дублей.
+     *
+     * Сверяемся по ссылке, как у остальных библиотек: так при обновлении набора
+     * у записи сохраняется идентификатор. Одноимённые предметы из разных книг
+     * по имени затирали бы друг друга.
+     *
+     * @return была ли запись добавлена или обновлена.
+     */
+    suspend fun saveOfficialMagicItem(item: MagicItem): Boolean {
+        if (item.name.isBlank()) return false
+        val existing = item.source.takeIf { it.isNotBlank() }
+            ?.let { magicItemDao.findBySource(it) }
+            ?: run {
+                magicItemDao.upsert(item)
+                return true
+            }
+        magicItemDao.upsert(item.copy(id = existing.id, createdAt = existing.createdAt))
+        return true
+    }
+
+    /**
+     * Импортирует набор магических предметов из `assets`.
+     *
+     * Набор синхронизируется целиком, как у остальных библиотек: исчезнувшие
+     * из файла записи удаляются.
+     *
+     * @return сколько записей добавлено или обновлено; 0 — если файла нет.
+     */
+    suspend fun importBundledMagicItems(): Int = withContext(Dispatchers.IO) {
+        val json = readAsset(BUNDLED_MAGIC_ITEMS_ASSET) ?: return@withContext 0
+
+        val items = MagicItemLibraryCodec.decodeAll(json)
+        if (items.isEmpty()) return@withContext 0
+
+        magicItemDao.deleteMissingFromBundle(
+            items.map { it.source }.filter { it.isNotBlank() },
+        )
+
+        var saved = 0
+        items.forEach { item ->
+            if (saveOfficialMagicItem(item)) saved++
+        }
+        saved
+    }
+
+    // endregion
+
     /**
      * Разовая миграция: если библиотека пуста
      * переносим заклинания в БД и удаляем файл.
@@ -539,5 +599,8 @@ class SpellBookRepository(
 
         /** Файл со встроенной библиотекой предысторий; там же. */
         const val BUNDLED_BACKGROUNDS_ASSET = "backgrounds-library.json"
+
+        /** Файл со встроенной библиотекой магических предметов; там же. */
+        const val BUNDLED_MAGIC_ITEMS_ASSET = "magic-items-library.json"
     }
 }

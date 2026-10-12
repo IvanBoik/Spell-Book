@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Shield
@@ -55,11 +56,13 @@ fun LibraryHubScreen(
     raceCount: Int,
     classCount: Int,
     backgroundCount: Int,
+    magicItemCount: Int,
     onOpenSpells: () -> Unit,
     onOpenFeats: () -> Unit,
     onOpenRaces: () -> Unit,
     onOpenClasses: () -> Unit,
     onOpenBackgrounds: () -> Unit,
+    onOpenMagicItems: () -> Unit,
     bottomBar: @Composable () -> Unit = {},
 ) {
     Scaffold(
@@ -113,6 +116,18 @@ fun LibraryHubScreen(
                     ),
                     icon = Icons.AutoMirrored.Filled.MenuBook,
                     onClick = onOpenBackgrounds,
+                )
+            }
+            item {
+                LibrarySectionCard(
+                    titleRes = R.string.library_section_magic_items,
+                    subtitle = pluralStringResource(
+                        R.plurals.magic_item_count,
+                        magicItemCount,
+                        magicItemCount,
+                    ),
+                    icon = Icons.Default.AutoAwesome,
+                    onClick = onOpenMagicItems,
                 )
             }
         }

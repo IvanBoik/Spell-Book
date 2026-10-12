@@ -53,6 +53,11 @@ class AppPreferences(context: Context) {
         get() = prefs.getInt(KEY_BUNDLED_BACKGROUNDS_VERSION, 0)
         set(value) = prefs.edit().putInt(KEY_BUNDLED_BACKGROUNDS_VERSION, value).apply()
 
+    /** Версия уже импортированного набора магических предметов; 0 — импорта ещё не было. */
+    var bundledMagicItemsVersion: Int
+        get() = prefs.getInt(KEY_BUNDLED_MAGIC_ITEMS_VERSION, 0)
+        set(value) = prefs.edit().putInt(KEY_BUNDLED_MAGIC_ITEMS_VERSION, value).apply()
+
     /** Язык интерфейса; по умолчанию — системный. */
     var language: AppLanguage
         get() = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, null))
@@ -129,6 +134,7 @@ class AppPreferences(context: Context) {
         const val KEY_BUNDLED_RACES_VERSION = "bundled_races_version"
         const val KEY_BUNDLED_CLASSES_VERSION = "bundled_classes_version"
         const val KEY_BUNDLED_BACKGROUNDS_VERSION = "bundled_backgrounds_version"
+        const val KEY_BUNDLED_MAGIC_ITEMS_VERSION = "bundled_magic_items_version"
         const val KEY_LANGUAGE = "app_language"
         const val KEY_THEME = "app_theme"
         const val KEY_GLOBAL_SECTIONS = "sections_global"

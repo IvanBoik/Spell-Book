@@ -17,6 +17,7 @@ import com.example.spellbook.data.model.ComboStepLink
 import com.example.spellbook.data.model.CharacterFeatCrossRef
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
+import com.example.spellbook.data.model.MagicItem
 import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.Spell
@@ -37,8 +38,9 @@ import com.example.spellbook.data.model.Spell
         Race::class,
         CharClass::class,
         Background::class,
+        MagicItem::class,
     ],
-    version = 29,
+    version = 30,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -53,6 +55,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
     abstract fun raceDao(): RaceDao
     abstract fun charClassDao(): CharClassDao
     abstract fun backgroundDao(): BackgroundDao
+    abstract fun magicItemDao(): MagicItemDao
 
     companion object {
         private const val DB_NAME = "spellbook.db"
@@ -421,6 +424,29 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** v29 → v30: библиотека магических предметов. */
+        private val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS magic_items (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL DEFAULT '',
+                        description TEXT NOT NULL DEFAULT '',
+                        source TEXT NOT NULL DEFAULT '',
+                        book TEXT NOT NULL DEFAULT '',
+                        category TEXT NOT NULL DEFAULT '',
+                        kind TEXT NOT NULL DEFAULT '',
+                        rarity TEXT NOT NULL DEFAULT '',
+                        requiresAttunement INTEGER NOT NULL DEFAULT 0,
+                        price TEXT NOT NULL DEFAULT '',
+                        createdAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -459,6 +485,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_26_27,
                     MIGRATION_27_28,
                     MIGRATION_28_29,
+                    MIGRATION_29_30,
                 ).build()
             }
     }

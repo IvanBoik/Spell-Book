@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -460,6 +463,13 @@ private fun DescriptionTable(
     // Расшифровка сокращения столбца; null — подсказка скрыта.
     var abbreviationHint by remember(table) { mutableStateOf<String?>(null) }
 
+    // В таблицах на сотню строк выпавший вариант оказывается далеко за экраном,
+    // поэтому после броска прокручиваем список к подсвеченной строке.
+    val rolledRowRequester = remember(table) { BringIntoViewRequester() }
+    LaunchedEffect(table, rolled) {
+        if (rolled != null) rolledRowRequester.bringIntoView()
+    }
+
     Surface(
         shape = shape,
         color = MaterialTheme.colorScheme.surface,
@@ -492,14 +502,17 @@ private fun DescriptionTable(
                 if (index > 0) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
+                val highlighted = rolled != null && TableDice.matches(row.firstOrNull(), rolled)
                 TableRow(
                     cells = row,
                     isHeader = false,
                     onDiceClick = onDiceClick,
                     columnWeights = columnWeights,
-                    highlighted = rolled != null && TableDice.matches(row.firstOrNull(), rolled),
+                    highlighted = highlighted,
                     featureColumn = featureColumn,
                     onFeatureClick = onFeatureClick,
+                    // Запрос вешаем только на выпавшую строку: иначе прокрутка увела бы к первой.
+                    bringIntoViewRequester = rolledRowRequester.takeIf { highlighted },
                 )
             }
         }
@@ -534,6 +547,7 @@ private fun TableRow(
     featureColumn: Int? = null,
     onFeatureClick: ((String) -> Unit)? = null,
     onAbbreviationClick: ((String) -> Unit)? = null,
+    bringIntoViewRequester: BringIntoViewRequester? = null,
 ) {
     val background = when {
         highlighted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
@@ -543,6 +557,9 @@ private fun TableRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                bringIntoViewRequester?.let { Modifier.bringIntoViewRequester(it) } ?: Modifier,
+            )
             .background(background)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),

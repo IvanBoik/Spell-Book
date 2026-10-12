@@ -13,6 +13,7 @@ val GENERATOR_PROPERTIES = listOf(
     "generate.races",
     "generate.classes",
     "generate.backgrounds",
+    "generate.magicitems",
 )
 
 android {

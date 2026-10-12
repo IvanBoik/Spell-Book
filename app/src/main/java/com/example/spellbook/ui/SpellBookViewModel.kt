@@ -48,9 +48,12 @@ import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
 import com.example.spellbook.data.RaceFilters
 import com.example.spellbook.data.BackgroundLibraryCodec
+import com.example.spellbook.data.MagicItemFilters
+import com.example.spellbook.data.MagicItemLibraryCodec
 import com.example.spellbook.data.ClassLibraryCodec
 import com.example.spellbook.data.RaceLibraryCodec
 import com.example.spellbook.data.model.Background
+import com.example.spellbook.data.model.MagicItem
 import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.NoteParagraph
@@ -140,6 +143,9 @@ private const val BUNDLED_CLASSES_VERSION = 4
  */
 private const val BUNDLED_BACKGROUNDS_VERSION = 3
 
+/** Версия встроенного набора магических предметов; повышается при обновлении файла. */
+private const val BUNDLED_MAGIC_ITEMS_VERSION = 1
+
 /** Экраны приложения. Нижняя навигация видна только на «корневых» экранах вкладок. */
 sealed interface Screen {
     /** Персонаж, которому принадлежит экран; null у общих экранов (библиотека, настройки). */
@@ -155,6 +161,7 @@ sealed interface Screen {
     data object LibraryRaces : Screen
     data object LibraryClasses : Screen
     data object LibraryBackgrounds : Screen
+    data object LibraryMagicItems : Screen
 
     /** Просмотр черты из библиотеки. */
     data class FeatDetails(val featId: String) : Screen
@@ -167,6 +174,9 @@ sealed interface Screen {
 
     /** Просмотр предыстории из библиотеки. */
     data class BackgroundDetails(val backgroundId: String) : Screen
+
+    /** Просмотр магического предмета из библиотеки. */
+    data class MagicItemDetails(val itemId: String) : Screen
 
     /** Просмотр черты при добавлении её персонажу: внизу есть кнопка «Добавить». */
     data class AddFeatDetails(
@@ -219,6 +229,7 @@ data class SpellBookUiState(
     val libraryClasses: List<CharClass> = emptyList(),
     /** Общая библиотека предысторий. */
     val libraryBackgrounds: List<Background> = emptyList(),
+    val libraryMagicItems: List<MagicItem> = emptyList(),
     /** id черт, входящих в набор текущего персонажа. */
     val currentCharacterFeatIds: Set<String> = emptySet(),
     /** Последний бросок d20: показывается небольшой плашкой слева внизу. */
@@ -380,6 +391,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             importBundledRacesOnce()
             importBundledClassesOnce()
             importBundledBackgroundsOnce()
+            importBundledMagicItemsOnce()
             forgetDeletedLastCharacter()
         }
         repository.observeCharacters()
@@ -404,6 +416,9 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             .launchIn(viewModelScope)
         repository.observeAllBackgrounds()
             .onEach { uiState = uiState.copy(libraryBackgrounds = it) }
+            .launchIn(viewModelScope)
+        repository.observeAllMagicItems()
+            .onEach { uiState = uiState.copy(libraryMagicItems = it) }
             .launchIn(viewModelScope)
     }
 
@@ -518,6 +533,13 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         if (prefs.bundledBackgroundsVersion >= BUNDLED_BACKGROUNDS_VERSION) return
         repository.importBundledBackgrounds()
         prefs.bundledBackgroundsVersion = BUNDLED_BACKGROUNDS_VERSION
+    }
+
+    /** Загружает встроенные магические предметы по тем же правилам, что и предыстории. */
+    private suspend fun importBundledMagicItemsOnce() {
+        if (prefs.bundledMagicItemsVersion >= BUNDLED_MAGIC_ITEMS_VERSION) return
+        repository.importBundledMagicItems()
+        prefs.bundledMagicItemsVersion = BUNDLED_MAGIC_ITEMS_VERSION
     }
 
     /**
@@ -905,6 +927,88 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
     /** JSON предыстории для выгрузки в файл или отправки; null — если записи уже нет. */
     fun exportBackgroundJson(backgroundId: String): String? =
         getLibraryBackground(backgroundId)?.let { BackgroundLibraryCodec.encode(it) }
+
+    /**
+     * Раздел библиотеки с магическими предметами: поиск и прокрутка начинаются с чистого листа.
+     *
+     * Для возврата с экрана предмета есть [backToLibraryMagicItems].
+     */
+    fun openLibraryMagicItems() {
+        magicItemsQuery = ""
+        magicItemsFilters = MagicItemFilters()
+        magicItemsExpandedKinds = emptySet()
+        magicItemsScrollIndex = 0
+        magicItemsScrollOffset = 0
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryMagicItems)
+    }
+
+    /** Возврат к списку предметов с сохранёнными поиском и позицией прокрутки. */
+    fun backToLibraryMagicItems() {
+        uiState = uiState.copy(tab = Tab.LIBRARY, screen = Screen.LibraryMagicItems)
+    }
+
+    /** Открывает магический предмет отдельным экраном. */
+    fun openMagicItemDetails(itemId: String) {
+        uiState = uiState.copy(screen = Screen.MagicItemDetails(itemId))
+    }
+
+    /** Магический предмет библиотеки по идентификатору или null. */
+    fun getLibraryMagicItem(itemId: String): MagicItem? =
+        uiState.libraryMagicItems.firstOrNull { it.id == itemId }
+
+    /** Поиск по библиотеке предметов; хранится здесь, чтобы переживать поворот экрана. */
+    var magicItemsQuery by mutableStateOf("")
+        private set
+
+    fun updateMagicItemsQuery(query: String) { magicItemsQuery = query }
+
+    /** Фильтры библиотеки предметов (редкость, настройка, книга-источник). */
+    var magicItemsFilters by mutableStateOf(MagicItemFilters())
+        private set
+
+    fun updateMagicItemsFilters(filters: MagicItemFilters) { magicItemsFilters = filters }
+
+    /**
+     * Раскрытые типы предметов в списке; пустое множество — всё свёрнуто.
+     *
+     * Хранится рядом с позицией прокрутки, а не в самом экране: при переходе
+     * на предмет список покидает композицию, и локальное состояние терялось бы.
+     * Тогда при возврате все разделы схлопывались, список становился короче,
+     * и сохранённая позиция теряла смысл — пользователя отбрасывало наверх.
+     */
+    var magicItemsExpandedKinds by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    fun saveMagicItemsExpandedKinds(kinds: Set<String>) { magicItemsExpandedKinds = kinds }
+
+    /** Позиция прокрутки списка предметов. */
+    var magicItemsScrollIndex by mutableIntStateOf(0)
+        private set
+    var magicItemsScrollOffset by mutableIntStateOf(0)
+        private set
+
+    fun saveMagicItemsScroll(index: Int, offset: Int) {
+        magicItemsScrollIndex = index
+        magicItemsScrollOffset = offset
+    }
+
+    /** Сохраняет правку предмета в библиотеке. */
+    fun editLibraryMagicItem(itemId: String, name: String, description: String) {
+        viewModelScope.launch {
+            val item = repository.getMagicItem(itemId) ?: return@launch
+            repository.saveMagicItem(
+                item.copy(name = name.trim(), description = description.trim()),
+            )
+        }
+    }
+
+    fun deleteMagicItem(itemId: String) {
+        viewModelScope.launch { repository.deleteMagicItem(itemId) }
+    }
+
+    /** JSON предмета для выгрузки в файл или отправки; null — если записи уже нет. */
+    fun exportMagicItemJson(itemId: String): String? =
+        getLibraryMagicItem(itemId)?.let { MagicItemLibraryCodec.encode(it) }
 
     /** Сохраняет правку расы в библиотеке. */
     fun editLibraryRace(raceId: String, name: String, description: String) {

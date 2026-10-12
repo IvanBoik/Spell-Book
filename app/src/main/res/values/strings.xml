@@ -58,6 +58,32 @@
     <string name="background_edit">Edit background</string>
     <string name="background_export_success">Background saved to file</string>
 
+    <!-- Magic items -->
+    <string name="library_section_magic_items">Magic items</string>
+    <string name="library_magic_items_title">Magic items</string>
+    <string name="library_magic_items_search">Item name</string>
+    <string name="library_magic_items_no_results">No items match your search</string>
+    <string name="library_magic_items_empty">The magic item library is empty</string>
+    <string name="library_magic_items_other_kind">Other</string>
+    <string name="magic_item_attunement_short">requires attunement</string>
+    <string name="magic_item_price">Price: %1$s</string>
+    <string name="magic_item_delete_title">Delete item?</string>
+    <string name="magic_item_delete_text">Item “%1$s” will be deleted from the library.</string>
+    <string name="magic_item_edit">Edit item</string>
+    <string name="magic_item_export_success">Item saved to file</string>
+    <string name="library_magic_items_filter_rarity">Rarity</string>
+    <string name="library_magic_items_filter_attunement">Attunement</string>
+    <string name="library_magic_items_filter_book">Source book</string>
+    <string name="magic_item_attunement_required">Required</string>
+    <string name="magic_item_attunement_not_required">Not required</string>
+    <string name="item_rarity_common">Common</string>
+    <string name="item_rarity_uncommon">Uncommon</string>
+    <string name="item_rarity_rare">Rare</string>
+    <string name="item_rarity_very_rare">Very rare</string>
+    <string name="item_rarity_legendary">Legendary</string>
+    <string name="item_rarity_artifact">Artifact</string>
+    <string name="item_rarity_varies">Rarity varies</string>
+
     <string name="entries_sort_title">Sort:</string>
     <string name="entries_sort_original">As in book</string>
     <string name="entries_sort_name">By name</string>
@@ -740,6 +766,10 @@
     <plurals name="class_count">
         <item quantity="one">%1$d class</item>
         <item quantity="other">%1$d classes</item>
+    </plurals>
+    <plurals name="magic_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
     </plurals>
     <plurals name="background_count">
         <item quantity="one">%1$d background</item>

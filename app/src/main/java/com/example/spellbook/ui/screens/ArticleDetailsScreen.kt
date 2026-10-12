@@ -162,6 +162,7 @@ private fun EntrySortOrder.labelRes(): Int = when (this) {
  *
  * @param articleId идентификатор записи: при его смене сбрасываются свёрнутые разделы.
  * @param book книга-источник; пустая строка убирает строку с подписью.
+ * @param summary строки над описанием: у магического предмета — тип с редкостью и стоимость.
  * @param showSectionMenu показывать ли в шапке меню быстрого перехода по разделам.
  * У коротких статей вроде предысторий оно лишнее: весь текст и так в паре экранов,
  * а ряд чипов оттесняет начало описания вниз.
@@ -181,11 +182,12 @@ fun ArticleDetailsScreen(
     onDelete: () -> Unit,
     showSectionMenu: Boolean = true,
     refEmphasis: RefEmphasis = RefEmphasis.STRONG,
+    summary: List<String> = emptyList(),
 ) {
     var rollResult by remember { mutableStateOf<DiceRoller.Result?>(null) }
 
     val sections = remember(description) { splitDescriptionSections(description) }
-    val withHeader = needsHeader(book, showSectionMenu)
+    val withHeader = needsHeader(book, showSectionMenu, summary)
     val items = remember(sections, withHeader) { buildArticleItems(sections, withHeader) }
     val navigableSections = remember(sections) { sections.indices.filterNot { sections[it].isIntro } }
 
@@ -241,6 +243,7 @@ fun ArticleDetailsScreen(
                         when (val item = items[index]) {
                             ArticleItem.Header -> ArticleHeader(
                                 book = book,
+                                summary = summary,
                                 titles = if (showSectionMenu) {
                                     navigableSections.map { sections[it].title }
                                 } else {
@@ -332,11 +335,14 @@ private sealed interface ArticleItem {
 /**
  * Нужна ли шапка статьи.
  *
- * Шапка несёт книгу-источник и меню разделов. Если нет ни того, ни другого,
+ * Шапка несёт сводку, книгу-источник и меню разделов. Если нет ничего из этого,
  * элемент не добавляется вовсе: пустой блок оставил бы лишний отступ над текстом.
  */
-internal fun needsHeader(book: String, showSectionMenu: Boolean): Boolean =
-    book.isNotBlank() || showSectionMenu
+internal fun needsHeader(
+    book: String,
+    showSectionMenu: Boolean,
+    summary: List<String> = emptyList(),
+): Boolean = book.isNotBlank() || showSectionMenu || summary.isNotEmpty()
 
 /**
  * Раскладывает разделы статьи в плоский список для `LazyColumn`.
@@ -408,14 +414,24 @@ private fun ArticlePartTitle(section: DescriptionSection) {
 /** Прозрачность линии под заголовком части: разделяет, но не спорит с текстом. */
 private const val PART_DIVIDER_ALPHA = 0.4f
 
-/** Шапка: книга-источник и меню быстрого перехода по разделам. */
+/** Шапка: сводка, книга-источник и меню быстрого перехода по разделам. */
 @Composable
 private fun ArticleHeader(
     book: String,
+    summary: List<String>,
     titles: List<String>,
     onSectionClick: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Сводка идёт первой: у предмета это тип с редкостью — главное после названия.
+        summary.forEach { line ->
+            Text(
+                line,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         if (book.isNotBlank()) {
             Text(
                 book,

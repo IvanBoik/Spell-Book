@@ -87,6 +87,8 @@ import com.example.spellbook.ui.screens.FeatEditorDialog
 import com.example.spellbook.ui.screens.BackgroundDetailsScreen
 import com.example.spellbook.ui.screens.ClassDetailsScreen
 import com.example.spellbook.ui.screens.LibraryBackgroundsScreen
+import com.example.spellbook.ui.screens.LibraryMagicItemsScreen
+import com.example.spellbook.ui.screens.MagicItemDetailsScreen
 import com.example.spellbook.ui.screens.LibraryClassesScreen
 import com.example.spellbook.ui.screens.LibraryHubScreen
 import com.example.spellbook.ui.screens.LibraryRacesScreen
@@ -151,7 +153,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Что выгружается в файл: заклинание, черта, лист персонажа или вся библиотека. */
-private enum class ExportKind { SPELL, FEAT, RACE, CLASS, BACKGROUND, CHARACTER, LIBRARY }
+private enum class ExportKind { SPELL, FEAT, RACE, CLASS, BACKGROUND, MAGIC_ITEM, CHARACTER, LIBRARY }
 
 /** Извлекает первую http(s)-ссылку из произвольного текста (браузеры часто шлют «название + URL»). */
 private fun extractUrl(text: String?): String? {
@@ -246,6 +248,7 @@ private fun SpellBookApp(
             ExportKind.RACE -> R.string.race_export_success
             ExportKind.CLASS -> R.string.class_export_success
             ExportKind.BACKGROUND -> R.string.background_export_success
+            ExportKind.MAGIC_ITEM -> R.string.magic_item_export_success
             ExportKind.CHARACTER -> R.string.export_character_done
             ExportKind.LIBRARY -> R.string.export_library_done
         }
@@ -337,10 +340,11 @@ private fun SpellBookApp(
                 viewModel.exitCharacterSection(screen.characterId, CharacterSection.INVENTORY)
             // Разделы библиотеки возвращают к выбору раздела, а не закрывают приложение.
             Screen.LibrarySpells, Screen.LibraryFeats, Screen.LibraryRaces,
-            Screen.LibraryClasses, Screen.LibraryBackgrounds,
+            Screen.LibraryClasses, Screen.LibraryBackgrounds, Screen.LibraryMagicItems,
             -> viewModel.openLibrary()
             is Screen.ClassDetails -> viewModel.backToLibraryClasses()
             is Screen.BackgroundDetails -> viewModel.backToLibraryBackgrounds()
+            is Screen.MagicItemDetails -> viewModel.backToLibraryMagicItems()
             is Screen.FeatDetails -> viewModel.openLibraryFeats()
             is Screen.RaceDetails -> viewModel.backToLibraryRaces()
             is Screen.AddFeatDetails -> viewModel.openAddFeats(screen.characterId)
@@ -385,11 +389,13 @@ private fun SpellBookApp(
             raceCount = state.libraryRaces.size,
             classCount = state.libraryClasses.size,
             backgroundCount = state.libraryBackgrounds.size,
+            magicItemCount = state.libraryMagicItems.size,
             onOpenSpells = viewModel::openLibrarySpells,
             onOpenFeats = viewModel::openLibraryFeats,
             onOpenRaces = viewModel::openLibraryRaces,
             onOpenClasses = viewModel::openLibraryClasses,
             onOpenBackgrounds = viewModel::openLibraryBackgrounds,
+            onOpenMagicItems = viewModel::openLibraryMagicItems,
             bottomBar = bottomBar,
         )
 
@@ -527,6 +533,80 @@ private fun SpellBookApp(
                             confirmDeleteBackground = false
                             viewModel.deleteBackground(background.id)
                             viewModel.backToLibraryBackgrounds()
+                        },
+                    )
+                }
+            }
+        }
+
+        Screen.LibraryMagicItems -> LibraryMagicItemsScreen(
+            items = state.libraryMagicItems,
+            query = viewModel.magicItemsQuery,
+            onQueryChange = viewModel::updateMagicItemsQuery,
+            filters = viewModel.magicItemsFilters,
+            onFiltersChange = viewModel::updateMagicItemsFilters,
+            expandedKinds = viewModel.magicItemsExpandedKinds,
+            onExpandedKindsChange = viewModel::saveMagicItemsExpandedKinds,
+            onItemClick = viewModel::openMagicItemDetails,
+            onBack = viewModel::openLibrary,
+            bottomBar = bottomBar,
+            initialScrollIndex = viewModel.magicItemsScrollIndex,
+            initialScrollOffset = viewModel.magicItemsScrollOffset,
+            onScrollChanged = viewModel::saveMagicItemsScroll,
+        )
+
+        is Screen.MagicItemDetails -> {
+            val magicItem = viewModel.getLibraryMagicItem(screen.itemId)
+            if (magicItem == null) {
+                // Предмет могли удалить с другого экрана — возвращаемся к списку.
+                LaunchedEffect(screen.itemId) { viewModel.openLibraryMagicItems() }
+            } else {
+                var editingMagicItem by remember(magicItem.id) { mutableStateOf(false) }
+                var confirmDeleteMagicItem by remember(magicItem.id) { mutableStateOf(false) }
+
+                MagicItemDetailsScreen(
+                    item = magicItem,
+                    onBack = viewModel::backToLibraryMagicItems,
+                    onEdit = { editingMagicItem = true },
+                    onExport = {
+                        val json = viewModel.exportMagicItemJson(magicItem.id)
+                        if (json != null) {
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.MAGIC_ITEM
+                            exportLauncher.launch(suggestFileName(magicItem.name))
+                        }
+                    },
+                    onShare = {
+                        val json = viewModel.exportMagicItemJson(magicItem.id)
+                        if (json != null) {
+                            shareSpellJson(context, json, suggestFileName(magicItem.name))
+                        }
+                    },
+                    onDelete = { confirmDeleteMagicItem = true },
+                )
+
+                if (editingMagicItem) {
+                    // У предмета те же редактируемые поля, что и у черты, — название и описание.
+                    FeatEditorDialog(
+                        title = stringResource(R.string.magic_item_edit),
+                        initialName = magicItem.name,
+                        initialDescription = magicItem.description,
+                        onDismiss = { editingMagicItem = false },
+                        onConfirm = { name, description ->
+                            editingMagicItem = false
+                            viewModel.editLibraryMagicItem(magicItem.id, name, description)
+                        },
+                    )
+                }
+                if (confirmDeleteMagicItem) {
+                    ConfirmDeleteDialog(
+                        title = stringResource(R.string.magic_item_delete_title),
+                        text = stringResource(R.string.magic_item_delete_text, magicItem.name),
+                        onDismiss = { confirmDeleteMagicItem = false },
+                        onConfirm = {
+                            confirmDeleteMagicItem = false
+                            viewModel.deleteMagicItem(magicItem.id)
+                            viewModel.backToLibraryMagicItems()
                         },
                     )
                 }
