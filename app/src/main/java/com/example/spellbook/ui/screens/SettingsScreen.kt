@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Card
@@ -83,6 +84,9 @@ fun SettingsScreen(
     /** Сброс: у персонажа — к общей настройке, у общей области — к порядку по умолчанию. */
     onLayoutReset: () -> Unit,
     onBack: () -> Unit,
+    /** Почта вошедшего пользователя; null — аккаунт не подключён. */
+    accountEmail: String? = null,
+    onOpenAccount: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
 ) {
     Scaffold(
@@ -103,6 +107,10 @@ fun SettingsScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(CARD_PADDING),
             verticalArrangement = Arrangement.spacedBy(SECTION_SPACING),
         ) {
+            item {
+                AccountSettingsCard(email = accountEmail, onOpen = onOpenAccount)
+            }
+
             item {
                 GeneralSettingsCard(
                     language = language,
@@ -173,6 +181,50 @@ private fun LazyListScope.sectionItems(
                 onLayoutChange(layout.copy(order = order, hidden = hidden))
             },
         )
+    }
+}
+
+/**
+ * Карточка аккаунта.
+ *
+ * Аккаунт опционален, поэтому без входа карточка объясняет, зачем он нужен,
+ * а не требует войти: всё приложение работает и без него.
+ */
+@Composable
+private fun AccountSettingsCard(email: String?, onOpen: () -> Unit) {
+    SettingsCard(title = stringResource(R.string.settings_account)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Default.AccountCircle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(
+                    email ?: stringResource(R.string.settings_account_signed_out),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = if (email != null) FontWeight.Bold else FontWeight.Normal,
+                )
+                Text(
+                    stringResource(
+                        if (email != null) {
+                            R.string.settings_account_signed_in_note
+                        } else {
+                            R.string.settings_account_signed_out_note
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        TextButton(onClick = onOpen) {
+            Text(
+                stringResource(
+                    if (email != null) R.string.settings_account_manage else R.string.settings_account_sign_in,
+                ),
+            )
+        }
     }
 }
 

@@ -203,6 +203,9 @@ sealed interface Screen {
     data class Feats(override val characterId: String) : Screen
     data class AddFeats(override val characterId: String) : Screen
     data object Settings : Screen
+
+    /** Аккаунт: вход, регистрация или профиль. Открывается из настроек. */
+    data object Account : Screen
 }
 
 data class SpellBookUiState(
@@ -461,6 +464,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun exitSettings() {
         selectTab(Tab.CHARACTERS)
+    }
+
+    fun openAccount() {
+        uiState = uiState.copy(tab = Tab.SETTINGS, screen = Screen.Account)
     }
 
     fun setLanguage(language: AppLanguage) {

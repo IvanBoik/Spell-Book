@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Только для debug-сборки: сервер аккаунтов пока доступен лишь по http и IP.
+    Открытый трафик разрешён только к этому адресу. Когда появится домен с HTTPS,
+    файл нужно удалить вместе со ссылкой на него в debug-манифесте.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">185.240.103.127</domain>
+    </domain-config>
+</network-security-config>

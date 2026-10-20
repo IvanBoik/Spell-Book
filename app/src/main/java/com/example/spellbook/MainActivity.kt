@@ -96,6 +96,9 @@ import com.example.spellbook.ui.screens.RaceDetailsScreen
 import com.example.spellbook.ui.screens.NotesScreen
 import com.example.spellbook.ui.screens.PrepareSpellsScreen
 import com.example.spellbook.ui.screens.SettingsScreen
+import com.example.spellbook.ui.auth.AccountScreen
+import com.example.spellbook.ui.auth.AuthViewModel
+import com.example.spellbook.data.auth.AuthState
 import com.example.spellbook.ui.screens.SpellDetailsScreen
 import com.example.spellbook.ui.screens.SpellFormScreen
 import com.example.spellbook.ui.screens.SpellListScreen
@@ -171,6 +174,17 @@ private fun SpellBookApp(
 ) {
     val context = LocalContext.current
     val state = viewModel.uiState
+
+    // Аккаунт живёт отдельно от остального состояния: он опционален и не затрагивает
+    // локальные данные, а формы входа должны переживать переключение вкладок.
+    val authViewModel: AuthViewModel = viewModel()
+
+    LaunchedEffect(authViewModel.message) {
+        authViewModel.message?.let {
+            Toast.makeText(context, it.resolve(context), Toast.LENGTH_SHORT).show()
+            authViewModel.consumeMessage()
+        }
+    }
 
     // JSON, ожидающий записи в выбранный пользователем файл (для выгрузки).
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
@@ -321,6 +335,8 @@ private fun SpellBookApp(
             }
 
             Screen.Settings -> viewModel.exitSettings()
+            // Сначала шаг назад внутри сценария входа (код → форма), затем возврат в настройки.
+            Screen.Account -> if (!authViewModel.navigateBack()) viewModel.openSettings()
             // Разделы персонажа: с домашнего — к списку, с остальных — к домашнему.
             is Screen.CharacterSpells ->
                 viewModel.exitCharacterSection(screen.characterId, CharacterSection.SPELLS)
@@ -1195,9 +1211,16 @@ private fun SpellBookApp(
                 onLayoutChange = { layout -> viewModel.setSectionLayout(scopeId, layout) },
                 onLayoutReset = { viewModel.setSectionLayout(scopeId, null) },
                 onBack = viewModel::exitSettings,
+                accountEmail = (authViewModel.authState as? AuthState.SignedIn)?.email,
+                onOpenAccount = viewModel::openAccount,
                 bottomBar = bottomBar,
             )
         }
+
+        Screen.Account -> AccountScreen(
+            viewModel = authViewModel,
+            onClose = viewModel::openSettings,
+        )
     }
 }
 

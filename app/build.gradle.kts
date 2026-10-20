@@ -82,6 +82,9 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.coil.compose)
     implementation(libs.jsoup)
+    // HTTP-клиент для API аккаунта: позволяет отключить тихие повторы запросов,
+    // что критично для одноразового refresh-токена.
+    implementation(libs.okhttp)
     testImplementation(libs.junit)
     // Реальная реализация org.json: в JVM-тестах классы из android.jar — заглушки.
     testImplementation(libs.json)
