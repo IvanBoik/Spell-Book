@@ -73,6 +73,7 @@ import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterResource
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.components.FormulaTextField
+import com.example.spellbook.util.HtmlUtils
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -559,21 +560,26 @@ private fun ResourceDescriptionDialog(
         tonalElevation = 0.dp,
         title = { Text(resource.name) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Описания умений из библиотеки бывают длинными — текст прокручивается, а не залезает на кнопки.
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(
                     "${resource.current} / ${resource.maximum}",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                 )
-                Text(
-                resource.description.ifBlank { stringResource(R.string.resources_no_description) },
-                    color = if (resource.description.isBlank()) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
+                when {
+                    resource.description.isBlank() -> Text(
+                        stringResource(R.string.resources_no_description),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    // Таблицы из описания умения рисуются сеткой, а заклинания в тексте — ссылками
+                    // на их описание («адское возмездие [hellish rebuke]»).
+                    else -> DescriptionText(description = resource.description, onDiceClick = {})
+                }
             }
         },
         confirmButton = {

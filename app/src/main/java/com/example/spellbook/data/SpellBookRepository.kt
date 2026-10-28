@@ -19,6 +19,7 @@ import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.data.model.SpellOrigin
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -39,6 +40,7 @@ class SpellBookRepository(
     db: SpellBookDatabase = SpellBookDatabase.get(context),
 ) {
 
+    private val database = db
     private val spellDao = db.spellDao()
     private val characterDao = db.characterDao()
     private val comboDao = db.comboDao()
@@ -123,6 +125,32 @@ class SpellBookRepository(
     suspend fun upsertCharacter(character: Character) = characterDao.upsert(character)
 
     suspend fun deleteCharacter(characterId: String) = characterDao.deleteById(characterId)
+
+    /**
+     * Сохраняет персонажа из мастера создания вместе со всеми связями одной транзакцией:
+     * заметки, снаряжение, заклинания (с отметками подготовки) и черты.
+     * При сбое не остаётся полусобранного персонажа.
+     */
+    suspend fun createCharacter(creation: com.example.spellbook.data.wizard.CharacterCreation) {
+        database.withTransaction {
+            val characterId = creation.character.id
+            characterDao.upsert(creation.character)
+            creation.notes.forEach { noteDao.upsertBlock(it) }
+            creation.items.forEach { inventoryDao.upsertItem(it) }
+            creation.spellIds.forEach { spellId ->
+                spellDao.addSpellToCharacter(
+                    CharacterSpellCrossRef(
+                        characterId = characterId,
+                        spellId = spellId,
+                        prepared = spellId in creation.preparedIds,
+                    ),
+                )
+            }
+            creation.featIds.forEach { featId ->
+                featDao.addFeatToCharacter(CharacterFeatCrossRef(characterId = characterId, featId = featId))
+            }
+        }
+    }
 
     // endregion
 

@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -74,6 +75,11 @@ import com.example.spellbook.data.model.NoteListStyle
 import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.components.imeAwareContentInsets
+import com.example.spellbook.util.HtmlUtils
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 
 private val NOTE_CARD_SHAPE = RoundedCornerShape(12.dp)
 
@@ -308,6 +314,27 @@ private fun ParagraphEditor(
         mutableStateOf(TextFieldValue(paragraph.text, TextRange(paragraph.text.length)))
     }
 
+    // Абзац с таблицей (заклинания домена, «Изначальная осведомлённость») показывается с настоящей
+    // таблицей; нажатие открывает обычное редактирование текста, включая строки таблицы.
+    // Абзац со ссылками на заклинания тоже показывается в режиме чтения: в поле ввода ссылка
+    // не нажимается. Нажатие вне ссылки открывает редактирование.
+    val spellLinks = LocalSpellLinks.current
+    val hasTable = remember(fieldValue.text, spellLinks) {
+        fieldValue.text.lines().any { HtmlUtils.isTableRow(it) } ||
+            spellLinks?.index?.find(fieldValue.text)?.isNotEmpty() == true
+    }
+    var editing by remember(paragraph.id) { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    var hadFocus by remember(paragraph.id) { mutableStateOf(false) }
+    if (hasTable && !editing) {
+        NoteTableView(
+            paragraph = paragraph.withText(fieldValue.text),
+            onClick = { editing = true },
+        )
+        return
+    }
+    LaunchedEffect(editing) { if (editing) focusRequester.requestFocus() }
+
     Column(Modifier.fillMaxWidth()) {
         TextField(
             value = fieldValue,
@@ -327,7 +354,17 @@ private fun ParagraphEditor(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
             ),
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester)
+                .onFocusChanged { state ->
+                    // Ушли из редактирования — абзац с таблицей снова показывается сеткой.
+                    if (state.isFocused) hadFocus = true
+                    if (!state.isFocused && hadFocus) {
+                        hadFocus = false
+                        editing = false
+                    }
+                },
         )
 
         if (isFocused) {
@@ -617,6 +654,80 @@ private class NoteStyleTransformation(
     }
 }
 
+
+/**
+ * Просмотр абзаца с таблицей: текст с оформлением и таблицы сеткой, как в библиотеке.
+ * Нажатие переводит абзац в редактирование.
+ */
+@Composable
+private fun NoteTableView(paragraph: NoteParagraph, onClick: () -> Unit) {
+    val styles = remember(paragraph) { paragraph.toCharStyles() }
+    val text = paragraph.text
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Делим текст на куски: подряд идущие строки таблицы и обычный текст с смещениями.
+        var offset = 0
+        val chunks = mutableListOf<Triple<Boolean, Int, Int>>()
+        text.split("\n").forEach { line ->
+            val isTable = HtmlUtils.isTableRow(line)
+            val start = offset
+            val end = offset + line.length
+            val last = chunks.lastOrNull()
+            if (last != null && last.first == isTable) {
+                chunks[chunks.lastIndex] = Triple(isTable, last.second, end)
+            } else {
+                chunks += Triple(isTable, start, end)
+            }
+            offset = end + 1
+        }
+        chunks.forEach { (isTable, start, end) ->
+            val chunk = text.substring(start, end).trim('\n')
+            if (chunk.isBlank()) return@forEach
+            if (isTable) {
+                DescriptionText(description = chunk, onDiceClick = {})
+            } else {
+                val linkStyles = spellLinkStyles()
+                val links = LocalSpellLinks.current
+                // Диапазоны — относительно начала куска: строка ниже собирается с символа [start].
+                val found = remember(text, start, end, links) { links?.index?.find(text.substring(start, end)).orEmpty() }
+                Text(
+                    buildAnnotatedString {
+                        for (index in start until end) {
+                            val style = styles.getOrNull(index) ?: NoteCharStyle()
+                            withStyle(
+                                SpanStyle(
+                                    fontWeight = if (style.bold) FontWeight.Bold else null,
+                                    fontStyle = if (style.italic) FontStyle.Italic else null,
+                                    textDecoration = if (style.underline) TextDecoration.Underline else null,
+                                    fontSize = style.fontSize.takeIf { it != NOTE_DEFAULT_FONT_SIZE }?.sp
+                                        ?: androidx.compose.ui.unit.TextUnit.Unspecified,
+                                ),
+                            ) { append(text[index]) }
+                        }
+                        // Ссылки на заклинания поверх посимвольных стилей заметки.
+                        found.forEach { link ->
+                            addLink(
+                                LinkAnnotation.Clickable(
+                                    tag = "spell",
+                                    styles = linkStyles,
+                                    linkInteractionListener = { links?.onOpen?.invoke(link.spell) },
+                                ),
+                                link.range.first,
+                                link.range.last + 1,
+                            )
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+        }
+    }
+}
 
 private fun List<NoteParagraph>.replace(index: Int, value: NoteParagraph): List<NoteParagraph> =
     toMutableList().apply { this[index] = value }

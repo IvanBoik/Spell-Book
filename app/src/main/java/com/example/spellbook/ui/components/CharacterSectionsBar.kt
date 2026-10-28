@@ -93,8 +93,12 @@ fun CharacterSection.Companion.arrange(
     layout: SectionLayout,
     showPrepare: Boolean,
     keepVisible: CharacterSection? = null,
+    showSpells: Boolean = true,
 ): List<CharacterSection> = ordered(layout).filter { section ->
-    val available = section != CharacterSection.PREPARE || showPrepare
+    // У персонажа без заклинаний и ячеек раздел заклинаний пуст — он появится сам,
+    // как только персонаж получит заклинание или ячейки.
+    val available = (section != CharacterSection.PREPARE || showPrepare) &&
+        (section != CharacterSection.SPELLS || showSpells)
     val visible = section.name !in layout.hidden ||
         section in ALWAYS_VISIBLE ||
         section == keepVisible
@@ -116,6 +120,7 @@ fun CharacterSectionsBar(
     current: CharacterSection,
     showPrepare: Boolean,
     onSelect: (CharacterSection) -> Unit,
+    showSpells: Boolean = true,
     modifier: Modifier = Modifier,
     layout: SectionLayout = SectionLayout.DEFAULT,
     initialScrollIndex: Int = 0,
@@ -123,7 +128,7 @@ fun CharacterSectionsBar(
     onScrollChanged: (index: Int, offset: Int) -> Unit = { _, _ -> },
 ) {
     // Текущий раздел остаётся в панели, даже если скрыт: иначе непонятно, где находишься.
-    val sections = CharacterSection.arrange(layout, showPrepare, keepVisible = current)
+    val sections = CharacterSection.arrange(layout, showPrepare, keepVisible = current, showSpells = showSpells)
 
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialScrollIndex,

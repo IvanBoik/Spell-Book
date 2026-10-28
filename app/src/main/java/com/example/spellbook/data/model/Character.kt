@@ -73,7 +73,37 @@ data class Character(
     /** Инструменты и языки задаются свободным текстом через запятую. */
     val toolProficiencies: String = "",
     val languages: String = "",
+    /**
+     * Происхождение персонажа текстом: раса, разновидность, архетип и предыстория.
+     *
+     * Хранятся названия, а не ссылки на библиотеку: запись библиотеки могут удалить или
+     * переименовать, а персонаж должен сохранить своё происхождение. Пусто — не задано.
+     */
+    val race: String = "",
+    val subrace: String = "",
+    val subclass: String = "",
+    val background: String = "",
+    /**
+     * Составляющие КД: доспех, щит, черты и т. п. Пусто — КД задан числом [armorClass]
+     * (персонажи, созданные до появления составляющих). Итог считает `Character.effectiveArmorClass`.
+     */
+    val armorClassParts: List<StatPart> = emptyList(),
+    /**
+     * Составляющие скорости: скорость расы, прибавки от черт и умений класса.
+     * Пусто — скорость задана числом [speed]. Итог считает `Character.effectiveSpeed`.
+     */
+    val speedParts: List<StatPart> = emptyList(),
+    /**
+     * Составляющие инициативы: основа (модификатор Ловкости) и прибавки от черт и умений
+     * («Бдительный», «Волшебная прозорливость»). Пусто — действует [initiativeFormula].
+     * Итог считает `Character.initiativeBonus`.
+     */
+    val initiativeParts: List<StatPart> = emptyList(),
 ) {
+    /** Происхождение одной строкой: «Высший эльф · Мудрец». */
+    val originSummary: String
+        get() = listOf(subrace.ifBlank { race }, background).filter { it.isNotBlank() }.joinToString(" · ")
+
     /** Разобранный список классов с уровнями. */
     val classLevels: List<CharacterClassLevel>
         get() = classes.mapNotNull(CharacterClassLevel::parse)

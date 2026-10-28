@@ -1,6 +1,8 @@
 package com.example.spellbook.data.db
 
 import androidx.room.TypeConverter
+import com.example.spellbook.data.model.StatPart
+import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.CharacterResource
 import com.example.spellbook.data.model.DamagePart
 import com.example.spellbook.data.model.NOTE_DEFAULT_FONT_SIZE
@@ -99,6 +101,45 @@ class Converters {
                 maximum = maximum,
                 maximumFormula = obj.optString("maximumFormula"),
             ).normalized()
+        }
+    }
+
+    /** Составляющие КД и скорости ↔ JSON-массив. */
+    @TypeConverter
+    fun armorPartsToJson(parts: List<StatPart>): String {
+        val array = JSONArray()
+        parts.forEach { part ->
+            array.put(JSONObject().apply {
+                put("id", part.id)
+                put("name", part.name)
+                put("formula", part.formula)
+                put("kind", part.kind.name)
+                put("enabled", part.enabled)
+                put("description", part.description)
+            })
+        }
+        return array.toString()
+    }
+
+    @TypeConverter
+    fun jsonToArmorParts(json: String): List<StatPart> {
+        if (json.isBlank()) return emptyList()
+        val array = runCatching { JSONArray(json) }.getOrElse { return emptyList() }
+        return (0 until array.length()).mapNotNull { index ->
+            val obj = array.optJSONObject(index) ?: return@mapNotNull null
+            // Название может быть пустым: так хранится основа по умолчанию («Базовый КД»).
+            val name = obj.optString("name").trim()
+            val formula = obj.optString("formula").trim()
+            if (formula.isBlank()) return@mapNotNull null
+            StatPart(
+                id = obj.optString("id").ifBlank { java.util.UUID.randomUUID().toString() },
+                name = name,
+                formula = formula,
+                kind = runCatching { StatPartKind.valueOf(obj.optString("kind")) }
+                    .getOrDefault(StatPartKind.BONUS),
+                enabled = obj.optBoolean("enabled", true),
+                description = obj.optString("description"),
+            )
         }
     }
 

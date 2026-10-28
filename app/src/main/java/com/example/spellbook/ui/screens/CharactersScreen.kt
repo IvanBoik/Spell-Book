@@ -18,6 +18,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -42,10 +49,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.pluralStringResource
+
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import com.example.spellbook.R
 import com.example.spellbook.data.model.Character
@@ -61,8 +85,37 @@ fun CharactersScreen(
     onAddCharacter: () -> Unit,
     onImportSheet: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
+    /** Пошаговое создание по библиотекам; [onAddCharacter] — быстрая форма. */
+    onStartWizard: () -> Unit = onAddCharacter,
+    /** Кнопка «Редактировать» под сдвинутой карточкой: открывает настройки персонажа. */
+    onEditCharacter: (String) -> Unit = {},
+    /** Удаление персонажа — вызывается только после подтверждения в диалоге. */
+    onDeleteCharacter: (String) -> Unit = {},
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var chooseCreation by remember { mutableStateOf(false) }
+    // Сдвинутой может быть только одна карточка: открытие другой закрывает предыдущую.
+    var openedCardId by remember { mutableStateOf<String?>(null) }
+    var pendingDeletion by remember { mutableStateOf<Character?>(null) }
+
+    pendingDeletion?.let { character ->
+        DeleteCharacterDialog(
+            character = character,
+            onConfirm = {
+                pendingDeletion = null
+                onDeleteCharacter(character.id)
+            },
+            onDismiss = { pendingDeletion = null },
+        )
+    }
+
+    if (chooseCreation) {
+        CreationMethodSheet(
+            onWizard = { chooseCreation = false; onStartWizard() },
+            onQuick = { chooseCreation = false; onAddCharacter() },
+            onDismiss = { chooseCreation = false },
+        )
+    }
 
     Scaffold(
         topBar = { DndTopBar(title = stringResource(R.string.tab_characters)) },
@@ -80,9 +133,17 @@ fun CharactersScreen(
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; onAddCharacter() },
                         icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        text = { Text(stringResource(R.string.characters_create_manually)) },
+                        text = { Text(stringResource(R.string.characters_quick)) },
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
+                    )
+                    // Мастер — основной способ, поэтому он залит фирменным цветом.
+                    ExtendedFloatingActionButton(
+                        onClick = { menuExpanded = false; onStartWizard() },
+                        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) },
+                        text = { Text(stringResource(R.string.characters_wizard)) },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     )
                 }
                 FloatingActionButton(
@@ -102,7 +163,7 @@ fun CharactersScreen(
     ) { padding ->
         if (characters.isEmpty()) {
             EmptyCharacters(
-                onAddCharacter = onAddCharacter,
+                onAddCharacter = { chooseCreation = true },
                 onImportSheet = onImportSheet,
                 modifier = Modifier.padding(padding),
             )
@@ -115,10 +176,28 @@ fun CharactersScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(characters, key = { it.id }) { character ->
-                    CharacterCard(
+                    SwipeableCharacterCard(
                         character = character,
-                        spellCount = spellCounts[character.id] ?: 0,
-                        onClick = { onCharacterClick(character.id) },
+                        isOpen = openedCardId == character.id,
+                        onOpenChange = { open ->
+                            openedCardId = when {
+                                open -> character.id
+                                openedCardId == character.id -> null
+                                else -> openedCardId
+                            }
+                        },
+                        onClick = {
+                            // Нажатие по открытой карточке сначала закрывает её, а не открывает персонажа.
+                            if (openedCardId != null) openedCardId = null else onCharacterClick(character.id)
+                        },
+                        onEdit = {
+                            openedCardId = null
+                            onEditCharacter(character.id)
+                        },
+                        onDelete = {
+                            openedCardId = null
+                            pendingDeletion = character
+                        },
                     )
                 }
             }
@@ -126,10 +205,157 @@ fun CharactersScreen(
     }
 }
 
+/** Положения сдвигаемой карточки: на месте или сдвинута влево до кнопок действий. */
+private enum class CardSwipe { CLOSED, OPEN }
+
+/**
+ * Кнопки действий под карточкой — как на остальных экранах со свайпом (комбинации,
+ * ресурсы, инвентарь): круглые 48dp, жёлтое редактирование и красное удаление.
+ */
+private val SWIPE_ACTION_SIZE = 48.dp
+private val SWIPE_ACTION_GAP = 12.dp
+private val EDIT_ACTION_COLOR = Color(0xFFFBC02D)
+
+/**
+ * Карточка персонажа, которую можно сдвинуть влево: под ней открываются кнопки
+ * «Редактировать» и «Удалить».
+ *
+ * Состояние «открыта» хранит список ([isOpen]): так одновременно открыта только одна
+ * карточка. Жест сообщает о новом положении через [onOpenChange], а изменение [isOpen]
+ * снаружи анимированно открывает или закрывает карточку.
+ */
 @Composable
-private fun CharacterCard(character: Character, spellCount: Int, onClick: () -> Unit) {
-    Card(
+private fun SwipeableCharacterCard(
+    character: Character,
+    isOpen: Boolean,
+    onOpenChange: (Boolean) -> Unit,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val density = LocalDensity.current
+    val actionsWidth = with(density) { (SWIPE_ACTION_SIZE * 2 + SWIPE_ACTION_GAP * 3).toPx() }
+    val state = remember {
+        AnchoredDraggableState(
+            initialValue = CardSwipe.CLOSED,
+            anchors = DraggableAnchors {
+                CardSwipe.CLOSED at 0f
+                CardSwipe.OPEN at -actionsWidth
+            },
+        )
+    }
+    // Якоря зависят от плотности экрана — обновляем их при её смене.
+    LaunchedEffect(actionsWidth) {
+        state.updateAnchors(
+            DraggableAnchors {
+                CardSwipe.CLOSED at 0f
+                CardSwipe.OPEN at -actionsWidth
+            },
+        )
+    }
+    // Жест завершился — сообщаем списку, чтобы он закрыл другие карточки.
+    LaunchedEffect(state) {
+        snapshotFlow { state.settledValue }.collect { value -> onOpenChange(value == CardSwipe.OPEN) }
+    }
+    // Список закрыл карточку (открыта другая, нажата кнопка) — анимируем возврат.
+    LaunchedEffect(isOpen) {
+        val target = if (isOpen) CardSwipe.OPEN else CardSwipe.CLOSED
+        if (state.settledValue != target) state.animateTo(target)
+    }
+
+    Box(Modifier.fillMaxWidth()) {
+        // Кнопки лежат под карточкой справа и показываются по мере сдвига.
+        Row(
+            modifier = Modifier.matchParentSize().padding(end = SWIPE_ACTION_GAP),
+            horizontalArrangement = Arrangement.spacedBy(SWIPE_ACTION_GAP, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SwipeActionButton(
+                icon = Icons.Default.Edit,
+                description = stringResource(R.string.action_edit),
+                background = EDIT_ACTION_COLOR,
+                contentColor = Color.Black,
+                onClick = onEdit,
+            )
+            SwipeActionButton(
+                icon = Icons.Default.Delete,
+                description = stringResource(R.string.action_delete),
+                background = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+                onClick = onDelete,
+            )
+        }
+        CharacterCard(
+            character = character,
+            onClick = onClick,
+            modifier = Modifier
+                .offset { IntOffset(state.requireOffset().roundToInt(), 0) }
+                .anchoredDraggable(state = state, orientation = Orientation.Horizontal),
+        )
+    }
+}
+
+/** Круглая кнопка действия под сдвинутой карточкой — такая же, как у комбинаций и ресурсов. */
+@Composable
+private fun SwipeActionButton(
+    icon: ImageVector,
+    description: String,
+    background: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+) {
+    Box(
         modifier = Modifier
+            .size(SWIPE_ACTION_SIZE)
+            .clip(CircleShape)
+            .background(background)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = contentColor)
+    }
+}
+
+/** Подтверждение удаления: персонаж удаляется вместе со всеми данными без возврата. */
+@Composable
+private fun DeleteCharacterDialog(
+    character: Character,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+        title = {
+            Text(
+                stringResource(
+                    R.string.characters_delete_title,
+                    character.name.ifBlank { stringResource(R.string.character_unnamed) },
+                ),
+            )
+        },
+        text = { Text(stringResource(R.string.characters_delete_text)) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+/**
+ * Карточка персонажа: имя, а под ним только раса, класс и уровень — без разновидности,
+ * предыстории и счётчика заклинаний, чтобы список читался с одного взгляда.
+ */
+@Composable
+private fun CharacterCard(character: Character, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -145,9 +371,18 @@ private fun CharacterCard(character: Character, spellCount: Int, onClick: () -> 
                     text = character.name.ifBlank { stringResource(R.string.character_unnamed) },
                     style = MaterialTheme.typography.titleLarge,
                 )
+                // Раса · класс · уровень. У персонажа без класса уровень показывается отдельно.
+                // У штатных классов название из ресурсов, у пользовательских — заданное имя.
+                val classes = character.classLevels
+                    .map { it.displayName ?: stringResource(it.characterClass.labelRes) }
+                    .joinToString(" / ")
+                val summary = listOf(
+                    character.race,
+                    classes,
+                    stringResource(R.string.wizard_class_level, character.level),
+                ).filter { it.isNotBlank() }.joinToString(" · ")
                 Text(
-                    // Склонением занимаются ресурсы: в разных языках разное число форм.
-                    text = pluralStringResource(R.plurals.spell_count, spellCount, spellCount),
+                    text = summary,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
@@ -193,6 +428,88 @@ fun CharacterAvatar(character: Character, size: Int) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Выбор способа создания. Мастер выделен градиентом и плашкой «Рекомендуем»,
+ * быстрая форма — скромная карточка для тех, кому нужен только список заклинаний.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CreationMethodSheet(onWizard: () -> Unit, onQuick: () -> Unit, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                stringResource(R.string.characters_create),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            val primary = MaterialTheme.colorScheme.primary
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = androidx.compose.ui.graphics.Color.Transparent,
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onWizard),
+            ) {
+                Box(
+                    Modifier
+                        .background(Brush.linearGradient(listOf(primary, MaterialTheme.colorScheme.primaryContainer)))
+                        .padding(20.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(36.dp),
+                        )
+                        Column(Modifier.padding(start = 16.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondary) {
+                                Text(
+                                    stringResource(R.string.characters_recommended),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
+                            Text(
+                                stringResource(R.string.characters_wizard),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Text(
+                                stringResource(R.string.characters_wizard_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+                            )
+                        }
+                    }
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onQuick),
+            ) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Column(Modifier.padding(start = 16.dp)) {
+                        Text(stringResource(R.string.characters_quick), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.characters_quick_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
         }
     }

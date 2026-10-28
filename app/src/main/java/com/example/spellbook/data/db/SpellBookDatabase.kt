@@ -40,7 +40,7 @@ import com.example.spellbook.data.model.Spell
         Background::class,
         MagicItem::class,
     ],
-    version = 30,
+    version = 34,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -447,6 +447,42 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v30 → v31: происхождение персонажа (раса, разновидность, архетип, предыстория).
+         * Пустые строки по умолчанию: у существующих персонажей происхождение не задано.
+         */
+        private val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("race", "subrace", "subclass", "background").forEach { column ->
+                    db.execSQL("ALTER TABLE characters ADD COLUMN $column TEXT NOT NULL DEFAULT ''")
+                }
+            }
+        }
+
+        /**
+         * v31 → v32: составляющие КД (доспех, щит, бонусы).
+         * Пустой список сохраняет прежнее поведение: КД задан числом.
+         */
+        private val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN armorClassParts TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        /** Составляющие скорости. У старых персонажей пусто: скорость остаётся числом. */
+        private val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN speedParts TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
+        /** Составляющие инициативы; у старых персонажей пусто — действует прежняя формула. */
+        private val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN initiativeParts TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -486,6 +522,10 @@ abstract class SpellBookDatabase : RoomDatabase() {
                     MIGRATION_27_28,
                     MIGRATION_28_29,
                     MIGRATION_29_30,
+                    MIGRATION_30_31,
+                MIGRATION_31_32,
+                MIGRATION_32_33,
+                MIGRATION_33_34,
                 ).build()
             }
     }

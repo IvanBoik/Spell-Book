@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Действия по свайпу в списке персонажей -->
+    <string name="characters_delete_title">Удалить персонажа «%1$s»?</string>
+    <string name="characters_delete_text">Персонаж, его заклинания, заметки и инвентарь будут удалены без возможности восстановления.</string>
+
+</resources>

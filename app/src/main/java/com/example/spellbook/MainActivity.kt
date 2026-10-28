@@ -73,6 +73,7 @@ import com.example.spellbook.ui.screens.AddSpellFab
 import com.example.spellbook.ui.screens.AddSpellsScreen
 import com.example.spellbook.ui.screens.CharacterFormScreen
 import com.example.spellbook.ui.screens.CharactersScreen
+import com.example.spellbook.ui.wizard.CharacterWizardScreen
 import com.example.spellbook.ui.screens.ComboEditorScreen
 import com.example.spellbook.ui.screens.ComboListScreen
 import com.example.spellbook.ui.screens.ComboResultScreen
@@ -99,6 +100,7 @@ import com.example.spellbook.ui.screens.SettingsScreen
 import com.example.spellbook.ui.auth.AccountScreen
 import com.example.spellbook.ui.auth.AuthViewModel
 import com.example.spellbook.data.auth.AuthState
+import com.example.spellbook.ui.screens.ProvideSpellLinks
 import com.example.spellbook.ui.screens.SpellDetailsScreen
 import com.example.spellbook.ui.screens.SpellFormScreen
 import com.example.spellbook.ui.screens.SpellListScreen
@@ -126,13 +128,16 @@ class MainActivity : ComponentActivity() {
             val settings = viewModel.uiState.settings
             ProvideAppLocale(settings.language) {
                 SpellBookTheme(appTheme = settings.theme) {
-                    SpellBookApp(
-                        incomingUri = incomingUri,
-                        onIncomingUriHandled = { incomingUri = null },
-                        sharedUrl = sharedUrl,
-                        onSharedUrlHandled = { sharedUrl = null },
-                        viewModel = viewModel,
-                    )
+                    // Ссылки на заклинания во всех текстах приложения.
+                    ProvideSpellLinks(viewModel.uiState.librarySpells) {
+                        SpellBookApp(
+                            incomingUri = incomingUri,
+                            onIncomingUriHandled = { incomingUri = null },
+                            sharedUrl = sharedUrl,
+                            onSharedUrlHandled = { sharedUrl = null },
+                            viewModel = viewModel,
+                        )
+                    }
                 }
             }
         }
@@ -370,6 +375,8 @@ private fun SpellBookApp(
             is Screen.StepLibrary -> viewModel.openCombos(screen.characterId)
             is Screen.ComboResult -> viewModel.openCombos(screen.characterId)
             is Screen.CharacterForm -> viewModel.exitCharacterForm()
+            // Мастер обрабатывает «Назад» сам: шаг назад или предупреждение о потере данных.
+            Screen.CharacterWizard -> viewModel.closeCharacterWizard()
             is Screen.Details -> viewModel.navigateBackFromDetails()
             is Screen.SpellForm -> {
                 val existing = viewModel.getSpell(screen.spellId)
@@ -390,6 +397,10 @@ private fun SpellBookApp(
             // Точка входа — домашний раздел персонажа, а не всегда заклинания.
             onCharacterClick = viewModel::openCharacterHome,
             onAddCharacter = viewModel::openCreateCharacterForm,
+            onStartWizard = viewModel::openCharacterWizard,
+            // Свайп карточки влево: редактирование открывает настройки персонажа.
+            onEditCharacter = viewModel::openEditCharacterForm,
+            onDeleteCharacter = viewModel::deleteCharacter,
             onImportSheet = {
                 // Новый лист создаёт персонажа, а не обновляет существующего.
                 sheetImportTargetId = null
@@ -826,6 +837,23 @@ private fun SpellBookApp(
             onBack = { viewModel.openCharacterSpells(screen.characterId) },
         )
 
+        Screen.CharacterWizard -> {
+            val wizard = viewModel.characterWizard
+            if (wizard == null) {
+                // После перезапуска процесса черновик не сохраняется — возвращаемся к списку.
+                LaunchedEffect(Unit) { viewModel.openCharacters() }
+            } else {
+                CharacterWizardScreen(
+                    controller = wizard,
+                    library = viewModel.wizardLibrary(),
+                    spells = state.librarySpells,
+                    feats = state.libraryFeats,
+                    onClose = viewModel::closeCharacterWizard,
+                    onCreate = viewModel::finishCharacterWizard,
+                )
+            }
+        }
+
         is Screen.CharacterForm -> {
             val existing = viewModel.getCharacter(screen.characterId)
             CharacterFormScreen(
@@ -935,9 +963,10 @@ private fun SpellBookApp(
                         viewModel.setHpValues(screen.characterId, tempHp, maxHp)
                     },
                     onSetArmorClass = { value -> viewModel.setArmorClass(screen.characterId, value) },
-                    onSetSpeed = { value -> viewModel.setSpeed(screen.characterId, value) },
-                    onSetInitiativeFormula = { formula ->
-                        viewModel.setInitiativeFormula(screen.characterId, formula)
+                    onSetArmorClassParts = { parts -> viewModel.setArmorClassParts(screen.characterId, parts) },
+                onSetSpeedParts = { parts -> viewModel.setSpeedParts(screen.characterId, parts) },
+                    onSetInitiativeParts = { parts ->
+                        viewModel.setInitiativeParts(screen.characterId, parts)
                     },
                     onSetAbilityScore = { ability, value ->
                         viewModel.setAbilityScore(screen.characterId, ability, value)
@@ -1431,9 +1460,12 @@ private fun CharacterSections(
     characterId: String,
     current: CharacterSection,
 ) {
+    val character = viewModel.getCharacter(characterId)
     CharacterSectionsBar(
         current = current,
-        showPrepare = viewModel.getCharacter(characterId)?.canPrepareSpells == true,
+        showPrepare = character?.canPrepareSpells == true,
+        // Раздел заклинаний — только если есть хоть одно заклинание или ячейки.
+        showSpells = viewModel.hasSpells(characterId),
         onSelect = { section -> viewModel.openCharacterSection(characterId, section) },
         layout = viewModel.uiState.settings.layoutFor(characterId),
         initialScrollIndex = viewModel.sectionsScrollIndex,

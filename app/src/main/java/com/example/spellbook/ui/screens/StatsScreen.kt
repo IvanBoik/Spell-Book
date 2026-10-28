@@ -68,6 +68,8 @@ import com.example.spellbook.R
 import com.example.spellbook.data.DEFAULT_INITIATIVE_FORMULA
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.initiativeBonus
+import com.example.spellbook.data.effectiveArmorClass
+import com.example.spellbook.data.effectiveSpeed
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.D20RollResult
 import com.example.spellbook.data.model.ProficiencyLevel
@@ -108,8 +110,10 @@ fun StatsScreen(
     onChangeHp: (Int) -> Unit,
     onSetHpValues: (tempHp: Int, maxHp: Int) -> Unit,
     onSetArmorClass: (Int) -> Unit,
-    onSetSpeed: (Int) -> Unit,
-    onSetInitiativeFormula: (String) -> Unit,
+    onSetSpeedParts: (List<com.example.spellbook.data.model.StatPart>) -> Unit,
+    /** Составляющие КД; старое число [onSetArmorClass] остаётся для совместимости. */
+    onSetArmorClassParts: (List<com.example.spellbook.data.model.StatPart>) -> Unit = {},
+    onSetInitiativeParts: (List<com.example.spellbook.data.model.StatPart>) -> Unit,
     onSetAbilityScore: (AbilityType, Int) -> Unit,
     onToggleSave: (AbilityType) -> Unit,
     onCycleSkill: (SkillType) -> Unit,
@@ -192,26 +196,27 @@ fun StatsScreen(
         )
     }
     if (editingArmor) {
-        NumberDialog(
-            title = stringResource(R.string.stats_armor_class),
-            initial = character.armorClass,
+        // Нажатие на КД открывает разбор: доспех, щит и бонусы с возможностью правки.
+        ArmorClassDialog(
+            character = character,
             onDismiss = { editingArmor = false },
-            onSave = { onSetArmorClass(it); editingArmor = false },
+            onSave = { onSetArmorClassParts(it); editingArmor = false },
         )
     }
     if (editingSpeed) {
-        NumberDialog(
-            title = stringResource(R.string.stats_speed_dialog),
-            initial = character.speed,
+        // Нажатие на скорость открывает разбор: скорость расы и прибавки от черт и умений.
+        SpeedDialog(
+            character = character,
             onDismiss = { editingSpeed = false },
-            onSave = { onSetSpeed(it); editingSpeed = false },
+            onSave = { onSetSpeedParts(it); editingSpeed = false },
         )
     }
     if (editingInitiative) {
+        // Нажатие на инициативу открывает разбор: Ловкость и прибавки от черт и умений.
         InitiativeDialog(
-            initial = character.initiativeFormula,
+            character = character,
             onDismiss = { editingInitiative = false },
-            onSave = { onSetInitiativeFormula(it); editingInitiative = false },
+            onSave = { onSetInitiativeParts(it); editingInitiative = false },
         )
     }
     editingAbility?.let { ability ->
@@ -289,13 +294,13 @@ private fun VitalsCard(
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 VitalValue(
                     label = stringResource(R.string.stats_defense),
-                    value = character.armorClass.toString(),
+                    value = character.effectiveArmorClass.toString(),
                     modifier = Modifier.weight(1f),
                     onClick = onArmorClick,
                 )
                 VitalValue(
                     label = stringResource(R.string.stats_speed),
-                    value = stringResource(R.string.stats_speed_value, character.speed),
+                    value = stringResource(R.string.stats_speed_value, character.effectiveSpeed),
                     modifier = Modifier.weight(1f),
                     onClick = onSpeedClick,
                 )
@@ -372,58 +377,6 @@ private fun EditableStatRow(
     }
 }
 
-/**
- * Диалог формулы инициативы.
- *
- * Поле заполняется формулой по умолчанию, если своей ещё нет: проще дописать `+ 5`,
- * чем набирать выражение с нуля. Кнопка сброса возвращает поведение по умолчанию.
- */
-@Composable
-private fun InitiativeDialog(
-    initial: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit,
-) {
-    var formula by remember { mutableStateOf(initial.ifBlank { DEFAULT_INITIATIVE_FORMULA }) }
-    val valid = StatFormula.isValid(formula)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        title = { Text(stringResource(R.string.stats_initiative)) },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    stringResource(R.string.stats_initiative_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                FormulaTextField(
-                    value = formula,
-                    onValueChange = { formula = it },
-                    label = stringResource(R.string.stats_initiative),
-                    placeholder = "$DEFAULT_INITIATIVE_FORMULA + 5",
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                TextButton(onClick = { formula = DEFAULT_INITIATIVE_FORMULA }) {
-                    Text(stringResource(R.string.stats_initiative_reset))
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onSave(formula) }, enabled = valid) {
-                Text(stringResource(R.string.action_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-        },
-    )
-}
 
 @Composable
 private fun VitalValue(

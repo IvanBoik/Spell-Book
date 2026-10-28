@@ -19,6 +19,8 @@ import com.example.spellbook.data.CharacterLssCodec
 import com.example.spellbook.data.DEFAULT_INITIATIVE_FORMULA
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.withRecalculatedResources
+import com.example.spellbook.data.withSyncedArmorClass
+import com.example.spellbook.data.model.StatPart
 import com.example.spellbook.data.DndSuException
 import com.example.spellbook.data.ComboRoller
 import com.example.spellbook.data.DndSuCatalog
@@ -59,6 +61,13 @@ import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.util.DiceRoller
+import com.example.spellbook.data.wizard.CharacterAssembler
+import com.example.spellbook.data.wizard.ArmorClassRules
+import com.example.spellbook.data.wizard.InitiativeRules
+import com.example.spellbook.data.wizard.SpeedRules
+import com.example.spellbook.data.wizard.WizardEngine
+import com.example.spellbook.data.wizard.WizardLibrary
+import com.example.spellbook.ui.wizard.CharacterWizardController
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -190,6 +199,9 @@ sealed interface Screen {
         override val characterId: String? = null,
     ) : Screen
     data class CharacterForm(override val characterId: String?) : Screen
+
+    /** Пошаговое создание персонажа по библиотекам (мастер). */
+    data object CharacterWizard : Screen
     data class AddSpells(override val characterId: String) : Screen
     data class PrepareSpells(override val characterId: String) : Screen
     data class SpellSlots(override val characterId: String) : Screen
@@ -719,6 +731,17 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         openCharacterSection(characterId, CharacterSection.HOME)
     }
 
+    /**
+     * Есть ли у персонажа что показать в разделе заклинаний: хоть одно заклинание,
+     * ячейки или подготовка. Иначе раздел скрывается и появляется сам с первым заклинанием.
+     */
+    fun hasSpells(characterId: String): Boolean {
+        val character = getCharacter(characterId) ?: return true
+        return (uiState.spellCounts[characterId] ?: 0) > 0 ||
+            character.spellSlots.values.any { it > 0 } ||
+            character.canPrepareSpells
+    }
+
     /** Открывает заданный раздел персонажа (общий обработчик панели разделов). */
     fun openCharacterSection(characterId: String, section: CharacterSection) {
         when (section) {
@@ -1177,6 +1200,61 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         uiState = uiState.copy(screen = Screen.CharacterForm(characterId = null))
     }
 
+    /**
+     * Состояние мастера создания; null — мастер не открыт.
+     * Хранится здесь, чтобы черновик переживал поворот экрана.
+     */
+    var characterWizard by mutableStateOf<CharacterWizardController?>(null)
+        private set
+
+    /** Открывает мастер создания персонажа с чистого листа. */
+    fun openCharacterWizard() {
+        val controller = CharacterWizardController()
+        characterWizard = controller
+        uiState = uiState.copy(tab = Tab.CHARACTERS, screen = Screen.CharacterWizard)
+        // Описания классов — сотни килобайт текста: разбираем их заранее в фоне,
+        // чтобы списки рас и классов открывались без задержки.
+        val library = wizardLibrary()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            library.classes.forEach { controller.cache.characterClass(it) }
+            library.races.forEach { controller.cache.race(it) }
+            library.backgrounds.forEach { controller.cache.background(it) }
+        }
+    }
+
+    /** Закрывает мастер без сохранения. */
+    fun closeCharacterWizard() {
+        characterWizard = null
+        openCharacters()
+    }
+
+    /**
+     * Создаёт персонажа из мастера: лист, заметки, снаряжение, заклинания и черты
+     * записываются одной транзакцией, затем открывается домашний раздел персонажа.
+     */
+    fun finishCharacterWizard() {
+        val wizard = characterWizard ?: return
+        val context = wizard.context(wizardLibrary())
+        if (!WizardEngine.canCreate(wizard.draft, context)) return
+        val creation = CharacterAssembler.assemble(wizard.draft, context, uiState.librarySpells, uiState.libraryFeats)
+        val character = creation.character.withRecalculatedResources()
+        viewModelScope.launch {
+            repository.createCharacter(creation.copy(character = character))
+            characterWizard = null
+            openCharacterHome(character.id)
+            uiState = uiState.copy(message = UiMessage(R.string.wizard_created))
+        }
+    }
+
+    /** Библиотеки, из которых выбирает мастер. */
+    fun wizardLibrary(): WizardLibrary = WizardLibrary(
+        races = uiState.libraryRaces,
+        classes = uiState.libraryClasses,
+        backgrounds = uiState.libraryBackgrounds,
+        feats = uiState.libraryFeats,
+        spells = uiState.librarySpells,
+    )
+
     fun openEditCharacterForm(characterId: String) {
         uiState = uiState.copy(screen = Screen.CharacterForm(characterId = characterId))
     }
@@ -1241,7 +1319,26 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             val feat = Feat(name = name.trim(), description = description.trim())
             repository.saveFeat(feat)
             repository.addFeatToCharacter(characterId, feat.id)
+            applyFeatArmorClass(characterId, feat, added = true)
         }
+    }
+
+    /**
+     * Учитывает прибавку к КД от черты («Использование двух оружий»: +1): при добавлении
+     * черты в разбор КД попадает составляющая, при удалении — убирается.
+     */
+    private suspend fun applyFeatArmorClass(characterId: String, feat: Feat, added: Boolean) {
+        val character = repository.getCharacter(characterId) ?: return
+        // Прибавки к КД («Использование двух оружий»), скорости («Подвижный») и инициативе («Бдительный»).
+        val updated = if (added) {
+            InitiativeRules.withFeat(SpeedRules.withFeat(ArmorClassRules.withFeat(character, feat), feat), feat)
+        } else {
+            InitiativeRules.withoutFeat(
+                SpeedRules.withoutFeat(ArmorClassRules.withoutFeat(character, feat.id), feat.id),
+                feat.id,
+            )
+        }
+        if (updated != character) repository.upsertCharacter(updated.withSyncedArmorClass())
     }
 
     fun saveFeat(feat: Feat) {
@@ -1302,6 +1399,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             if (add) repository.addFeatToCharacter(characterId, featId)
             else repository.removeFeatFromCharacter(characterId, featId)
+            repository.getFeat(featId)?.let { applyFeatArmorClass(characterId, it, added = add) }
         }
     }
 
@@ -1339,7 +1437,10 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             repository.saveFeat(feat)
 
             val target = characterId ?: pendingCharacterId
-            if (target != null) repository.addFeatToCharacter(target, feat.id)
+            if (target != null) {
+                repository.addFeatToCharacter(target, feat.id)
+                applyFeatArmorClass(target, feat, added = true)
+            }
 
             val messageRes = when {
                 target != null -> R.string.msg_feat_added_to_character
@@ -2092,35 +2193,43 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun setSpeed(characterId: String, value: Int) {
+    /**
+     * Заменяет составляющие КД: добавление, правка, удаление и включение делаются на экране,
+     * сюда приходит готовый список. Число `armorClass` синхронизируется с расчётным для выгрузки.
+     */
+    fun setArmorClassParts(characterId: String, parts: List<StatPart>) {
         val character = getCharacter(characterId) ?: return
         viewModelScope.launch {
-            repository.upsertCharacter(character.copy(speed = value.coerceAtLeast(0)))
+            repository.upsertCharacter(character.copy(armorClassParts = parts).withSyncedArmorClass())
+        }
+    }
+
+    /** Сохраняет составляющие скорости; число `speed` синхронизируется с расчётным для выгрузки. */
+    fun setSpeedParts(characterId: String, parts: List<StatPart>) {
+        val character = getCharacter(characterId) ?: return
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(speedParts = parts).withSyncedArmorClass())
         }
     }
 
     /**
-     * Сохраняет формулу бонуса инициативы.
-     *
-     * Пустая строка и формула по умолчанию хранятся одинаково — как пустое значение:
-     * так «сбросить к Ловкости» и «ввести ровно [dex]» дают один и тот же результат.
-     * Неразборчивое выражение не сохраняется: иначе бонус молча стал бы по умолчанию,
-     * а пользователь видел бы свою формулу в поле.
+     * Сохраняет составляющие инициативы. Прежняя формула больше не действует —
+     * при первом изменении она стала основой (см. `Character.initiativePartsOrDefault`).
      */
-    fun setInitiativeFormula(characterId: String, formula: String) {
+    fun setInitiativeParts(characterId: String, parts: List<StatPart>) {
         val character = getCharacter(characterId) ?: return
-        val trimmed = formula.trim()
-        if (trimmed.isNotEmpty() && !StatFormula.isValid(trimmed)) return
-        val normalized = if (trimmed == DEFAULT_INITIATIVE_FORMULA) "" else trimmed
         viewModelScope.launch {
-            repository.upsertCharacter(character.copy(initiativeFormula = normalized))
+            repository.upsertCharacter(character.copy(initiativeParts = parts, initiativeFormula = ""))
         }
     }
 
     fun setAbilityScore(characterId: String, ability: AbilityType, value: Int) {
         val character = getCharacter(characterId) ?: return
         val scores = character.abilityScores + (ability.ordinal to value.coerceIn(1, 30))
-        viewModelScope.launch { repository.upsertCharacter(character.copy(abilityScores = scores)) }
+        // От характеристик зависит КД (Ловкость, защита без доспехов) — синхронизируем число.
+        viewModelScope.launch {
+            repository.upsertCharacter(character.copy(abilityScores = scores).withSyncedArmorClass())
+        }
     }
 
     /** Спасброски знают только владение, без экспертизы. */

@@ -48,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.spellbook.R
+import com.example.spellbook.data.SpellLinkIndex
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DetailsActionBar
@@ -89,6 +91,18 @@ enum class RefEmphasis {
 
 /** Выделение терминов-ссылок для текущего экрана. */
 val LocalRefEmphasis = staticCompositionLocalOf { RefEmphasis.STRONG }
+
+/**
+ * Ссылки на заклинания в текстах: индекс библиотеки и действие по нажатию.
+ *
+ * Предоставляется в корне приложения, поэтому ссылки работают везде, где текст рисуется
+ * через [DescriptionText]: в библиотеке, мастере создания, описаниях ресурсов и заметках.
+ * Диалоги наследуют значение, так что ссылки активны и в окнах поверх экрана.
+ */
+class SpellLinks(val index: SpellLinkIndex, val onOpen: (Spell) -> Unit)
+
+/** Ссылки на заклинания; null — текст показывается без них. */
+val LocalSpellLinks = staticCompositionLocalOf<SpellLinks?> { null }
 
 /** Расстояние между блоками описания и пунктами списка. */
 private val DESCRIPTION_BLOCK_SPACING = 8.dp
@@ -151,36 +165,10 @@ fun SpellDetailsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = headerLabel(spell),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                SpellInfoContent(
+                    spell = spell,
+                    onDiceClick = { formula -> DiceRoller.roll(formula)?.let { rollResult = it } },
                 )
-
-                InfoRow(stringResource(R.string.spell_casting_time), activationLabel(spell))
-                InfoRow(stringResource(R.string.spell_duration), durationLabel(spell))
-                InfoRow(stringResource(R.string.spell_range), rangeLabel(spell))
-                InfoRow(stringResource(R.string.spell_components), componentsLabel(spell))
-                if (spell.classes.isNotEmpty()) {
-                    val classes = spell.classes.map { spellOptionLabel(SpellOptions.classes, it) }
-                    InfoRow(stringResource(R.string.spell_classes), classes.joinToString())
-                }
-                // Часть заклинаний доступна только отдельным подклассам, а не классу целиком.
-                if (spell.subclasses.isNotEmpty()) {
-                    InfoRow(stringResource(R.string.spell_subclasses), spell.subclasses.joinToString())
-                }
-                if (spell.source.isNotBlank()) {
-                    InfoRow(stringResource(R.string.spell_source), spell.source)
-                }
-
-                if (spell.description.isNotBlank()) {
-                    // Заголовок не нужен: разделитель уже отделяет описание от характеристик.
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    DescriptionText(
-                        description = spell.description,
-                        onDiceClick = { formula -> DiceRoller.roll(formula)?.let { rollResult = it } },
-                    )
-                }
 
                 // Место под плавающий блок действий: прокрутив текст до конца,
                 // пользователь видит его ниже описания, а не поверх последних строк.
@@ -223,6 +211,43 @@ fun SpellDetailsScreen(
                 TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
+    }
+}
+
+/**
+ * Содержимое карточки заклинания: «круг · школа», характеристики и описание с костями.
+ *
+ * Общее для экрана заклинания и для окна-превью, открываемого по ссылке из текста расы,
+ * умения или заметки. Располагается внутри вертикального списка вызывающего кода.
+ */
+@Composable
+internal fun SpellInfoContent(spell: Spell, onDiceClick: (String) -> Unit) {
+    Text(
+        text = headerLabel(spell),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+    )
+
+    InfoRow(stringResource(R.string.spell_casting_time), activationLabel(spell))
+    InfoRow(stringResource(R.string.spell_duration), durationLabel(spell))
+    InfoRow(stringResource(R.string.spell_range), rangeLabel(spell))
+    InfoRow(stringResource(R.string.spell_components), componentsLabel(spell))
+    if (spell.classes.isNotEmpty()) {
+        val classes = spell.classes.map { spellOptionLabel(SpellOptions.classes, it) }
+        InfoRow(stringResource(R.string.spell_classes), classes.joinToString())
+    }
+    // Часть заклинаний доступна только отдельным подклассам, а не классу целиком.
+    if (spell.subclasses.isNotEmpty()) {
+        InfoRow(stringResource(R.string.spell_subclasses), spell.subclasses.joinToString())
+    }
+    if (spell.source.isNotBlank()) {
+        InfoRow(stringResource(R.string.spell_source), spell.source)
+    }
+
+    if (spell.description.isNotBlank()) {
+        // Заголовок не нужен: разделитель уже отделяет описание от характеристик.
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        DescriptionText(description = spell.description, onDiceClick = onDiceClick)
     }
 }
 
@@ -374,9 +399,54 @@ private fun DescriptionQuote(quote: DescriptionBlock.Quote, onDiceClick: (String
     )
 }
 
-/** Строит текст с костями, словами-ссылками и инлайновыми выделениями. */
+/**
+ * Строит текст с костями, словами-ссылками, инлайновыми выделениями
+ * и ссылками на заклинания ([LocalSpellLinks]).
+ */
 @Composable
-private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit) = buildAnnotatedString {
+private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit): AnnotatedString =
+    withSpellLinks(formattedDescription(text, onDiceClick))
+
+/**
+ * Добавляет в готовый текст ссылки на заклинания: «адское возмездие [hellish rebuke]».
+ *
+ * Ищем уже в отформатированном тексте — без звёздочек и токенов, поэтому ссылка работает
+ * и внутри курсива («*порча [bane]*»), и внутри жирного. Стили текста при этом сохраняются.
+ */
+@Composable
+internal fun withSpellLinks(text: AnnotatedString): AnnotatedString {
+    val links = LocalSpellLinks.current ?: return text
+    val found = remember(text.text, links) { links.index.find(text.text) }
+    if (found.isEmpty()) return text
+    val styles = spellLinkStyles()
+    return buildAnnotatedString {
+        append(text)
+        found.forEach { link ->
+            addLink(
+                LinkAnnotation.Clickable(
+                    tag = "spell",
+                    styles = styles,
+                    linkInteractionListener = { links.onOpen(link.spell) },
+                ),
+                link.range.first,
+                link.range.last + 1,
+            )
+        }
+    }
+}
+
+/** Оформление ссылки на заклинание — как у ссылок на умения в таблице класса. */
+@Composable
+internal fun spellLinkStyles(): TextLinkStyles = TextLinkStyles(
+    style = SpanStyle(
+        color = MaterialTheme.colorScheme.primary,
+        textDecoration = TextDecoration.Underline,
+    ),
+)
+
+/** Текст с костями, словами-ссылками и инлайновыми выделениями. */
+@Composable
+private fun formattedDescription(text: String, onDiceClick: (String) -> Unit) = buildAnnotatedString {
     val diceLinkStyle = TextLinkStyles(
         style = SpanStyle(
             color = MaterialTheme.colorScheme.primary,

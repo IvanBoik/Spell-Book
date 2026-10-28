@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Swipe actions on the character list -->
+    <string name="characters_delete_title">Delete character «%1$s»?</string>
+    <string name="characters_delete_text">The character, their spells, notes and inventory will be deleted permanently.</string>
+
+</resources>

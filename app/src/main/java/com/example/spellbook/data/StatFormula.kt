@@ -3,7 +3,11 @@ package com.example.spellbook.data
 import androidx.annotation.StringRes
 import com.example.spellbook.R
 import com.example.spellbook.data.model.AbilityType
+import com.example.spellbook.data.model.StatPart
+import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.Character
+import com.example.spellbook.data.model.DEFAULT_SPEED_FORMULA
+import com.example.spellbook.data.model.UNARMORED_AC_FORMULA
 import com.example.spellbook.data.model.ComboRollMode
 import kotlin.random.Random
 
@@ -255,6 +259,8 @@ object StatFormula {
                 '+' -> { position++; parseAtom() }
                 in '0'..'9' -> parseNumberOrDice()
                 null -> error("Формула не закончена")
+                // Функции min(a, b) и max(a, b): нужны для КД средних доспехов («Ловкость, не больше 2»).
+                'm' -> parseFunction()
                 // Запись без количества: `d6` означает одну кость.
                 in DICE_CHARS -> parseDice(count = 1)
                 else -> error("Неизвестный символ: $symbol")
@@ -303,6 +309,25 @@ object StatFormula {
             )
         }
 
+        /** Читает `min(a, b)` или `max(a, b)`. */
+        private fun parseFunction(): Term {
+            val name = FUNCTIONS.firstOrNull { text.startsWith(it, position) } ?: error("Неизвестная функция")
+            position += name.length
+            skipSpaces()
+            require(peek() == '(') { "Ожидалась скобка" }
+            position++
+            val first = parseSum()
+            skipSpaces()
+            require(peek() == ',') { "Ожидалась запятая" }
+            position++
+            val second = parseSum()
+            skipSpaces()
+            require(peek() == ')') { "Не закрыта скобка" }
+            position++
+            val value = if (name == "min") minOf(first.value, second.value) else maxOf(first.value, second.value)
+            return Term(value, value.toString())
+        }
+
         /** Читает `[name]` и возвращает значение переменной для персонажа. */
         private fun parseVariable(): Term {
             position++ // пропускаем '['
@@ -325,6 +350,7 @@ object StatFormula {
             /** Латинская и русская запись костей. */
             val DICE_CHARS = charArrayOf('d', 'к')
             const val MAX_DICE_COUNT = 100
+            val FUNCTIONS = listOf("min", "max")
         }
     }
 }
@@ -345,9 +371,83 @@ const val DEFAULT_INITIATIVE_FORMULA: String = "[dex]"
  * рабочим, даже если формула сломалась после ручной правки или импорта.
  */
 val Character.initiativeBonus: Int
-    get() = initiativeFormula.takeIf { it.isNotBlank() }
-        ?.let { StatFormula.evaluateValue(it, this) }
-        ?: abilityModifierOf(AbilityType.DEXTERITY)
+    get() = if (initiativeParts.isNotEmpty()) {
+        // Как у КД и скорости: основа (Ловкость) плюс прибавки от черт и умений.
+        statTotal(initiativeParts, DEFAULT_INITIATIVE_FORMULA)
+    } else {
+        initiativeFormula.takeIf { it.isNotBlank() }
+            ?.let { StatFormula.evaluateValue(it, this) }
+            ?: abilityModifierOf(AbilityType.DEXTERITY)
+    }
+
+/**
+ * Составляющие инициативы для редактирования: у персонажа без составляющих старая формула
+ * становится основой, чтобы ручная настройка (`[dex] + 5`) не потерялась.
+ */
+val Character.initiativePartsOrDefault: List<StatPart>
+    get() = initiativeParts.ifEmpty {
+        listOf(
+            StatPart(
+                name = "",
+                formula = initiativeFormula.ifBlank { DEFAULT_INITIATIVE_FORMULA },
+                kind = StatPartKind.BASE,
+            ),
+        )
+    }
+
+/** Значение составляющей (КД, скорости) для персонажа; неразборчивая формула даёт null. */
+fun Character.statPartValue(part: StatPart): Int? = StatFormula.evaluateValue(part.formula, this)
+
+/**
+ * Итог по составляющим: наибольшая из включённых основ (или [defaultBase], если
+ * все основы отключены) плюс сумма включённых прибавок.
+ */
+fun Character.statTotal(parts: List<StatPart>, defaultBase: String): Int {
+    val active = parts.filter { it.enabled }
+    val base = active.filter { it.kind == StatPartKind.BASE }
+        .mapNotNull { statPartValue(it) }
+        .maxOrNull()
+        ?: StatFormula.evaluateValue(defaultBase, this)
+        ?: 0
+    val bonus = active.filter { it.kind == StatPartKind.BONUS }.sumOf { statPartValue(it) ?: 0 }
+    return base + bonus
+}
+
+/** Включённая основа, которая сейчас применяется; null — действует основа по умолчанию. */
+fun Character.activeStatBase(parts: List<StatPart>): StatPart? =
+    parts.filter { it.enabled && it.kind == StatPartKind.BASE }
+        .maxByOrNull { statPartValue(it) ?: Int.MIN_VALUE }
+
+/**
+ * Итоговый КД.
+ *
+ * Без составляющих — число [Character.armorClass], как раньше. Иначе наибольшая из включённых
+ * основ (или 10 + Лов, если все основы отключены) плюс сумма включённых прибавок:
+ * по правилам способы расчёта КД не складываются, а щит и бонусы — складываются.
+ */
+val Character.effectiveArmorClass: Int
+    get() = if (armorClassParts.isEmpty()) armorClass else statTotal(armorClassParts, UNARMORED_AC_FORMULA)
+
+/**
+ * Включённая основа, которая сейчас даёт КД; null — действует 10 + Лов по умолчанию.
+ * Нужна, чтобы показать, какая из нескольких основ в итоге применяется.
+ */
+val Character.activeArmorClassBase: StatPart?
+    get() = activeStatBase(armorClassParts)
+
+/**
+ * Итоговая скорость: как и КД, складывается из основы (скорость расы) и прибавок
+ * («Подвижный», «Движение без доспехов»). Без составляющих — число [Character.speed].
+ */
+val Character.effectiveSpeed: Int
+    get() = if (speedParts.isEmpty()) speed else statTotal(speedParts, DEFAULT_SPEED_FORMULA).coerceAtLeast(0)
+
+/** Копия с числами [Character.armorClass] и [Character.speed], совпадающими с расчётными: их читают выгрузка и старый код. */
+fun Character.withSyncedArmorClass(): Character {
+    val ac = if (armorClassParts.isEmpty()) armorClass else effectiveArmorClass
+    val walk = if (speedParts.isEmpty()) speed else effectiveSpeed
+    return if (ac == armorClass && walk == speed) this else copy(armorClass = ac, speed = walk)
+}
 
 /**
  * Пересчитывает максимумы ресурсов, заданных формулами.
@@ -357,16 +457,18 @@ val Character.initiativeBonus: Int
  * или характеристик.
  */
 fun Character.withRecalculatedResources(): Character {
-    if (resources.none { it.maximumFormula.isNotBlank() }) return this
-    val updated = resources.map { resource ->
+    // КД тоже зависит от характеристик — синхронизируем его число заодно.
+    val character = withSyncedArmorClass()
+    if (character.resources.none { it.maximumFormula.isNotBlank() }) return character
+    val updated = character.resources.map { resource ->
         val target = resource.maximumFormula
             .takeIf { it.isNotBlank() }
-            ?.let { StatFormula.evaluateValue(it, this) }
+            ?.let { StatFormula.evaluateValue(it, character) }
             ?.coerceAtLeast(1)
             ?: return@map resource
         if (target == resource.maximum) return@map resource
         val spent = (resource.maximum - resource.current).coerceAtLeast(0)
         resource.copy(maximum = target, current = (target - spent).coerceIn(0, target))
     }
-    return copy(resources = updated)
+    return character.copy(resources = updated)
 }
