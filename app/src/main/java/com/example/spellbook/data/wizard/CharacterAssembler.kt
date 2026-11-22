@@ -2,6 +2,7 @@ package com.example.spellbook.data.wizard
 
 import com.example.spellbook.data.model.AbilityType
 import com.example.spellbook.data.model.StatPart
+import com.example.spellbook.data.model.unarmoredArmorClassPart
 import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.ArmorProficiency
 import com.example.spellbook.data.model.Feat
@@ -188,6 +189,7 @@ object CharacterAssembler {
             subrace = context.subrace?.title.orEmpty(),
             subclass = context.subclass?.title.orEmpty(),
             background = context.background?.background?.name.orEmpty(),
+            size = RaceSizes.resolve(draft, context),
             excludedContent = excluded.sorted(),
         )
 
@@ -547,6 +549,9 @@ object CharacterAssembler {
             draft.selections[choice.id].orEmpty().mapNotNull { id -> choice.options.firstOrNull { it.id == id } }
                 .forEach { option -> ArmorClassRules.bonusPart(option.title, option.text)?.let(parts::add) }
         }
+        // Без доспеха и без своей защиты без доспехов КД — 10 + Лов. Основа нужна явно: без
+        // составляющих персонаж получил бы число 10 по умолчанию, без Ловкости.
+        if (parts.none { it.kind == StatPartKind.BASE }) parts.add(0, unarmoredArmorClassPart())
         return parts
     }
 

@@ -79,6 +79,9 @@ enum class IssueKind {
     NAME_MISSING,
     RACE_MISSING,
     SUBRACE_MISSING,
+
+    /** Раса позволяет выбрать размер («Маленький или Средний»), а он не выбран. */
+    SIZE_MISSING,
     CLASS_MISSING,
     SUBCLASS_MISSING,
     BACKGROUND_MISSING,
@@ -790,6 +793,9 @@ object WizardEngine {
                 add(WizardIssue(IssueKind.RACE_MISSING))
             } else {
                 if (race.subraceRequired && context.subrace == null) add(WizardIssue(IssueKind.SUBRACE_MISSING))
+                if (RaceSizes.options(context).size > 1 && RaceSizes.resolve(draft, context).isEmpty()) {
+                    add(WizardIssue(IssueKind.SIZE_MISSING))
+                }
                 addAll(choiceIssues(draft, choicesOn(step, context), context))
             }
         }
@@ -899,6 +905,7 @@ object WizardEngine {
         return clearSelections(draft, "race.", "subrace.").copy(
             raceId = raceId,
             subraceId = null,
+            size = "",
             bonusPatternIndex = 0,
             bonusTargets = emptyList(),
             featSlots = draft.featSlots.filterKeys { !it.startsWith("race.") },
@@ -909,6 +916,7 @@ object WizardEngine {
         if (draft.subraceId == subraceId) return draft
         return clearSelections(draft, "subrace.").copy(
             subraceId = subraceId,
+            size = "",
             bonusPatternIndex = 0,
             bonusTargets = emptyList(),
             featSlots = draft.featSlots.filterKeys { !it.startsWith("race.") },

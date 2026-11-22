@@ -4,6 +4,7 @@ import androidx.room.TypeConverter
 import com.example.spellbook.data.model.StatPart
 import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.ResourceRecovery
 import com.example.spellbook.data.model.DamagePart
 import com.example.spellbook.data.model.NOTE_DEFAULT_FONT_SIZE
 import com.example.spellbook.data.model.NoteParagraph
@@ -79,6 +80,10 @@ class Converters {
                 put("current", resource.current)
                 put("maximum", resource.maximum)
                 put("maximumFormula", resource.maximumFormula)
+                put("shortRest", resource.recovery.shortRest)
+                put("longRest", resource.recovery.longRest)
+                put("otherRecovery", resource.recovery.other)
+                put("otherRecoveryText", resource.recovery.otherText)
             })
         }
         return array.toString()
@@ -100,6 +105,13 @@ class Converters {
                 current = obj.optInt("current", maximum),
                 maximum = maximum,
                 maximumFormula = obj.optString("maximumFormula"),
+                // У ресурсов, сохранённых до появления флагов, восстановление не отмечено.
+                recovery = ResourceRecovery(
+                    shortRest = obj.optBoolean("shortRest", false),
+                    longRest = obj.optBoolean("longRest", false),
+                    other = obj.optBoolean("otherRecovery", false),
+                    otherText = obj.optString("otherRecoveryText"),
+                ),
             ).normalized()
         }
     }

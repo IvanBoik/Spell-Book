@@ -1,5 +1,6 @@
 package com.example.spellbook.data.wizard
 
+import com.example.spellbook.data.model.CreatureSize
 import com.example.spellbook.data.model.AbilityType
 import com.example.spellbook.data.model.ArmorProficiency
 import com.example.spellbook.data.model.Race
@@ -439,6 +440,19 @@ object RaceRulesParser {
 
     private const val FULL_BONUS = 3
 
+    /**
+     * Размер из текста: «Ваш размер — Средний», «ваш размер – Средний», «Ваш размер Средний».
+     * Буква «й» в части текстов записана двумя символами («и» + кратка), поэтому текст нормализуется.
+     * null — размера в тексте нет (или после «ваш размер» идёт не название размера).
+     */
+    private fun sizeIn(lower: String): String? {
+        val text = java.text.Normalizer.normalize(lower, java.text.Normalizer.Form.NFC)
+        return Regex("ваш размер\\s*[—–-]?\\s*([а-яё]+(?:\\s+или\\s+[а-яё]+)?)").findAll(text)
+            .map { it.groupValues[1] }
+            .firstOrNull { CreatureSize.parse(it).isNotEmpty() }
+            ?.replaceFirstChar { it.uppercase() }
+    }
+
     private fun analyze(traits: List<Trait>, idPrefix: String, source: ChoiceSource): Analysis {
         var bonus: AbilityBonusRule? = null
         var speed: Int? = null
@@ -468,11 +482,7 @@ object RaceRulesParser {
             ) {
                 Regex("(\\d+)\\s*фут").find(lower)?.groupValues?.get(1)?.toIntOrNull()?.let { speed = it }
             }
-            if (lowerTitle.startsWith("размер")) {
-                Regex("ваш размер\\s*[—-]\\s*([а-яё]+(?:\\s+или\\s+[а-яё]+)?)").find(lower)?.let {
-                    size = it.groupValues[1].replaceFirstChar { c -> c.uppercase() }
-                }
-            }
+            if (lowerTitle.startsWith("размер")) sizeIn(lower)?.let { size = it }
             if (lowerTitle.startsWith("языки") || lowerTitle.startsWith("дополнительный язык")) {
                 val fixedPart = plain.substringBefore("на ваш выбор").substringBefore("по вашему выбору")
                 val count = MarkupText.languageChoiceCount(plain)
@@ -546,6 +556,12 @@ object RaceRulesParser {
             if (FIELD_ONLY_TRAITS.none { lowerTitle.startsWith(it) } && !lowerTitle.startsWith("разновидност")) {
                 features += RuleFeature(title = title, text = trait.text)
             }
+        }
+
+        // У части рас особенности записаны одним абзацем («…Размер. Рост гномов… Ваш размер — Маленький.
+        // Скорость…» в «Книге игрока»), и отдельной особенности «Размер» нет: ищем по всему тексту.
+        if (size.isBlank()) {
+            traits.firstNotNullOfOrNull { sizeIn(MarkupText.plain(it.text).lowercase()) }?.let { size = it }
         }
 
         return Analysis(

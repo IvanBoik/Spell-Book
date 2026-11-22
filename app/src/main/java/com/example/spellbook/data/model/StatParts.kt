@@ -39,5 +39,15 @@ data class StatPart(
 /** Основа КД по умолчанию, если доспех не надет: 10 + модификатор Ловкости. */
 const val UNARMORED_AC_FORMULA = "10 + [dex]"
 
+/** Название основы КД без доспеха; как и прочие составляющие, это пользовательский текст. */
+const val UNARMORED_AC_NAME = "Без доспехов"
+
+/** КД, который получает персонаж без составляющих по умолчанию: число без учёта Ловкости. */
+const val DEFAULT_ARMOR_CLASS = 10
+
+/** Основа «Без доспехов»: 10 + модификатор Ловкости. */
+fun unarmoredArmorClassPart(): StatPart =
+    StatPart(name = UNARMORED_AC_NAME, formula = UNARMORED_AC_FORMULA, kind = StatPartKind.BASE)
+
 /** Основа скорости по умолчанию, если основы отключены: 30 футов. */
 const val DEFAULT_SPEED_FORMULA = "30"

@@ -59,6 +59,10 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.spellbook.data.CharacterLssCodec
+import com.example.spellbook.data.SheetImportReport
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.res.pluralStringResource
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.LibraryDownloadProgress
@@ -200,9 +204,6 @@ private fun SpellBookApp(
     // Чью панель разделов редактируем в настройках; null — общая для всех персонажей.
     var settingsScopeId by remember { mutableStateOf<String?>(null) }
 
-    /** К какому персонажу применить загружаемый лист; null — создать нового. */
-    var sheetImportTargetId by remember { mutableStateOf<String?>(null) }
-
     // Показан ли диалог ввода ссылки dnd.su.
     var showDndSuDialog by remember { mutableStateOf(false) }
 
@@ -282,14 +283,13 @@ private fun SpellBookApp(
     val sheetImportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        val targetId = sheetImportTargetId
-        sheetImportTargetId = null
         if (uri == null) return@rememberLauncherForActivityResult
         val text = runCatching {
             context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
         }.getOrNull()
         if (text != null) {
-            viewModel.importCharacterJson(text, targetId)
+            // Лист всегда создаёт нового персонажа.
+            viewModel.importCharacterJson(text)
         } else {
             Toast.makeText(context, context.getString(R.string.file_read_failed), Toast.LENGTH_SHORT).show()
         }
@@ -322,6 +322,11 @@ private fun SpellBookApp(
     // Лог показывается только если при массовой загрузке были ошибки.
     state.libraryReport?.let { report ->
         LibraryReportDialog(report = report, onDismiss = viewModel::dismissLibraryReport)
+    }
+
+    // Что при загрузке листа LSS перенести точно не удалось.
+    state.sheetImportReport?.let { report ->
+        SheetImportReportDialog(report = report, onDismiss = viewModel::dismissSheetImportReport)
     }
 
     // Обработка системной кнопки «Назад»: на внутренних экранах — возврат к предыдущему,
@@ -404,11 +409,8 @@ private fun SpellBookApp(
             onEditCharacter = viewModel::openEditCharacterForm,
             onDeleteCharacter = viewModel::deleteCharacter,
             onLevelUp = viewModel::openLevelUp,
-            onImportSheet = {
-                // Новый лист создаёт персонажа, а не обновляет существующего.
-                sheetImportTargetId = null
-                importSheet()
-            },
+            // Лист создаёт нового персонажа, а не обновляет существующего.
+            onImportSheet = importSheet,
             bottomBar = bottomBar,
         )
 
@@ -891,18 +893,15 @@ private fun SpellBookApp(
                 },
                 onDelete = existing?.let { { viewModel.deleteCharacter(it.id) } },
                 onBack = viewModel::exitCharacterForm,
+                raceSizes = existing?.let { remember(it.race, it.subrace, state.libraryRaces) { viewModel.raceSizesOf(it) } }.orEmpty(),
                 onExportSheet = existing?.let { character ->
                     {
-                        pendingExportJson = viewModel.exportCharacterJson(character.id)
-                        pendingExportKind = ExportKind.CHARACTER
-                        exportLauncher.launch(suggestFileName(character.name))
-                    }
-                },
-                onImportSheet = existing?.let { character ->
-                    {
-                        // Лист применяется к текущему персонажу.
-                        sheetImportTargetId = character.id
-                        importSheet()
+                        // Лист собирается в фоне: нужны заметки, черты, снаряжение и заклинания.
+                        viewModel.prepareCharacterExport(character.id) { json ->
+                            pendingExportJson = json
+                            pendingExportKind = ExportKind.CHARACTER
+                            exportLauncher.launch(suggestFileName(character.name))
+                        }
                     }
                 },
             )
@@ -944,16 +943,17 @@ private fun SpellBookApp(
                     onRestoreResourceUnit = { id -> viewModel.restoreCharacterResourceUnit(screen.characterId, id) },
                     onRestoreResource = { id -> viewModel.restoreCharacterResource(screen.characterId, id) },
                     onDeleteResource = { id -> viewModel.deleteCharacterResource(screen.characterId, id) },
-                    onAddResource = { name, description, maximum, formula ->
+                    onAddResource = { name, description, maximum, formula, recovery ->
                         viewModel.addCharacterResource(
                             screen.characterId,
                             name,
                             description,
                             maximum,
                             formula,
+                            recovery,
                         )
                     },
-                    onEditResource = { id, name, description, maximum, formula ->
+                    onEditResource = { id, name, description, maximum, formula, recovery ->
                         viewModel.editCharacterResource(
                             screen.characterId,
                             id,
@@ -961,6 +961,7 @@ private fun SpellBookApp(
                             description,
                             maximum,
                             formula,
+                            recovery,
                         )
                     },
                     onReorderResources = { orderedIds ->
@@ -1630,6 +1631,56 @@ private fun LibraryReportDialog(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text(stringResource(R.string.action_ok)) }
+        },
+    )
+}
+
+/**
+ * Итог загрузки листа LSS: сколько заклинаний не нашлось (их id — в заметке персонажа)
+ * и какие черты добавлены в библиотеку впервые — они могут оказаться ошибкой разбора текста.
+ */
+@Composable
+private fun SheetImportReportDialog(
+    report: SheetImportReport,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        title = { Text(stringResource(R.string.sheet_import_report_title, report.characterName)) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = LIBRARY_REPORT_MAX_HEIGHT).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (report.unresolvedSpells > 0) {
+                    Text(
+                        pluralStringResource(
+                            R.plurals.sheet_import_spells_not_found,
+                            report.unresolvedSpells,
+                            report.unresolvedSpells,
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (report.unknownFeats.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.sheet_import_unknown_feats),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    report.unknownFeats.forEach { name ->
+                        Text(
+                            "• $name",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }

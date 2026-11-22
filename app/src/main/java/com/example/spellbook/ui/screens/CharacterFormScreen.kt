@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -71,6 +70,7 @@ import com.example.spellbook.R
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterClass
 import com.example.spellbook.data.model.CharacterClassLevel
+import com.example.spellbook.data.model.CreatureSize
 import com.example.spellbook.data.model.MAX_CLASS_LEVEL
 import com.example.spellbook.data.model.maxSpellCircleFor
 import com.example.spellbook.data.model.SpellcasterType
@@ -229,6 +229,54 @@ private fun ClassLevelsSection(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Размер персонажа: выбор из списка размеров. Под полем — какие размеры допускает раса,
+ * чтобы было видно, откуда берётся значение по умолчанию.
+ */
+@Composable
+private fun SizeField(size: CreatureSize?, raceSizes: List<CreatureSize>, onChange: (CreatureSize?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.cform_size), fontWeight = FontWeight.Bold)
+        Box {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(size?.labelRes ?: R.string.cform_size_none))
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                containerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.cform_size_none)) },
+                    onClick = {
+                        onChange(null)
+                        expanded = false
+                    },
+                )
+                CreatureSize.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(option.labelRes)) },
+                        onClick = {
+                            onChange(option)
+                            expanded = false
+                        },
+                    )
+                }
+            }
+        }
+        if (raceSizes.isNotEmpty()) {
+            // joinToString не inline, поэтому подписи собираются заранее.
+            val labels = raceSizes.map { stringResource(it.labelRes).lowercase() }
+            Text(
+                stringResource(R.string.cform_size_race, labels.joinToString(" / ")),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -432,12 +480,17 @@ fun CharacterFormScreen(
     onSave: (character: Character, addClassSpells: Boolean) -> Unit,
     onDelete: (() -> Unit)?,
     onBack: () -> Unit,
-    /** Выгрузка и загрузка листа в формате LSS; null — действие недоступно. */
+    /** Выгрузка листа в формате LSS; null — действие недоступно. */
     onExportSheet: (() -> Unit)? = null,
-    onImportSheet: (() -> Unit)? = null,
+    /** Размеры, которые допускает раса персонажа (по библиотеке); пусто — раса не найдена. */
+    raceSizes: List<CreatureSize> = emptyList(),
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(initial.name) }
+    // Размер берётся от расы: если он не задан, а у расы один вариант, подставляется он.
+    var size by remember(raceSizes) {
+        mutableStateOf(CreatureSize.fromCode(initial.size) ?: raceSizes.singleOrNull())
+    }
     var imageUri by remember { mutableStateOf(initial.imageUri) }
 
     var canPrepare by remember { mutableStateOf(initial.canPrepareSpells) }
@@ -567,6 +620,7 @@ fun CharacterFormScreen(
         return initial.copy(
             name = name.trim(),
             imageUri = imageUri,
+            size = size?.code.orEmpty(),
             classes = validClassLevels.map { it.serialize() },
             // Уровень всегда складывается из классов; без них остаётся прежний.
             level = if (validClassLevels.isNotEmpty()) totalLevel(validClassLevels) else initial.level,
@@ -694,6 +748,8 @@ fun CharacterFormScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            SizeField(size = size, raceSizes = raceSizes, onChange = { size = it })
 
             // Классы редактируются и у созданного персонажа.
             ClassLevelsSection(
@@ -875,8 +931,9 @@ fun CharacterFormScreen(
                 }
             }
 
-            // Обмен листом персонажа в формате LSS — только для созданного персонажа.
-            if (!isNew && (onExportSheet != null || onImportSheet != null)) {
+            // Выгрузка листа в формате LSS — только для созданного персонажа. Загрузка листа
+            // всегда создаёт нового персонажа, поэтому она есть только в списке персонажей.
+            if (!isNew && onExportSheet != null) {
                 HorizontalDivider()
             Text(stringResource(R.string.cform_sheet), fontWeight = FontWeight.Bold)
                 Text(
@@ -884,19 +941,10 @@ fun CharacterFormScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                onExportSheet?.let { export ->
-                    OutlinedButton(onClick = export, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.FileUpload, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.cform_export_json))
-                    }
-                }
-                onImportSheet?.let { import ->
-                    OutlinedButton(onClick = import, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.FileDownload, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.cform_import_json))
-                    }
+                OutlinedButton(onClick = onExportSheet, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.FileUpload, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.cform_export_json))
                 }
             }
 

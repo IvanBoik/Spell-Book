@@ -8,6 +8,8 @@ import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.DEFAULT_SPEED_FORMULA
 import com.example.spellbook.data.model.UNARMORED_AC_FORMULA
+import com.example.spellbook.data.model.DEFAULT_ARMOR_CLASS
+import com.example.spellbook.data.model.unarmoredArmorClassPart
 import com.example.spellbook.data.model.ComboRollMode
 import kotlin.random.Random
 
@@ -441,6 +443,33 @@ val Character.activeArmorClassBase: StatPart?
  */
 val Character.effectiveSpeed: Int
     get() = if (speedParts.isEmpty()) speed else statTotal(speedParts, DEFAULT_SPEED_FORMULA).coerceAtLeast(0)
+
+/**
+ * Составляющие КД для добавления прибавки. У персонажа без составляющих основой становится
+ * его число КД, а КД по умолчанию (10, без Ловкости) — основа «Без доспехов» (10 + Лов).
+ */
+val Character.armorClassPartsOrBase: List<StatPart>
+    get() = armorClassParts.ifEmpty {
+        listOf(
+            if (armorClass == DEFAULT_ARMOR_CLASS) {
+                unarmoredArmorClassPart()
+            } else {
+                StatPart(name = "", formula = armorClass.toString(), kind = StatPartKind.BASE)
+            },
+        )
+    }
+
+/**
+ * Исправляет КД персонажа без доспеха: раньше мастер не добавлял основу «Без доспехов»,
+ * и у персонажа без составляющих оставалось число 10 без Ловкости. Число, отличное
+ * от 10, задано вручную или из листа и не трогается.
+ */
+fun Character.withUnarmoredBase(): Character =
+    if (armorClassParts.isEmpty() && armorClass == DEFAULT_ARMOR_CLASS) {
+        copy(armorClassParts = listOf(unarmoredArmorClassPart())).withSyncedArmorClass()
+    } else {
+        this
+    }
 
 /** Копия с числами [Character.armorClass] и [Character.speed], совпадающими с расчётными: их читают выгрузка и старый код. */
 fun Character.withSyncedArmorClass(): Character {

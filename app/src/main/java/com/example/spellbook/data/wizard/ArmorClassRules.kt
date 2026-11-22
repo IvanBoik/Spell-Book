@@ -4,6 +4,7 @@ import com.example.spellbook.data.model.StatPart
 import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.Feat
+import com.example.spellbook.data.armorClassPartsOrBase
 
 /**
  * Поиск прибавок к КД в текстах черт, боевых стилей и особенностей:
@@ -42,15 +43,12 @@ object ArmorClassRules {
      * Добавляет персонажу прибавку к КД от черты, если черта её даёт.
      *
      * У персонажа без составляющих текущее число КД сначала становится основой,
-     * чтобы прибавка не обнулила ручную настройку.
+     * чтобы прибавка не обнулила ручную настройку (КД по умолчанию — основой «Без доспехов»).
      */
     fun withFeat(character: Character, feat: Feat): Character {
         val part = bonusPart(feat.name, feat.description, FEAT_PART_PREFIX + feat.id) ?: return character
         if (character.armorClassParts.any { it.id == part.id }) return character
-        val base = character.armorClassParts.ifEmpty {
-            listOf(StatPart(name = "", formula = character.armorClass.toString(), kind = StatPartKind.BASE))
-        }
-        return character.copy(armorClassParts = base + part)
+        return character.copy(armorClassParts = character.armorClassPartsOrBase + part)
     }
 
     /** Убирает прибавку к КД, связанную с чертой. */

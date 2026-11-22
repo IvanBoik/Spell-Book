@@ -16,6 +16,7 @@ import com.example.spellbook.data.SectionLayout
 import com.example.spellbook.ui.components.CharacterSection
 import com.example.spellbook.ui.components.EditScope
 import com.example.spellbook.data.CharacterLssCodec
+import com.example.spellbook.data.SheetImportReport
 import com.example.spellbook.data.DEFAULT_INITIATIVE_FORMULA
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.withRecalculatedResources
@@ -34,6 +35,10 @@ import com.example.spellbook.data.SpellSort
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.AbilityType
 import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.ResourceRecovery
+import com.example.spellbook.data.wizard.WizardRulesCache
+import com.example.spellbook.data.wizard.RaceSizes
+import com.example.spellbook.data.model.CreatureSize
 import com.example.spellbook.data.model.classListPreparingLimits
 import com.example.spellbook.data.model.D20RollResult
 import com.example.spellbook.data.model.ProficiencyLevel
@@ -114,6 +119,14 @@ private const val LIBRARY_DOWNLOAD_PARALLELISM = 8
  * v2 — у черт появилась книга-источник для группировки в библиотеке.
  */
 private const val BUNDLED_FEATS_VERSION = 2
+
+/**
+ * Версия заполнения английских названий заклинаний из `assets/spellbook-library.json`.
+ * Повышается, когда в файле появляются новые английские названия.
+ *
+ * v1 — английские названия всех заклинаний dnd.su для обмена листами с LSS.
+ */
+private const val SPELL_ENGLISH_NAMES_VERSION = 1
 
 /**
  * Версия встроенного набора рас; повышается при обновлении `assets/races-library.json`.
@@ -257,6 +270,8 @@ data class SpellBookUiState(
     val libraryProgress: LibraryDownloadProgress? = null,
     /** Итог последней массовой загрузки с логом ошибок; null — показывать нечего. */
     val libraryReport: LibraryDownloadReport? = null,
+    /** Предупреждения после загрузки листа LSS; null — показывать нечего. */
+    val sheetImportReport: SheetImportReport? = null,
     /** Пользовательские настройки приложения (язык, тема, панель разделов). */
     val settings: AppSettingsState = AppSettingsState(),
     /** Сообщение для пользователя; текст собирается на стороне UI по языку интерфейса. */
@@ -406,8 +421,11 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.migrateLegacyIfNeeded()
             importBundledLibraryOnce()
+            fillSpellEnglishNamesOnce()
+            fixUnarmoredArmorClassOnce()
             importBundledFeatsOnce()
             importBundledRacesOnce()
+            fillCharacterSizesOnce()
             importBundledClassesOnce()
             importBundledBackgroundsOnce()
             importBundledMagicItemsOnce()
@@ -522,6 +540,34 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         // Импорт идёт молча: для пользователя библиотека просто уже есть при первом запуске.
         repository.importBundledLibrary()
         prefs.bundledLibraryImported = true
+    }
+
+    /** Разобранные правила рас — для размеров персонажей; разбор текста расы недёшев. */
+    private val raceRulesCache = WizardRulesCache()
+
+    /** Размеры, которые допускает раса персонажа, по библиотеке рас. */
+    fun raceSizesOf(character: Character): List<CreatureSize> =
+        RaceSizes.forCharacter(character, uiState.libraryRaces, raceRulesCache)
+
+    /** Один раз проставляет размер персонажам, созданным до его появления, — по их расе. */
+    private suspend fun fillCharacterSizesOnce() {
+        if (prefs.characterSizesFilled) return
+        repository.fillCharacterSizes()
+        prefs.characterSizesFilled = true
+    }
+
+    /** Один раз исправляет КД персонажей, созданных мастером без основы «Без доспехов». */
+    private suspend fun fixUnarmoredArmorClassOnce() {
+        if (prefs.unarmoredArmorClassFixed) return
+        repository.fixUnarmoredArmorClass()
+        prefs.unarmoredArmorClassFixed = true
+    }
+
+    /** Дописывает английские названия заклинаниям, загруженным до их появления. */
+    private suspend fun fillSpellEnglishNamesOnce() {
+        if (prefs.spellEnglishNamesVersion >= SPELL_ENGLISH_NAMES_VERSION) return
+        repository.fillSpellEnglishNames()
+        prefs.spellEnglishNamesVersion = SPELL_ENGLISH_NAMES_VERSION
     }
 
     /**
@@ -2031,33 +2077,49 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         return added
     }
 
-    /** Выгружает лист персонажа в формате LSS; null — персонаж не найден. */
-    fun exportCharacterJson(characterId: String): String? =
-        getCharacter(characterId)?.let(CharacterLssCodec::encode)
+    /**
+     * Собирает лист персонажа в формате LSS вместе с заметками, чертами, снаряжением,
+     * заклинаниями и комбинациями. [onReady] получает JSON; если персонаж не найден, не вызывается.
+     */
+    fun prepareCharacterExport(characterId: String, onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            val sheet = repository.loadSheetExport(characterId) ?: return@launch
+            val json = runCatching { CharacterLssCodec.encode(sheet) }.getOrElse {
+                uiState = uiState.copy(message = UiMessage(R.string.file_save_failed))
+                return@launch
+            }
+            onReady(json)
+        }
+    }
 
     /**
-     * Загружает лист персонажа из JSON формата LSS.
-     *
-     * @param characterId если задан, лист применяется к существующему персонажу,
-     * иначе создаётся новый.
+     * Загружает лист персонажа из JSON формата LSS. Лист всегда создаёт нового персонажа:
+     * существующие персонажи не перезаписываются. Если что-то перенести точно не удалось
+     * (заклинания не найдены, черты не из библиотеки), после загрузки показывается отчёт.
      */
-    fun importCharacterJson(json: String, characterId: String? = null) {
-        val existing = characterId?.let(::getCharacter)
-        val imported = runCatching { CharacterLssCodec.decode(json, existing) }
+    fun importCharacterJson(json: String) {
+        val imported = runCatching { CharacterLssCodec.decode(json) }
             .getOrElse {
                 uiState = uiState.copy(message = it.toUiMessage(R.string.msg_sheet_read_failed))
                 return
             }
         viewModelScope.launch {
-            repository.upsertCharacter(imported)
-            val messageRes = if (existing != null) {
-                R.string.msg_sheet_updated
-            } else {
-                R.string.msg_character_imported
+            val report = runCatching { repository.importSheet(imported) }.getOrElse {
+                uiState = uiState.copy(message = it.toUiMessage(R.string.msg_sheet_read_failed))
+                return@launch
             }
-            openCharacterHome(imported.id)
-            uiState = uiState.copy(message = UiMessage(messageRes))
+            openCharacterHome(report.characterId)
+            uiState = if (report.hasWarnings) {
+                uiState.copy(sheetImportReport = report)
+            } else {
+                uiState.copy(message = UiMessage(R.string.msg_character_imported))
+            }
         }
+    }
+
+    /** Закрывает отчёт о загрузке листа LSS. */
+    fun dismissSheetImportReport() {
+        uiState = uiState.copy(sheetImportReport = null)
     }
 
     /**
@@ -2161,6 +2223,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         description: String,
         maximum: Int,
         maximumFormula: String = "",
+        recovery: ResourceRecovery = ResourceRecovery(),
     ) {
         val character = getCharacter(characterId) ?: return
         // Формула задаёт максимум автоматически, поэтому число вводить не обязательно.
@@ -2175,6 +2238,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
             current = resolved,
             maximum = resolved,
             maximumFormula = maximumFormula.trim(),
+            recovery = recovery,
         ).normalized()
         viewModelScope.launch {
             repository.upsertCharacter(character.copy(resources = character.resources + resource))
@@ -2189,6 +2253,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         description: String,
         maximum: Int,
         maximumFormula: String = "",
+        recovery: ResourceRecovery = ResourceRecovery(),
     ) {
         val character = getCharacter(characterId) ?: return
         val resolved = resolveResourceMaximum(maximumFormula, maximum, character)
@@ -2204,6 +2269,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
                 maximum = resolved,
                 maximumFormula = maximumFormula.trim(),
                 current = (resolved - spent).coerceAtLeast(0),
+                recovery = recovery.normalized(),
             )
         }
     }

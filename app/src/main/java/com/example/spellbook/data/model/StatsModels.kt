@@ -55,6 +55,30 @@ enum class WeaponProficiency(@param:StringRes val labelRes: Int) {
     OTHER(R.string.action_type_other),
 }
 
+/**
+ * Размер существа. [code] — ключ формата LSS (`info.size`), [stem] — основа русского названия
+ * в текстах рас dnd.su («Ваш размер — Маленький или Средний»).
+ */
+enum class CreatureSize(val code: String, @param:StringRes val labelRes: Int, private val stem: String) {
+    TINY("tiny", R.string.size_tiny, "крошечн"),
+    SMALL("small", R.string.size_small, "маленьк"),
+    MEDIUM("medium", R.string.size_medium, "средн"),
+    LARGE("large", R.string.size_large, "больш"),
+    HUGE("huge", R.string.size_huge, "огромн"),
+    ;
+
+    companion object {
+        fun fromCode(code: String?): CreatureSize? = entries.firstOrNull { it.code == code }
+
+        /** Варианты размера из текста расы: «Маленький или Средний» → [SMALL, MEDIUM]. */
+        fun parse(text: String): List<CreatureSize> =
+            java.text.Normalizer.normalize(text.lowercase(), java.text.Normalizer.Form.NFC)
+                .split(Regex("\\s+или\\s+|,"))
+                .mapNotNull { part -> entries.firstOrNull { part.trim().startsWith(it.stem) } }
+                .distinct()
+    }
+}
+
 /** Уровень владения навыком или спасброском. */
 enum class ProficiencyLevel(@param:StringRes val labelRes: Int, val multiplier: Int) {
     NONE(R.string.proficiency_none, 0),

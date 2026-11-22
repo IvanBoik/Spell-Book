@@ -534,7 +534,6 @@
     <string name="cform_sheet">Лист персонажа</string>
     <string name="cform_sheet_format">Формат LSS (Long Story Short).</string>
     <string name="cform_export_json">Выгрузить JSON</string>
-    <string name="cform_import_json">Загрузить JSON</string>
     <string name="cform_delete_character">Удалить персонажа</string>
 
     <!-- Комбинации -->
@@ -653,7 +652,6 @@
     <string name="msg_character_saved">Персонаж сохранён</string>
     <string name="msg_character_saved_spells">Персонаж сохранён, добавлено заклинаний: %1$d</string>
     <string name="msg_sheet_read_failed">Не удалось прочитать лист: %1$s</string>
-    <string name="msg_sheet_updated">Лист персонажа обновлён</string>
     <string name="msg_character_imported">Персонаж загружен</string>
     <string name="msg_character_deleted">Персонаж удалён</string>
     <string name="msg_prepared_limit">Достигнут лимит подготовленных заклинаний (%1$d)</string>
@@ -724,6 +722,15 @@
     <string name="resources_name_hint">Например, очки монаха</string>
     <string name="resources_description_hint">На что тратится и когда восстанавливается</string>
     <string name="resources_maximum">Максимум</string>
+    <string name="resources_recovery">Восстановление</string>
+    <string name="resources_recovery_short">Короткий отдых</string>
+    <string name="resources_recovery_long">Долгий отдых</string>
+    <string name="resources_recovery_other">Другое</string>
+    <string name="resources_recovery_other_label">Как восстанавливается</string>
+    <string name="resources_recovery_other_hint">Например: после 1к4 долгих отдыхов</string>
+    <string name="resources_recovery_summary">Восстанавливается: %1$s</string>
+    <string name="sheet_import_report_title">Персонаж «%1$s» загружен</string>
+    <string name="sheet_import_unknown_feats">Этих черт нет в библиотеке. Они добавлены как новые, но могут оказаться ошибкой разбора текста листа — проверьте их в разделе «Черты»:</string>
     <string name="resources_no_description">Описание не указано.</string>
     <string name="resources_edit_named">Редактировать %1$s</string>
     <string name="resources_delete_named">Удалить %1$s</string>
@@ -864,6 +871,12 @@
         <item quantity="many">%1$d заклинаний</item>
         <item quantity="other">%1$d заклинания</item>
     </plurals>
+    <plurals name="sheet_import_spells_not_found">
+        <item quantity="one">Не найдено %1$d заклинание. В заметки персонажа добавлен блок с его id в LSS — по нему заклинание можно перенести вручную.</item>
+        <item quantity="few">Не найдено %1$d заклинания. В заметки персонажа добавлен блок с их id в LSS — по ним заклинания можно перенести вручную.</item>
+        <item quantity="many">Не найдено %1$d заклинаний. В заметки персонажа добавлен блок с их id в LSS — по ним заклинания можно перенести вручную.</item>
+        <item quantity="other">Не найдено %1$d заклинания. В заметки персонажа добавлен блок с их id в LSS — по ним заклинания можно перенести вручную.</item>
+    </plurals>
     <plurals name="feat_count">
         <item quantity="one">%1$d черта</item>
         <item quantity="few">%1$d черты</item>
@@ -998,6 +1011,17 @@
     <string name="wizard_issue_name">Введите имя персонажа</string>
     <string name="wizard_issue_race">Выберите расу</string>
     <string name="wizard_issue_subrace">Выберите разновидность расы</string>
+    <string name="size_tiny">Крошечный</string>
+    <string name="size_small">Маленький</string>
+    <string name="size_medium">Средний</string>
+    <string name="size_large">Большой</string>
+    <string name="size_huge">Огромный</string>
+    <string name="cform_size">Размер</string>
+    <string name="cform_size_none">Не указан</string>
+    <string name="cform_size_race">По расе: %1$s</string>
+    <string name="wizard_size_title">Размер</string>
+    <string name="wizard_size_hint">Раса позволяет выбрать размер. Он переносится и в лист LSS.</string>
+    <string name="wizard_issue_size">Выберите размер</string>
     <string name="wizard_issue_class">Выберите класс</string>
     <string name="wizard_issue_subclass">Выберите: %1$s</string>
     <string name="wizard_issue_background">Выберите предысторию</string>

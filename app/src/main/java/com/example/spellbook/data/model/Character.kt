@@ -84,6 +84,11 @@ data class Character(
     val subclass: String = "",
     val background: String = "",
     /**
+     * Размер: код [CreatureSize] (`medium`). Берётся от расы; если раса даёт выбор
+     * («Маленький или Средний»), его делают в мастере создания. Пусто — не задан.
+     */
+    val size: String = "",
+    /**
      * Составляющие КД: доспех, щит, черты и т. п. Пусто — КД задан числом [armorClass]
      * (персонажи, созданные до появления составляющих). Итог считает `Character.effectiveArmorClass`.
      */

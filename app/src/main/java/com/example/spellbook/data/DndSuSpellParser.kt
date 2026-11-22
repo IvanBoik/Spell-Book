@@ -37,8 +37,10 @@ object DndSuSpellParser {
         val classes = parseClasses(fields[LABEL_CLASSES].orEmpty())
         val subclasses = parseSubclasses(fields[LABEL_SUBCLASSES].orEmpty())
 
+        val (name, nameEn) = parseName(doc)
         return Spell(
-            name = parseName(doc),
+            name = name,
+            nameEn = nameEn,
             description = parseDescription(doc),
             source = parseSource(doc),
             level = level,
@@ -59,12 +61,15 @@ object DndSuSpellParser {
 
     // region Отдельные поля
 
-    /** Название берём из части до «[», например «Огненный снаряд [Fire bolt]» → «Огненный снаряд». */
-    private fun parseName(doc: Document): String {
+    /**
+     * Русское и английское название: «Огненный снаряд [Fire bolt]» → «Огненный снаряд» и «Fire bolt».
+     * Английское нужно листу LSS, который ищет заклинания по нему.
+     */
+    private fun parseName(doc: Document): Pair<String, String> {
         val raw = doc.selectFirst("h2.card-title span[data-copy]")?.text()
             ?: doc.selectFirst("h2.card-title")?.text()
             ?: ""
-        return raw.substringBefore('[').trim().ifBlank { raw.trim() }
+        return SpellNames.split(raw)
     }
 
     /**

@@ -536,7 +536,6 @@
     <string name="cform_sheet">Character sheet</string>
     <string name="cform_sheet_format">LSS (Long Story Short) format.</string>
     <string name="cform_export_json">Export JSON</string>
-    <string name="cform_import_json">Import JSON</string>
     <string name="cform_delete_character">Delete the character</string>
 
     <!-- Combos -->
@@ -655,7 +654,6 @@
     <string name="msg_character_saved">Character saved</string>
     <string name="msg_character_saved_spells">Character saved, spells added: %1$d</string>
     <string name="msg_sheet_read_failed">Could not read the sheet: %1$s</string>
-    <string name="msg_sheet_updated">Character sheet updated</string>
     <string name="msg_character_imported">Character imported</string>
     <string name="msg_character_deleted">Character deleted</string>
     <string name="msg_prepared_limit">Prepared spells limit reached (%1$d)</string>
@@ -726,6 +724,15 @@
     <string name="resources_name_hint">For example, Ki points</string>
     <string name="resources_description_hint">What it is spent on and when it is restored</string>
     <string name="resources_maximum">Maximum</string>
+    <string name="resources_recovery">Recovery</string>
+    <string name="resources_recovery_short">Short rest</string>
+    <string name="resources_recovery_long">Long rest</string>
+    <string name="resources_recovery_other">Other</string>
+    <string name="resources_recovery_other_label">How it recovers</string>
+    <string name="resources_recovery_other_hint">For example: after 1d4 long rests</string>
+    <string name="resources_recovery_summary">Recovers: %1$s</string>
+    <string name="sheet_import_report_title">Character “%1$s” imported</string>
+    <string name="sheet_import_unknown_feats">These feats are not in the library. They were added as new feats, but may be a mistake in reading the sheet text — check them in the Feats section:</string>
     <string name="resources_no_description">No description provided.</string>
     <string name="resources_edit_named">Edit %1$s</string>
     <string name="resources_delete_named">Delete %1$s</string>
@@ -864,6 +871,10 @@
         <item quantity="one">%1$d spell</item>
         <item quantity="other">%1$d spells</item>
     </plurals>
+    <plurals name="sheet_import_spells_not_found">
+        <item quantity="one">%1$d spell was not found. A note block with its LSS id was added to the character — you can use it to transfer the spell manually.</item>
+        <item quantity="other">%1$d spells were not found. A note block with their LSS ids was added to the character — you can use them to transfer the spells manually.</item>
+    </plurals>
     <plurals name="feat_count">
         <item quantity="one">%1$d feat</item>
         <item quantity="other">%1$d feats</item>
@@ -968,6 +979,17 @@
     <string name="wizard_issue_name">Enter a character name</string>
     <string name="wizard_issue_race">Choose a race</string>
     <string name="wizard_issue_subrace">Choose a subrace</string>
+    <string name="size_tiny">Tiny</string>
+    <string name="size_small">Small</string>
+    <string name="size_medium">Medium</string>
+    <string name="size_large">Large</string>
+    <string name="size_huge">Huge</string>
+    <string name="cform_size">Size</string>
+    <string name="cform_size_none">Not set</string>
+    <string name="cform_size_race">By race: %1$s</string>
+    <string name="wizard_size_title">Size</string>
+    <string name="wizard_size_hint">The race lets you choose your size. It is also exported to the LSS sheet.</string>
+    <string name="wizard_issue_size">Choose a size</string>
     <string name="wizard_issue_class">Choose a class</string>
     <string name="wizard_issue_subclass">Choose: %1$s</string>
     <string name="wizard_issue_background">Choose a background</string>
