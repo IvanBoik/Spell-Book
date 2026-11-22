@@ -443,6 +443,7 @@ fun issueText(issue: WizardIssue): String = when (issue.kind) {
     IssueKind.NAME_MISSING -> stringResource(R.string.wizard_issue_name)
     IssueKind.RACE_MISSING -> stringResource(R.string.wizard_issue_race)
     IssueKind.SUBRACE_MISSING -> stringResource(R.string.wizard_issue_subrace)
+    IssueKind.SIZE_MISSING -> stringResource(R.string.wizard_issue_size)
     IssueKind.CLASS_MISSING -> stringResource(R.string.wizard_issue_class)
     IssueKind.SUBCLASS_MISSING -> stringResource(R.string.wizard_issue_subclass, issue.label)
     IssueKind.BACKGROUND_MISSING -> stringResource(R.string.wizard_issue_background)

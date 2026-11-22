@@ -207,6 +207,15 @@ fun spellSlotsFor(classes: List<CharacterClassLevel>): Map<Int, Int> {
     return slots
 }
 
+/**
+ * Ячейки магии договора колдуна: количество и их круг.
+ * null — у персонажа нет уровней колдуна. Нужны листу LSS, где ячейки договора хранятся отдельно.
+ */
+fun pactSlotsFor(classes: List<CharacterClassLevel>): Pair<Int, Int>? {
+    val warlockLevel = classes.filter { it.characterClass.spellcaster == SpellcasterType.PACT }.sumOf { it.level }
+    return PACT_SLOTS.getOrNull(warlockLevel - 1)
+}
+
 /** Есть ли среди классов хотя бы один заклинатель. */
 fun hasSpellcaster(classes: List<CharacterClassLevel>): Boolean =
     classes.any { it.characterClass.spellcaster != SpellcasterType.NONE }

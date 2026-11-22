@@ -1,6 +1,7 @@
 package com.example.spellbook.data.db
 
 import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.ResourceRecovery
 import com.example.spellbook.data.model.DamagePart
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -128,4 +129,24 @@ class ConvertersTest {
     }
 
     // endregion
+    @Test
+    fun `resource recovery survives round trip`() {
+        val resources = listOf(
+            CharacterResource(
+                id = "r1", name = "Ограниченное желание", current = 1, maximum = 1,
+                recovery = ResourceRecovery(other = true, otherText = "после 1к4 долгих отдыхов"),
+            ),
+            CharacterResource(
+                id = "r2", name = "Кости", current = 2, maximum = 3,
+                recovery = ResourceRecovery(shortRest = true, longRest = true),
+            ),
+        )
+        assertEquals(resources, converters.jsonToResources(converters.resourcesToJson(resources)))
+    }
+
+    @Test
+    fun `old resources have no recovery flags`() {
+        val resource = converters.jsonToResources("""[{"id":"r1","name":"Очки","current":1,"maximum":3}]""").single()
+        assertEquals(ResourceRecovery(), resource.recovery)
+    }
 }

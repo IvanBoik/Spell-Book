@@ -38,6 +38,11 @@ data class Spell(
     /** [SpellOrigin] в виде имени — Room хранит его строкой. */
     val origin: String = SpellOrigin.USER.name,
     val name: String = "",
+    /**
+     * Английское название, например `Cure wounds` для «Лечения ран». По нему лист LSS находит
+     * заклинание (слаг `cure-wounds`): русские названия LSS не распознаёт. Пусто — неизвестно.
+     */
+    val nameEn: String = "",
     /** Описание в виде простого текста; абзацы разделяются переводом строки. */
     val description: String = "",
     val source: String = "HB",

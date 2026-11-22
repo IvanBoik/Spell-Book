@@ -40,7 +40,7 @@ import com.example.spellbook.data.model.Spell
         Background::class,
         MagicItem::class,
     ],
-    version = 35,
+    version = 37,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -490,6 +490,23 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Английское название заклинания: по нему лист LSS находит заклинание.
+         * У старых записей оно пустое и заполняется из встроенной библиотеки при запуске.
+         */
+        private val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE spells ADD COLUMN nameEn TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        /** Размер персонажа; у старых персонажей он заполняется по расе при запуске. */
+        private val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN size TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -534,6 +551,8 @@ abstract class SpellBookDatabase : RoomDatabase() {
                 MIGRATION_32_33,
                 MIGRATION_33_34,
                 MIGRATION_34_35,
+                MIGRATION_35_36,
+                MIGRATION_36_37,
                 ).build()
             }
     }

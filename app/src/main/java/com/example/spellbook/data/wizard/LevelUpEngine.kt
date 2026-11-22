@@ -15,6 +15,7 @@ import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.SkillType
 import com.example.spellbook.data.model.Spell
+import com.example.spellbook.data.armorClassPartsOrBase
 import com.example.spellbook.data.model.StatPart
 import com.example.spellbook.data.model.StatPartKind
 import com.example.spellbook.data.model.WeaponProficiency
@@ -1564,10 +1565,7 @@ object LevelUpEngine {
         }
         addedOptions.mapNotNull { ArmorClassRules.bonusPart(it.title, it.text) }.forEach { part ->
             if (character.armorClassParts.any { norm(it.name) == norm(part.name) }) return@forEach
-            val baseParts = character.armorClassParts.ifEmpty {
-                listOf(StatPart(name = "", formula = character.armorClass.toString(), kind = StatPartKind.BASE))
-            }
-            character = character.copy(armorClassParts = baseParts + part)
+            character = character.copy(armorClassParts = character.armorClassPartsOrBase + part)
         }
         return character
     }

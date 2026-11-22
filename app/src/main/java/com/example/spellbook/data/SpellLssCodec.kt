@@ -133,7 +133,8 @@ object SpellLssCodec {
         }
 
         return JSONObject().apply {
-            put("name", spell.name)
+            // LSS хранит название вместе с английским: «Лечение ран [Cure wounds]».
+            put("name", SpellNames.join(spell.name, spell.nameEn))
             put("type", TYPE_SPELL)
             put("system", system)
             put("classes", JSONArray(spell.classes))
@@ -174,10 +175,12 @@ object SpellLssCodec {
         val damage = system.optJSONObject("damage") ?: JSONObject()
 
         val descriptionHtml = system.optJSONObject("description")?.optString("value").orEmpty()
+        val (name, nameEn) = SpellNames.split(json.optString("name"))
 
         return Spell(
             id = json.optString(LOCAL_ID_KEY).ifEmpty { UUID.randomUUID().toString() },
-            name = json.optString("name"),
+            name = name,
+            nameEn = nameEn,
             description = HtmlUtils.htmlToPlain(descriptionHtml),
             source = system.optString("source"),
             level = system.optInt("level", 0),

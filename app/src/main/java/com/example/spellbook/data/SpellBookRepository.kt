@@ -15,6 +15,7 @@ import com.example.spellbook.data.model.CharacterFeatCrossRef
 import com.example.spellbook.data.model.Feat
 import com.example.spellbook.data.model.InventoryItem
 import com.example.spellbook.data.model.NoteBlock
+import com.example.spellbook.data.model.NoteParagraph
 import com.example.spellbook.data.model.CharClass
 import com.example.spellbook.data.model.Race
 import com.example.spellbook.data.model.Spell
@@ -22,6 +23,7 @@ import com.example.spellbook.data.model.SpellOrigin
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -182,6 +184,180 @@ class SpellBookRepository(
                 featDao.addFeatToCharacter(CharacterFeatCrossRef(characterId = characterId, featId = featId))
             }
         }
+    }
+
+    // endregion
+
+    // region Лист персонажа LSS
+
+    /** Всё, что выгружается в лист LSS: персонаж, заметки, черты, снаряжение, заклинания и комбинации. */
+    suspend fun loadSheetExport(characterId: String): LssSheetExport? {
+        val character = characterDao.getById(characterId) ?: return null
+        val prepared = spellDao.observePreparedSpellIdsForCharacter(characterId).first().toSet()
+        return LssSheetExport(
+            character = character,
+            notes = noteDao.observeBlocks(characterId).first(),
+            feats = featDao.observeFeatsForCharacter(characterId).first(),
+            items = inventoryDao.observeItems(characterId).first(),
+            spells = observeSpellsForCharacter(characterId).first().map { LssSpellEntry(it, it.id in prepared) },
+            combos = comboDao.observeCombos(characterId).first().mapNotNull { getComboWithSteps(it.id) },
+        )
+    }
+
+    /**
+     * Сохраняет персонажа, загруженного из листа LSS, со всеми связями одной транзакцией.
+     *
+     * Заклинания ищутся в библиотеке по слагу и названию; ненайденные (в том числе заданные
+     * id базы LSS) перечисляются в отдельной заметке. Черта, найденная в библиотеке по названию,
+     * привязывается с текстом из листа как личной правкой; не найденная — добавляется в библиотеку
+     * и попадает в отчёт: возможно, это не черта, а ошибка разбора текста.
+     */
+    suspend fun importSheet(sheet: LssSheetImport): SheetImportReport {
+        val characterId = sheet.character.id
+        // Сопоставление с библиотекой — до транзакции: чтение потоков внутри неё может зависнуть.
+        val lssIds = withContext(Dispatchers.IO) {
+            readAsset(LSS_SPELL_IDS_ASSET)?.let { runCatching { LssSpellRefs.parseIdTable(it) }.getOrNull() }.orEmpty()
+        }
+        val resolver = LssSpellRefs.Resolver(spellDao.observeAll().first(), lssIds)
+        val spellLinks = linkedMapOf<String, Boolean>()
+        val unresolved = mutableListOf<String>()
+        sheet.spells.forEach { ref ->
+            val spell = resolver.resolve(ref.ref)
+            if (spell == null) {
+                unresolved += ref.ref
+            } else {
+                spellLinks[spell.id] = (spellLinks[spell.id] ?: false) || ref.prepared
+            }
+        }
+        val libraryFeats = featDao.observeAllFeats().first().associateBy { normalizeTitle(it.name) }
+        val createdFeats = mutableMapOf<String, Feat>()
+        val unknownFeats = mutableListOf<String>()
+        val featLinks = sheet.feats.map { feat ->
+            val key = normalizeTitle(feat.name)
+            val known = libraryFeats[key]
+            val target = known ?: createdFeats.getOrPut(key) {
+                unknownFeats += feat.name
+                Feat(name = feat.name, description = feat.description)
+            }
+            Triple(target, known != null, feat.description)
+        }.distinctBy { it.first.id }
+        val notes = if (unresolved.isEmpty()) {
+            sheet.notes
+        } else {
+            sheet.notes + unresolvedSpellsNote(characterId, unresolved, sheet.notes.size)
+        }
+
+        database.withTransaction {
+            characterDao.upsert(sheet.character)
+            notes.forEach { noteDao.upsertBlock(it) }
+            sheet.items.forEach { inventoryDao.upsertItem(it) }
+            sheet.combos.forEach { (combo, steps) ->
+                comboDao.upsertCombo(combo)
+                steps.forEach { comboDao.upsertStep(it) }
+                comboDao.replaceComboSteps(combo.id, steps.map { it.id })
+            }
+            spellLinks.forEach { (spellId, prepared) ->
+                spellDao.addSpellToCharacter(CharacterSpellCrossRef(characterId, spellId, prepared = prepared))
+            }
+            featLinks.forEachIndexed { index, (feat, fromLibrary, description) ->
+                if (!fromLibrary) featDao.upsertFeat(feat)
+                featDao.addFeatToCharacter(
+                    CharacterFeatCrossRef(
+                        characterId = characterId,
+                        featId = feat.id,
+                        collapsed = true,
+                        sortOrder = index.toLong() - SHEET_ORDER_BASE,
+                    ),
+                )
+                // Текст из листа остаётся личной правкой: библиотека и другие персонажи не меняются.
+                if (fromLibrary && description.isNotBlank() && description.trim() != feat.description.trim()) {
+                    featDao.updateOverrides(characterId, feat.id, null, description)
+                }
+            }
+        }
+        return SheetImportReport(
+            characterId = characterId,
+            characterName = sheet.character.name,
+            unresolvedSpells = unresolved.size,
+            unknownFeats = unknownFeats,
+        )
+    }
+
+    /**
+     * Добавляет основу «Без доспехов» (10 + Лов) персонажам, у которых КД остался числом 10
+     * по умолчанию: мастер раньше не создавал эту основу классам без доспеха.
+     *
+     * @return сколько персонажей исправлено.
+     */
+    suspend fun fixUnarmoredArmorClass(): Int {
+        var fixed = 0
+        characterDao.observeAll().first().forEach { character ->
+            val updated = character.withUnarmoredBase()
+            if (updated != character) {
+                characterDao.upsert(updated)
+                fixed++
+            }
+        }
+        return fixed
+    }
+
+    /**
+     * Проставляет размер персонажам без размера по их расе из библиотеки, если раса даёт
+     * один вариант. Раса с выбором («Маленький или Средний») оставляет размер на пользователя.
+     *
+     * @return сколько персонажей обновлено.
+     */
+    suspend fun fillCharacterSizes(): Int {
+        val races = raceDao.observeAll().first()
+        val cache = com.example.spellbook.data.wizard.WizardRulesCache()
+        var filled = 0
+        characterDao.observeAll().first().filter { it.size.isBlank() }.forEach { character ->
+            val size = com.example.spellbook.data.wizard.RaceSizes.forCharacter(character, races, cache).singleOrNull()
+                ?: return@forEach
+            characterDao.upsert(character.copy(size = size.code))
+            filled++
+        }
+        return filled
+    }
+
+    /** Заметка со ссылками на заклинания листа, которых нет в библиотеке. */
+    private fun unresolvedSpellsNote(characterId: String, refs: List<String>, position: Int): NoteBlock {
+        val text = buildString {
+            append(UNRESOLVED_SPELLS_HINT)
+            refs.forEach { append("\n• ").append(it) }
+        }
+        return NoteBlock(
+            characterId = characterId,
+            title = UNRESOLVED_SPELLS_TITLE,
+            paragraphs = listOf(NoteParagraph(text = text)),
+            sortOrder = position.toLong() - SHEET_ORDER_BASE,
+        )
+    }
+
+    private fun normalizeTitle(title: String): String = title.trim().lowercase().replace('ё', 'е')
+
+    /**
+     * Заполняет английские названия заклинаний по встроенной библиотеке. У записей, созданных
+     * до появления этого поля, оно пустое, а без него лист LSS не найдёт заклинание.
+     * Записи, где английское название уже есть, не трогаются.
+     *
+     * @return сколько записей обновлено.
+     */
+    suspend fun fillSpellEnglishNames(): Int = withContext(Dispatchers.IO) {
+        val json = readAsset(BUNDLED_LIBRARY_ASSET) ?: return@withContext 0
+        val bundled = runCatching { SpellLssCodec.decodeList(json) }.getOrNull().orEmpty()
+        var updated = 0
+        bundled.filter { it.nameEn.isNotBlank() }.forEach { spell ->
+            val existing = spellDao.findByName(spell.name)
+                ?: spellDao.findByName(SpellNames.join(spell.name, spell.nameEn))
+                ?: return@forEach
+            if (existing.nameEn.isNotBlank()) return@forEach
+            // Запись вида «Ужас [Fear]» заодно получает чистое русское название.
+            val name = SpellNames.split(existing.name).first
+            spellDao.upsert(existing.copy(name = name, nameEn = spell.nameEn))
+            updated++
+        }
+        updated
     }
 
     // endregion
@@ -646,6 +822,19 @@ class SpellBookRepository(
 
     private companion object {
         const val LEGACY_FILE_NAME = "spells.json"
+
+        /** Таблица id заклинаний SRD в базе LSS → слаг. */
+        const val LSS_SPELL_IDS_ASSET = "lss-spell-ids.json"
+
+        /** Основа порядка заметок, черт и предметов из листа LSS: идут сверху в порядке листа. */
+        const val SHEET_ORDER_BASE = 1_000_000L
+
+        /** Заметка с заклинаниями листа LSS, которых нет в библиотеке. */
+        const val UNRESOLVED_SPELLS_TITLE = "Заклинания из LSS: не найдены"
+        const val UNRESOLVED_SPELLS_HINT =
+            "Эти заклинания листа LSS не нашлись в библиотеке приложения: их нет в SRD (например, они " +
+                "из гримуара владельца листа) или в библиотеке нет такого заклинания. Ниже их id в базе LSS " +
+                "(или название, если в листе было оно): по нему заклинание можно найти в LSS и добавить вручную."
 
         /** Файл со встроенной библиотекой заклинаний; лежит в `app/src/main/assets`. */
         const val BUNDLED_LIBRARY_ASSET = "spellbook-library.json"

@@ -58,6 +58,11 @@ data class CharacterDraft(
     val raceId: String? = null,
     /** id разновидности из [SubraceRules.id]. */
     val subraceId: String? = null,
+    /**
+     * Выбранный размер — код [com.example.spellbook.data.model.CreatureSize]; нужен, только если
+     * раса даёт выбор («Маленький или Средний»). Пусто — не выбран.
+     */
+    val size: String = "",
     val classId: String? = null,
     val subclassId: String? = null,
     val backgroundId: String? = null,

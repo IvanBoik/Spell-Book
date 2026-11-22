@@ -84,6 +84,24 @@ object FeatureSpells {
 
     data class Parsed(val spells: List<GrantedSpell>, val choices: List<ChoiceSpec>)
 
+    /**
+     * Даёт ли текст умения персонажу заклинания, которые всегда при нём: таблицу заклинаний
+     * по уровню класса («Уровень изобретателя | Заклинания») или по варианту, либо предложение
+     * «вы знаете заговор…», «можете накладывать…» с названием заклинания. Расширенный список
+     * колдуна («Уровень заклинания | Заклинания») — лишь выбор, поэтому не считается.
+     *
+     * Нужно выгрузке в лист LSS: такие умения идут в блок «Атаки и заклинания».
+     */
+    fun grantsSpells(text: String): Boolean {
+        val hasTable = MarkupText.tables(text).any { rows ->
+            val kind = tableKind(rows)
+            kind == TableKind.CLASS_LEVEL || kind == TableKind.VARIANT
+        }
+        if (hasTable) return true
+        val parsed = parse(text, id = "grants", source = ChoiceSource.CLASS, title = "")
+        return parsed.spells.isNotEmpty() || parsed.choices.isNotEmpty()
+    }
+
     // region Таблицы заклинаний архетипов
 
     /** Вид таблицы заклинаний архетипа по первой колонке. */

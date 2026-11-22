@@ -101,6 +101,10 @@ class WizardSweepTest {
                 draft = WizardEngine.selectSubclass(draft, sub.id)
             }
         }
+        // Раса с выбором размера: берём первый вариант.
+        RaceSizes.options(WizardEngine.context(draft, library, cache)).takeIf { it.size > 1 }?.let { options ->
+            draft = draft.copy(size = options.first().code)
+        }
         repeat(FILL_PASSES) {
             val context = WizardEngine.context(draft, library, cache)
             val selections = draft.selections.toMutableMap()

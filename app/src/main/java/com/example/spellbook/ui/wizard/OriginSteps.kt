@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +60,7 @@ import com.example.spellbook.data.model.MAX_CLASS_LEVEL
 import com.example.spellbook.data.model.formatModifier
 import com.example.spellbook.data.model.proficiencyBonusFor
 import com.example.spellbook.data.wizard.ChoiceKind
+import com.example.spellbook.data.wizard.RaceSizes
 import com.example.spellbook.data.wizard.ChoiceSpec
 import com.example.spellbook.data.wizard.MarkupText
 import com.example.spellbook.data.wizard.RaceRules
@@ -425,6 +427,22 @@ private fun RaceDetails(ui: WizardUi, race: RaceRules, onChange: () -> Unit) {
             (race.grants.languages + ui.context.subrace?.grants?.languages.orEmpty()).distinct().forEach { InfoPill(it) }
         }
         if (bonus.isNotBlank()) HintRow(stringResource(R.string.wizard_bonus_later))
+
+        // Раса с выбором размера («Маленький или Средний»): размер выбирается здесь, он уходит в лист.
+        val sizeOptions = RaceSizes.options(ui.context)
+        if (sizeOptions.size > 1) {
+            SectionTitle(stringResource(R.string.wizard_size_title))
+            HintRow(stringResource(R.string.wizard_size_hint))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                sizeOptions.forEach { option ->
+                    FilterChip(
+                        selected = ui.draft.size == option.code,
+                        onClick = { ui.update { it.copy(size = option.code) } },
+                        label = { Text(stringResource(option.labelRes)) },
+                    )
+                }
+            }
+        }
 
         // Владения расы и разновидности без выбора (например, «Обострённые чувства» эльфа).
         val grants = listOfNotNull(race.grants, ui.context.subrace?.grants)

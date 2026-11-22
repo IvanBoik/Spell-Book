@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -71,6 +72,7 @@ import com.example.spellbook.R
 import com.example.spellbook.data.StatFormula
 import com.example.spellbook.data.model.Character
 import com.example.spellbook.data.model.CharacterResource
+import com.example.spellbook.data.model.ResourceRecovery
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.components.FormulaTextField
 import com.example.spellbook.util.HtmlUtils
@@ -91,13 +93,20 @@ fun SpellSlotsScreen(
     onRestoreResourceUnit: (resourceId: String) -> Unit,
     onRestoreResource: (resourceId: String) -> Unit,
     onDeleteResource: (resourceId: String) -> Unit,
-    onAddResource: (name: String, description: String, maximum: Int, formula: String) -> Unit,
+    onAddResource: (
+        name: String,
+        description: String,
+        maximum: Int,
+        formula: String,
+        recovery: ResourceRecovery,
+    ) -> Unit,
     onEditResource: (
         resourceId: String,
         name: String,
         description: String,
         maximum: Int,
         formula: String,
+        recovery: ResourceRecovery,
     ) -> Unit,
     onReorderResources: (List<String>) -> Unit,
     onRestoreAll: () -> Unit,
@@ -275,8 +284,8 @@ fun SpellSlotsScreen(
         ResourceEditorDialog(
             initial = null,
             onDismiss = { showCreateDialog = false },
-            onSave = { name, description, maximum, formula ->
-                onAddResource(name, description, maximum, formula)
+            onSave = { name, description, maximum, formula, recovery ->
+                onAddResource(name, description, maximum, formula, recovery)
                 showCreateDialog = false
             },
         )
@@ -285,8 +294,8 @@ fun SpellSlotsScreen(
         ResourceEditorDialog(
             initial = resource,
             onDismiss = { editingResource = null },
-            onSave = { name, description, maximum, formula ->
-                onEditResource(resource.id, name, description, maximum, formula)
+            onSave = { name, description, maximum, formula, recovery ->
+                onEditResource(resource.id, name, description, maximum, formula, recovery)
                 editingResource = null
             },
         )
@@ -469,9 +478,16 @@ private fun ResourceSwipeAction(
 private fun ResourceEditorDialog(
     initial: CharacterResource?,
     onDismiss: () -> Unit,
-    onSave: (name: String, description: String, maximum: Int, maximumFormula: String) -> Unit,
+    onSave: (
+        name: String,
+        description: String,
+        maximum: Int,
+        maximumFormula: String,
+        recovery: ResourceRecovery,
+    ) -> Unit,
 ) {
     var name by remember(initial?.id) { mutableStateOf(initial?.name.orEmpty()) }
+    var recovery by remember(initial?.id) { mutableStateOf(initial?.recovery ?: ResourceRecovery()) }
     var description by remember(initial?.id) { mutableStateOf(initial?.description.orEmpty()) }
     // В одном поле допустимо число или формула вида `[pb] * 2`.
     var maximum by remember(initial?.id) {
@@ -528,6 +544,7 @@ private fun ResourceEditorDialog(
                     isError = hasDice,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                RecoveryEditor(recovery = recovery, onChange = { recovery = it })
             }
         },
         confirmButton = {
@@ -538,6 +555,7 @@ private fun ResourceEditorDialog(
                         description.trim(),
                         parsedMaximum,
                         if (isFormula) maximum.trim() else "",
+                        recovery.normalized(),
                     )
                 },
                 enabled = valid,
@@ -547,6 +565,64 @@ private fun ResourceEditorDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
+}
+
+/**
+ * Когда ресурс восстанавливается: короткий и долгий отдых отмечаются флагами,
+ * особое условие («после 1к4 долгих отдыхов») — флагом «Другое» и текстом.
+ */
+@Composable
+private fun RecoveryEditor(recovery: ResourceRecovery, onChange: (ResourceRecovery) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            stringResource(R.string.resources_recovery),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        RecoveryCheckbox(R.string.resources_recovery_short, recovery.shortRest) {
+            onChange(recovery.copy(shortRest = it))
+        }
+        RecoveryCheckbox(R.string.resources_recovery_long, recovery.longRest) {
+            onChange(recovery.copy(longRest = it))
+        }
+        RecoveryCheckbox(R.string.resources_recovery_other, recovery.other) {
+            onChange(recovery.copy(other = it))
+        }
+        if (recovery.other) {
+            OutlinedTextField(
+                value = recovery.otherText,
+                onValueChange = { onChange(recovery.copy(otherText = it)) },
+                label = { Text(stringResource(R.string.resources_recovery_other_label)) },
+                placeholder = { Text(stringResource(R.string.resources_recovery_other_hint)) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecoveryCheckbox(labelRes: Int, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onCheckedChange(!checked) },
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Text(stringResource(labelRes))
+    }
+}
+
+/** Условия восстановления одной строкой: «короткий отдых, после 1к4 долгих отдыхов»; null — не заданы. */
+@Composable
+private fun recoverySummary(recovery: ResourceRecovery): String? {
+    val parts = buildList {
+        if (recovery.shortRest) add(stringResource(R.string.resources_recovery_short).lowercase())
+        if (recovery.longRest) add(stringResource(R.string.resources_recovery_long).lowercase())
+        if (recovery.other) add(recovery.otherText.ifBlank { stringResource(R.string.resources_recovery_other).lowercase() })
+    }
+    return parts.takeIf { it.isNotEmpty() }?.joinToString(", ")
 }
 
 @Composable
@@ -571,6 +647,13 @@ private fun ResourceDescriptionDialog(
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                 )
+                recoverySummary(resource.recovery)?.let { summary ->
+                    Text(
+                        stringResource(R.string.resources_recovery_summary, summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 when {
                     resource.description.isBlank() -> Text(
                         stringResource(R.string.resources_no_description),

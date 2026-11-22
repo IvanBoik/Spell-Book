@@ -58,6 +58,24 @@ class AppPreferences(context: Context) {
         get() = prefs.getInt(KEY_BUNDLED_MAGIC_ITEMS_VERSION, 0)
         set(value) = prefs.edit().putInt(KEY_BUNDLED_MAGIC_ITEMS_VERSION, value).apply()
 
+    /**
+     * Версия заполнения английских названий заклинаний из встроенной библиотеки;
+     * 0 — ещё не заполнялись. Английское название нужно для обмена листами с LSS.
+     */
+    var spellEnglishNamesVersion: Int
+        get() = prefs.getInt(KEY_SPELL_ENGLISH_NAMES_VERSION, 0)
+        set(value) = prefs.edit().putInt(KEY_SPELL_ENGLISH_NAMES_VERSION, value).apply()
+
+    /** Проставлен ли размер персонажам, созданным до его появления. */
+    var characterSizesFilled: Boolean
+        get() = prefs.getBoolean(KEY_CHARACTER_SIZES_FILLED, false)
+        set(value) = prefs.edit().putBoolean(KEY_CHARACTER_SIZES_FILLED, value).apply()
+
+    /** Исправлен ли КД персонажей без доспеха (основа «Без доспехов» вместо числа 10). */
+    var unarmoredArmorClassFixed: Boolean
+        get() = prefs.getBoolean(KEY_UNARMORED_AC_FIXED, false)
+        set(value) = prefs.edit().putBoolean(KEY_UNARMORED_AC_FIXED, value).apply()
+
     /** Язык интерфейса; по умолчанию — системный. */
     var language: AppLanguage
         get() = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, null))
@@ -135,6 +153,9 @@ class AppPreferences(context: Context) {
         const val KEY_BUNDLED_CLASSES_VERSION = "bundled_classes_version"
         const val KEY_BUNDLED_BACKGROUNDS_VERSION = "bundled_backgrounds_version"
         const val KEY_BUNDLED_MAGIC_ITEMS_VERSION = "bundled_magic_items_version"
+        const val KEY_SPELL_ENGLISH_NAMES_VERSION = "spell_english_names_version"
+        const val KEY_UNARMORED_AC_FIXED = "unarmored_ac_fixed"
+        const val KEY_CHARACTER_SIZES_FILLED = "character_sizes_filled"
         const val KEY_LANGUAGE = "app_language"
         const val KEY_THEME = "app_theme"
         const val KEY_GLOBAL_SECTIONS = "sections_global"

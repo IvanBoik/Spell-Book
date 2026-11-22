@@ -8,8 +8,8 @@ import org.junit.Test
 /**
  * Перенос бонуса инициативы через лист персонажа LSS.
  *
- * Формат хранит готовое число, а не формулу, поэтому проверяется главное:
- * после выгрузки и загрузки итоговый бонус остаётся прежним.
+ * Лист LSS хранит формулу инициативы (`[DEX] + 5`) или `null` для бонуса по умолчанию:
+ * после выгрузки и загрузки итоговый бонус остаётся прежним и следует за Ловкостью.
  */
 class CharacterLssInitiativeTest {
 
@@ -21,7 +21,7 @@ class CharacterLssInitiativeTest {
     )
 
     private fun roundTrip(character: Character): Character =
-        CharacterLssCodec.decode(CharacterLssCodec.encode(character), existing = character)
+        CharacterLssCodec.decode(CharacterLssCodec.encode(LssSheetExport(character))).character
 
     @Test
     fun `custom bonus survives the round trip`() {
