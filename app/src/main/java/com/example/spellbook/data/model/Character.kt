@@ -99,6 +99,11 @@ data class Character(
      * Итог считает `Character.initiativeBonus`.
      */
     val initiativeParts: List<StatPart> = emptyList(),
+    /**
+     * Заметки и ресурсы, которые пользователь исключил в мастере создания или повышения уровня
+     * (ключи `ContentExclusions`): при следующих повышениях они не добавляются заново.
+     */
+    val excludedContent: List<String> = emptyList(),
 ) {
     /** Происхождение одной строкой: «Высший эльф · Мудрец». */
     val originSummary: String

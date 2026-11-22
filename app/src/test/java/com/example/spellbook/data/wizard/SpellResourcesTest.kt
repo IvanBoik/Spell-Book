@@ -38,15 +38,44 @@ class SpellResourcesTest {
             .mapIndexed { index, item -> item.copy(id = "s$index") }
     }
 
-    private fun tieflingDraft(level: Int): Pair<CharacterDraft, WizardRulesCache> {
+    private fun tieflingDraft(level: Int, subrace: String = "Асмодей"): Pair<CharacterDraft, WizardRulesCache> {
         val cache = WizardRulesCache()
         val race = library.races.first { it.name == "Тифлинг" && it.category == "Основные расы" }
         val fighter = library.classes.first { it.name == "Воин" }
         var draft = CharacterDraft(name = "Тифлинг", level = level)
         draft = WizardEngine.selectRace(draft, race.id)
         draft = WizardEngine.selectClass(draft, fighter.id)
-        val asmodeus = WizardEngine.context(draft, library, cache).race!!.subraces.first { it.title.startsWith("Асмодей") }
-        return WizardEngine.selectSubrace(draft, asmodeus.id) to cache
+        val chosen = WizardEngine.context(draft, library, cache).race!!.subraces.first { it.title.startsWith(subrace) }
+        return WizardEngine.selectSubrace(draft, chosen.id) to cache
+    }
+
+    @Test
+    fun `tiefling subrace heritage replaces infernal legacy`() {
+        val expected = mapOf(
+            "Зариэль" to setOf("палящая кара", "клеймящая кара"),
+            "Гласия" to setOf("маскировка", "невидимость", "малая иллюзия"),
+            "Маммон" to setOf("тензеров парящий диск", "волшебный замок", "волшебная рука"),
+        )
+        expected.forEach { (subrace, own) ->
+            val (draft, cache) = tieflingDraft(level = 5, subrace = subrace)
+            val context = WizardEngine.context(draft, library, cache)
+            val creation = CharacterAssembler.assemble(draft, context, spells)
+            val names = spellNames(creation.spellIds)
+            assertTrue("$subrace: свои заклинания $own в $names", names.containsAll(own))
+            assertFalse("$subrace: адское возмездие от наследия: $names", "адское возмездие" in names)
+            assertFalse("$subrace: тьма от наследия: $names", "тьма" in names)
+            if (subrace != "Зариэль") {
+                assertFalse("$subrace: чудотворство от наследия: $names", "чудотворство" in names)
+            }
+            val resources = creation.character.resources.map { it.name.lowercase() }
+            assertFalse("$subrace: ресурсы наследия: $resources", resources.any { it == "адское возмездие" || it == "тьма" })
+            val heritage = creation.character.resources.filter { it.description.contains("Наследие") }
+            assertEquals("$subrace: два ресурса своего наследия: $resources", 2, heritage.size)
+            assertTrue("$subrace: ресурсы наследия — свои заклинания: $resources", heritage.all { it.name.lowercase() in own })
+            val raceNotes = creation.notes.first { it.title.startsWith("Раса") }.paragraphs
+                .joinToString(" ") { it.text }
+            assertFalse("$subrace: заметка о Дьявольском наследии", raceNotes.contains("Дьявольское наследие"))
+        }
     }
 
     private fun spellNames(ids: Set<String>): Set<String> =

@@ -58,6 +58,13 @@ data class ChoiceOption(
     val requiredLevel: Int? = null,
     val requirement: String = "",
     val extended: Boolean = false,
+    /**
+     * Общий заголовок для вариантов, развёрнутых из одного (копии инфузии «Копия магического
+     * предмета» — по одной на предмет); пусто — самостоятельный вариант. Интерфейс группирует
+     * такие варианты под одним заголовком с текстом [groupText].
+     */
+    val group: String = "",
+    val groupText: String = "",
 )
 
 /**
@@ -217,6 +224,13 @@ data class SubraceRules(
     val grants: RaceGrants = RaceGrants(),
     val choices: List<ChoiceSpec> = emptyList(),
     val replacesBaseTraits: Boolean = false,
+    /**
+     * Названия особенностей расы, которые разновидность явно заменяет особенностью с другим названием:
+     * «Особенности выбранной подрасы заменяют «Дьявольское наследие»» (тифлинги MTF: «Наследие Авернуса»),
+     * «заменяющие особенность «Универсальность навыков»» (полуэльфы). Одноимённые особенности
+     * заменяются и без этого списка (см. `WizardEngine.withoutReplacedTraits`).
+     */
+    val replacedTraits: List<String> = emptyList(),
 )
 
 /** Что раса или разновидность даёт без выбора. */
@@ -330,6 +344,11 @@ data class ClassRules(
      * «Инфузии изобретателя». Ключ — название раздела.
      */
     val optionLists: Map<String, List<ChoiceOption>> = emptyMap(),
+    /**
+     * Неофициальный класс (UA, homebrew, сторонняя книга или создан пользователем) —
+     * скрыт без переключателя; см. [UnofficialContent.isUnofficialClass].
+     */
+    val extended: Boolean = false,
 ) {
     /** Список вариантов, чьё название содержит [keyword]; пусто — не найден. */
     fun optionList(keyword: String): List<ChoiceOption> =
@@ -372,6 +391,11 @@ data class SpellcastingPlan(
     val alwaysPrepared: List<String> = emptyList(),
     /** Ограничение школ (мистический рыцарь, мистический ловкач); пусто — любые. */
     val schools: Set<String> = emptySet(),
+    /**
+     * Сколько известных заклинаний могут быть любой школы при ограничении [schools]: по одному
+     * за 3, 8, 14 и 20 уровень (на 3-м — одно из трёх, два других — из школ архетипа).
+     */
+    val anySchoolSpells: Int = 0,
     /** Ячейки заклинаний на уровне создания: уровень ячейки → количество. */
     val slots: Map<Int, Int> = emptyMap(),
     /** Дополнительные заклинания, доступные для выбора (расширенный список покровителя). */

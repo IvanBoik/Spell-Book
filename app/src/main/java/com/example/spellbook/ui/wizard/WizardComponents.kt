@@ -234,7 +234,8 @@ fun ExpandableDescription(
     initiallyExpanded: Boolean? = null,
     badge: String? = null,
 ) {
-    val startExpanded = initiallyExpanded ?: isShortDescription(text)
+    val short = remember(text) { isShortDescription(text) }
+    val startExpanded = initiallyExpanded ?: short
     var expanded by rememberSaveable(title, text) { mutableStateOf(startExpanded) }
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -455,6 +456,7 @@ fun issueText(issue: WizardIssue): String = when (issue.kind) {
     IssueKind.ASI_INCOMPLETE -> stringResource(R.string.wizard_issue_asi, issue.label)
     IssueKind.FEAT_MISSING -> stringResource(R.string.wizard_issue_feat)
     IssueKind.WEAPON_MISSING -> pluralStringResource(R.plurals.wizard_issue_weapons, issue.missing, issue.missing)
+    IssueKind.SPELLS_SCHOOL_LIMIT -> stringResource(R.string.wizard_issue_school_limit, issue.missing)
 }
 
 /** Краткая запись бонусов расы: «ЛОВ +2 · ИНТ +1» или «+2/+1 на выбор». */
@@ -684,11 +686,25 @@ fun OptionCard(
     enabled: Boolean,
     onClick: () -> Unit,
     unavailableReason: String? = null,
+    /** Вариант внутри группы (копия «Копии магического предмета») — с отступом. */
+    indent: Boolean = false,
 ) {
     // Короткое описание видно целиком сразу и без кнопки «Подробнее», длинное — свёрнуто.
     val short = remember(option.text) { isShortDescription(option.text) }
+    // Первая строка для свёрнутой карточки считается один раз, а не на каждую перекомпоновку.
+    val preview = remember(option.text) {
+        MarkupText.plain(
+            option.text.lineSequence().firstOrNull { line -> line.isNotBlank() && !line.trim().startsWith("*") } ?: option.text,
+        )
+    }
     var expanded by rememberSaveable(option.id, option.title) { mutableStateOf(short) }
-    SelectableCard(selected = selected, onClick = onClick, enabled = enabled, multiSelect = multiSelect) {
+    SelectableCard(
+        selected = selected,
+        onClick = onClick,
+        enabled = enabled,
+        multiSelect = multiSelect,
+        modifier = if (indent) Modifier.padding(start = 16.dp) else Modifier,
+    ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -713,9 +729,7 @@ fun OptionCard(
             unavailableReason?.let { HintRow(it) }
             if (!expanded && option.text.isNotBlank()) {
                 Text(
-                    MarkupText.plain(option.text.lineSequence().firstOrNull { line ->
-                        line.isNotBlank() && !line.trim().startsWith("*")
-                    } ?: option.text),
+                    preview,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,

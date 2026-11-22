@@ -774,6 +774,14 @@ fun SummaryStep(ui: WizardUi, onCreate: () -> Unit) {
             }
         }
 
+        // Что записать в заметки и ресурсы: лишнее можно исключить.
+        val proposal = remember(context, draft) {
+            com.example.spellbook.data.wizard.CharacterAssembler.proposal(draft, context, ui.spells)
+        }
+        ContentExclusionSection(proposal, draft.excludedContent) { key ->
+            ui.update { it.copy(excludedContent = com.example.spellbook.data.wizard.ContentExclusions.toggle(it.excludedContent, key)) }
+        }
+
         // Незавершённое со ссылками на шаги.
         if (issues.isNotEmpty()) {
             HorizontalDivider()

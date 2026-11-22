@@ -17,8 +17,6 @@ import com.example.spellbook.util.HtmlUtils
  */
 object RaceRulesParser {
 
-    /** Разделы каталога с неофициальными или сторонними материалами. */
-    private val UNOFFICIAL_CATEGORIES = listOf("unearthed", "midgard", "plane shift", "homebrew")
 
     /** Признаки разделителя неофициальных материалов внутри описания. */
     private val UNOFFICIAL_MARKERS = listOf("unearthed", "homebrew", "unofficial")
@@ -33,7 +31,8 @@ object RaceRulesParser {
 
     fun parse(race: Race): RaceRules {
         val nodes = MarkupText.outline(race.description)
-        val raceExtended = UNOFFICIAL_CATEGORIES.any { race.category.lowercase().contains(it) }
+        // Разделы каталога с неофициальными или сторонними материалами.
+        val raceExtended = UnofficialContent.isUnofficialBook(race.category)
 
         val traitIndex = nodes.indexOfFirst { it.level == 2 && it.title.lowercase().startsWith("особенност") }
             .takeIf { it >= 0 }
@@ -110,6 +109,10 @@ object RaceRulesParser {
         // Раздел с «Источником», за которым может следовать полная версия расы («Гоблин (GGR)»):
         // тогда он лишь даёт название, иначе — сам является разновидностью («Морской эльф (MTF)»).
         var held: SubraceRules? = null
+        // Общее правило замены из раздела без особенностей («Особенности подрасы (SCAG)» тифлинга):
+        // «Особенности выбранной подрасы заменяют «Дьявольское наследие»» — действует на все следующие
+        // разновидности, хотя их собственные особенности названы иначе («Наследие Авернуса»).
+        var sharedReplaced = emptyList<String>()
         fun flushHeld() {
             held?.let { subraces += it }
             held = null
@@ -123,6 +126,7 @@ object RaceRulesParser {
             if (traitLines(node.body).isEmpty()) {
                 // Раздел только с «Источником» открывает новую версию («Металлические драконорождённые (FTD)»):
                 // предыдущая разновидность на этом заканчивается и не должна поглотить чужие особенности.
+                replacedTraitNames(node.body).takeIf { it.isNotEmpty() }?.let { sharedReplaced = it }
                 if (hasSourceLine(node.body)) {
                     flushHeld()
                     header = node.title
@@ -142,6 +146,7 @@ object RaceRulesParser {
                 extended = unofficial,
                 replacesBase = node.body.lowercase().contains("заменя"),
                 detectFullVersion = true,
+                inheritedReplaced = sharedReplaced,
             )
             if (sub.replacesBaseTraits) {
                 // Полная версия расы называется по своей книге, а не «Особенности кентавра».
@@ -371,6 +376,7 @@ object RaceRulesParser {
         replacesBase: Boolean,
         looseTitles: Boolean = false,
         detectFullVersion: Boolean = false,
+        inheritedReplaced: List<String> = emptyList(),
     ): SubraceRules {
         val traits = parseTraits(text, looseTitles)
         val analysis = analyze(traits, "subrace", ChoiceSource.SUBRACE)
@@ -390,8 +396,24 @@ object RaceRulesParser {
             grants = analysis.grants,
             choices = analysis.choices,
             replacesBaseTraits = full,
+            replacedTraits = (inheritedReplaced + replacedTraitNames(text)).distinct(),
         )
     }
+
+    /**
+     * Названия особенностей из предложений о замене: «…заменяют «Увеличение характеристик» и «Дьявольское
+     * наследие»», «такие особенности, как «…», … заменяются». Берутся все названия в «» из такого предложения;
+     * лишние («Книги игрока») ни с одной особенностью расы не совпадут и ничего не уберут.
+     */
+    private fun replacedTraitNames(text: String): List<String> =
+        text.replace("*", "").split(SENTENCE_END)
+            .filter { it.lowercase().contains("заменя") }
+            .flatMap { sentence -> QUOTED.findAll(sentence).map { it.groupValues[1].trim() } }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+    private val SENTENCE_END = Regex("(?<=[.!?])\\s+|\\n")
+    private val QUOTED = Regex("«([^«»]{2,60})»")
 
     /**
      * Раздел — полная версия расы из другой книги, а не разновидность:

@@ -71,9 +71,11 @@ fun ClassStep(ui: WizardUi) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ClassList(ui: WizardUi, onPick: (String) -> Unit) {
-    val rules = remember(ui.library.classes) {
+    val all = remember(ui.library.classes) {
         ui.library.classes.map(ui.controller.cache::characterClass).sortedBy { it.charClass.name }
     }
+    // Неофициальные классы — только с переключателем; уже выбранный остаётся виден (как разновидности).
+    val rules = all.filter { ui.draft.showUnofficial || !it.extended || it.charClass.id == ui.draft.classId }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -93,6 +95,7 @@ private fun ClassList(ui: WizardUi, onPick: (String) -> Unit) {
                         if (item.type.spellcaster != com.example.spellbook.data.model.SpellcasterType.NONE) {
                             InfoPill(stringResource(R.string.cform_spellcaster))
                         }
+                        if (item.extended) InfoPill(stringResource(R.string.wizard_unofficial_badge), highlighted = true)
                     }
                     if (item.charClass.book.isNotBlank()) {
                         Text(item.charClass.book, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -614,7 +617,8 @@ fun SpellsStep(ui: WizardUi) {
         }
         when (tab) {
             SpellTab.CANTRIPS -> SpellSelectionList(
-                candidates = remember(ui.spells, classFilter) { filterSpells(ui.spells, classFilter.copy(maxLevel = 0)) },
+                // Заговоры мистических рыцаря и ловкача школой не ограничены.
+                candidates = remember(ui.spells, classFilter) { filterSpells(ui.spells, classFilter.copy(maxLevel = 0, schools = emptySet())) },
                 selected = draft.cantripIds,
                 limit = plan.cantrips,
                 onToggle = { id -> ui.update { it.copy(cantripIds = toggleSet(it.cantripIds, id, plan.cantrips)) } },
@@ -622,14 +626,22 @@ fun SpellsStep(ui: WizardUi) {
             )
             SpellTab.KNOWN, SpellTab.SPELLBOOK -> {
                 val limit = if (tab == SpellTab.KNOWN) plan.knownSpells ?: 0 else plan.spellbookSpells ?: 0
+                // Мистические рыцарь и ловкач: часть заклинаний может быть любой школы.
+                val anySchool = plan.anySchoolSpells
+                val offSchool = ui.context.offSchoolSpellIds
+                val knownFilter = if (anySchool > 0) classFilter.copy(schools = emptySet()) else classFilter
                 SpellSelectionList(
-                    candidates = remember(ui.spells, classFilter, plan.maxSpellLevel, plan.extraSpellNames) {
-                        filterSpells(ui.spells, classFilter.copy(minLevel = 1, maxLevel = plan.maxSpellLevel), plan.extraSpellNames)
+                    candidates = remember(ui.spells, knownFilter, plan.maxSpellLevel, plan.extraSpellNames) {
+                        filterSpells(ui.spells, knownFilter.copy(minLevel = 1, maxLevel = plan.maxSpellLevel), plan.extraSpellNames)
                     },
                     selected = draft.spellIds,
                     limit = limit,
                     onToggle = { id ->
                         ui.update {
+                            // Свободные места заняты — заклинание другой школы больше не взять.
+                            if (id !in it.spellIds && id in offSchool && it.spellIds.count { s -> s in offSchool } >= anySchool) {
+                                return@update it
+                            }
                             val spells = toggleSet(it.spellIds, id, limit)
                             // Волшебник готовит из книги: убранное из книги снимается с подготовки.
                             it.copy(spellIds = spells, preparedIds = if (tab == SpellTab.SPELLBOOK) it.preparedIds intersect spells else it.preparedIds)
@@ -643,6 +655,15 @@ fun SpellsStep(ui: WizardUi) {
                                 limit,
                             ),
                         )
+                        if (anySchool > 0) {
+                            HintRow(
+                                stringResource(
+                                    R.string.wizard_any_school_hint,
+                                    anySchool,
+                                    draft.spellIds.count { it in offSchool },
+                                ),
+                            )
+                        }
                     },
                 )
             }

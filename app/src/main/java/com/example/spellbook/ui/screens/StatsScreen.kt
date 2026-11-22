@@ -31,6 +31,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Upgrade
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -121,6 +122,8 @@ fun StatsScreen(
     onDismissRoll: () -> Unit,
     onBack: () -> Unit,
     sectionsBar: @Composable () -> Unit = {},
+    /** Открывает окно повышения уровня; null — кнопка не показывается. */
+    onLevelUp: (() -> Unit)? = null,
 ) {
     var showHpDialog by remember { mutableStateOf(false) }
     var editingArmor by remember { mutableStateOf(false) }
@@ -161,6 +164,10 @@ fun StatsScreen(
                             onSpeedClick = { editingSpeed = true },
                             onInitiativeClick = { editingInitiative = true },
                             onRoll = onRoll,
+                            // На 20 уровне повышать некуда — кнопка скрыта.
+                            onLevelUp = onLevelUp?.takeIf {
+                                character.level < com.example.spellbook.data.model.MAX_CLASS_LEVEL
+                            },
                         )
                     }
 
@@ -243,6 +250,7 @@ private fun VitalsCard(
     onSpeedClick: () -> Unit,
     onInitiativeClick: () -> Unit,
     onRoll: (title: String, kind: RollKind, bonus: Int) -> Unit,
+    onLevelUp: (() -> Unit)? = null,
 ) {
     Card(
         shape = STATS_CARD_SHAPE,
@@ -321,6 +329,29 @@ private fun VitalsCard(
                 onRoll = { onRoll(initiativeLabel, RollKind.ABILITY, initiativeBonus) },
                 onEdit = onInitiativeClick,
             )
+            // Уровень и повышение — рядом с бонусом мастерства, который от него зависит.
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = STATS_ROW_PADDING),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.wizard_class_level, character.level),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (onLevelUp != null) {
+                    androidx.compose.material3.FilledTonalButton(onClick = onLevelUp) {
+                        Icon(
+                            Icons.Default.Upgrade,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 6.dp),
+                        )
+                        Text(stringResource(R.string.levelup_action))
+                    }
+                }
+            }
         }
     }
 }

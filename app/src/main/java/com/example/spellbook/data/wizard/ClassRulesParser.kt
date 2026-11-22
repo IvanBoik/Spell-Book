@@ -48,7 +48,8 @@ object ClassRulesParser {
 
     private val SERVICE_TITLES = listOf("хиты", "владение", "снаряжение")
 
-    private val UNOFFICIAL_MARKERS = listOf("unearthed", "unofficial", "plane shift", "огнестрел")
+    /** Заголовки частей с неофициальными архетипами («# Unearthed Arcana & Unofficial», огнестрельное оружие DMG). */
+    private val UNOFFICIAL_MARKERS = UnofficialContent.BOOK_MARKERS + "огнестрел"
 
     /** Строка требования: `*Требование: 5-й уровень колдуна, умение «Договор клинка»*`. */
     private val REQUIREMENT = Regex("^\\*?\\s*Требование\\s*:\\s*(.+?)\\*?$")
@@ -58,10 +59,13 @@ object ClassRulesParser {
     /** Признак умения с выбором одного варианта из вложенных. */
     private val ONE_OF = Regex("(одн\\S*|один)\\s+из\\s+(следующ|перечисл|вариант)")
 
+    /** Класс из перечисления по названию без разбора описания; [CharacterClass.OTHER] — неизвестный класс. */
+    fun classType(name: String): CharacterClass = CLASS_BY_NAME[name.trim().lowercase()] ?: CharacterClass.OTHER
+
     fun parse(charClass: CharClass): ClassRules {
         val description = charClass.description
         val nodes = MarkupText.outline(description)
-        val type = CLASS_BY_NAME[charClass.name.trim().lowercase()] ?: CharacterClass.OTHER
+        val type = classType(charClass.name)
 
         // Таблица класса — первая таблица с уровнями.
         val table = MarkupText.tables(description).firstOrNull { rows ->
@@ -212,6 +216,7 @@ object ClassRulesParser {
             subclasses = subclasses,
             asiLevels = asiLevels,
             optionLists = optionLists,
+            extended = UnofficialContent.isUnofficialClass(charClass),
         )
     }
 

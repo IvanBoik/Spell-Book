@@ -320,8 +320,8 @@ object MarkupText {
         if (a == b || a.endsWith(" $b")) return true
         // Название в тексте бывает в другом падеже: «наложить тишину» — «Тишина», «тьму» — «Тьма».
         // Сравниваем последние слова по основе: совпадает всё, кроме окончания из 1–2 букв.
-        val words = b.split(Regex("\\s+"))
-        val tail = a.split(Regex("\\s+")).takeLast(words.size)
+        val words = b.split(WHITESPACE)
+        val tail = a.split(WHITESPACE).takeLast(words.size)
         if (tail.size != words.size) return false
         return words.zip(tail).all { (expected, actual) -> sameStem(expected, actual) }
     }
@@ -333,6 +333,9 @@ object MarkupText {
         val longest = maxOf(a.length, b.length)
         return common >= MIN_STEM && longest - common <= MAX_ENDING
     }
+
+    /** Скомпилирован один раз: сравнение названий вызывается сотни раз на каждый текст. */
+    private val WHITESPACE = Regex("\\s+")
 
     private const val MIN_STEM = 3
     private const val MAX_ENDING = 2

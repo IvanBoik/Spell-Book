@@ -103,9 +103,27 @@ fun LazyListScope.optionBrowserItems(
     selected: List<String>,
     state: OptionBrowserState,
     onChange: (List<String>) -> Unit,
+) = optionBrowserItems(
+    choice = choice,
+    selected = selected,
+    state = state,
+    unmetOf = { option -> OptionRequirements.unmet(option, ui.draft, ui.context, ui.spells) },
+    onChange = onChange,
+)
+
+/**
+ * Браузер вариантов с внешней проверкой требований: так его использует и окно повышения
+ * уровня, где требования считаются по персонажу, а не по черновику мастера создания.
+ */
+fun LazyListScope.optionBrowserItems(
+    choice: ChoiceSpec,
+    selected: List<String>,
+    state: OptionBrowserState,
+    unmetOf: (ChoiceOption) -> List<OptionRequirements.Unmet>,
+    onChange: (List<String>) -> Unit,
 ) {
     val all = choice.options.mapIndexed { index, option ->
-        BrowsedOption(option, OptionRequirements.unmet(option, ui.draft, ui.context, ui.spells), index)
+        BrowsedOption(option, unmetOf(option), index)
     }
     val toolGroups = choice.options.mapNotNull { ToolCatalog.byId(it.id)?.category }.distinct()
     val showControls = choice.options.size > CONTROLS_THRESHOLD
@@ -150,24 +168,69 @@ fun LazyListScope.optionBrowserItems(
             )
         }
     }
-    items(visible, key = { "opt." + it.option.id }) { item ->
+    // Варианты, развёрнутые из одного (копии «Копии магического предмета»), идут под одним
+    // заголовком с общим правилом; в карточке — только своя часть названия (предмет).
+    val seenGroups = mutableSetOf<String>()
+    val groupStarts = visible.mapIndexedNotNull { index, item ->
+        val group = item.option.group
+        index.takeIf { group.isNotEmpty() && seenGroups.add(group) }
+    }.toSet()
+    visible.forEachIndexed { index, item ->
         val option = item.option
-        val isSelected = option.id in selected
-        val available = item.unmet.isEmpty()
-        OptionCard(
-            option = option,
-            selected = isSelected,
-            multiSelect = choice.count > 1,
-            // Недоступный вариант можно только снять, если он был выбран раньше.
-            enabled = isSelected || (available && (selected.size < choice.count || choice.count == 1)),
-            onClick = { onChange(toggle(selected, option.id, choice.count)) },
-            unavailableReason = if (available) null else unmetText(item.unmet),
-        )
+        if (index in groupStarts) {
+            item(key = "group." + option.group) {
+                val members = all.filter { it.option.group == option.group }
+                OptionGroupHeader(
+                    title = option.group,
+                    text = option.groupText,
+                    taken = members.count { it.option.id in selected },
+                )
+            }
+        }
+        item(key = "opt." + option.id) {
+            val isSelected = option.id in selected
+            val available = item.unmet.isEmpty()
+            OptionCard(
+                option = if (option.group.isNotEmpty()) {
+                    option.copy(title = option.title.removePrefix(option.group).trimStart(':', ' '))
+                } else {
+                    option
+                },
+                selected = isSelected,
+                multiSelect = choice.count > 1,
+                // Недоступный вариант можно только снять, если он был выбран раньше.
+                enabled = isSelected || (available && (selected.size < choice.count || choice.count == 1)),
+                onClick = { onChange(toggle(selected, option.id, choice.count)) },
+                unavailableReason = if (available) null else unmetText(item.unmet),
+                indent = option.group.isNotEmpty(),
+            )
+        }
     }
     if (visible.isEmpty()) {
         item(key = "browser.empty") {
             HintRow(stringResource(if (all.isEmpty()) R.string.wizard_options_missing else R.string.wizard_browser_nothing))
         }
+    }
+}
+
+/**
+ * Заголовок группы вариантов, развёрнутых из одного: «Копия магического предмета» с правилом
+ * и числом уже взятых копий.
+ */
+@Composable
+private fun OptionGroupHeader(title: String, text: String, taken: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            if (taken > 0) InfoPill(stringResource(R.string.wizard_group_taken, taken), highlighted = true)
+        }
+        HintRow(stringResource(R.string.wizard_group_hint))
+        if (text.isNotBlank()) ExpandableDescription(stringResource(R.string.wizard_rules_text), text)
     }
 }
 
@@ -272,7 +335,7 @@ fun toolCategoryLabel(category: ToolCategory): Int = when (category) {
 
 /** Текст невыполненных требований: «Нужен 5-й уровень · Нужно: Договор клинка». */
 @Composable
-private fun unmetText(unmet: List<OptionRequirements.Unmet>): String =
+fun unmetText(unmet: List<OptionRequirements.Unmet>): String =
     unmet.map { item ->
         when (item) {
             is OptionRequirements.Unmet.Level -> stringResource(R.string.wizard_unmet_level, item.level)
@@ -289,6 +352,22 @@ fun OptionBrowserList(
     selected: List<String>,
     onChange: (List<String>) -> Unit,
     header: @Composable () -> Unit = {},
+) = OptionBrowserList(
+    choice = choice,
+    selected = selected,
+    unmetOf = { option -> OptionRequirements.unmet(option, ui.draft, ui.context, ui.spells) },
+    onChange = onChange,
+    header = header,
+)
+
+/** Экран-браузер вариантов с внешней проверкой требований (см. [optionBrowserItems]). */
+@Composable
+fun OptionBrowserList(
+    choice: ChoiceSpec,
+    selected: List<String>,
+    unmetOf: (ChoiceOption) -> List<OptionRequirements.Unmet>,
+    onChange: (List<String>) -> Unit,
+    header: @Composable () -> Unit = {},
 ) {
     val state = rememberOptionBrowserState(choice.id)
     LazyColumn(
@@ -297,6 +376,6 @@ fun OptionBrowserList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item(key = "browser.header") { Box(Modifier.fillMaxWidth()) { header() } }
-        optionBrowserItems(ui, choice, selected, state, onChange)
+        optionBrowserItems(choice, selected, state, unmetOf, onChange)
     }
 }

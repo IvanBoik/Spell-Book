@@ -45,6 +45,11 @@ data class WizardLibrary(
      * для выбранного по черте заклинания нужно его название.
      */
     val spells: List<com.example.spellbook.data.model.Spell> = emptyList(),
+    /**
+     * Магические предметы: описания предметов для копий инфузии «Копия магического предмета».
+     * Пусто — копии описываются только названием и настройкой из таблицы инфузии.
+     */
+    val magicItems: List<com.example.spellbook.data.model.MagicItem> = emptyList(),
 )
 
 /** Шаг мастера. Дополнительные шаги появляются сразу после шага своего источника. */
@@ -87,6 +92,12 @@ enum class IssueKind {
     ASI_INCOMPLETE,
     FEAT_MISSING,
     WEAPON_MISSING,
+
+    /**
+     * Мистический рыцарь или ловкач: заклинаний других школ больше, чем свободных мест
+     * ([SpellcastingPlan.anySchoolSpells]); [WizardIssue.missing] — на сколько превышено.
+     */
+    SPELLS_SCHOOL_LIMIT,
 }
 
 /**
@@ -146,6 +157,9 @@ object WizardEngine {
     fun pointBuySpent(draft: CharacterDraft): Int =
         AbilityType.entries.sumOf { pointBuyCost(draft.baseScores[it] ?: POINT_BUY_MIN) ?: 0 }
 
+    /** id выбора инфузий изобретателя. */
+    const val INFUSIONS_CHOICE_ID = "class.infusions"
+
     // region Контекст
 
     fun context(draft: CharacterDraft, library: WizardLibrary, cache: WizardRulesCache): WizardContext {
@@ -193,7 +207,14 @@ object WizardEngine {
                 showOptional = draft.showOptional,
                 showUnofficial = draft.showUnofficial,
             )
-        }.orEmpty()
+        }.orEmpty().map { choice ->
+            // «Копия магического предмета» берётся несколько раз — по копии на каждый предмет.
+            if (choice.kind == ChoiceKind.OPTION && choice.id == INFUSIONS_CHOICE_ID) {
+                choice.copy(options = ReplicateInfusion.expand(choice.options, library.magicItems))
+            } else {
+                choice
+            }
+        }
 
         // Заклинания из умений класса и архетипа: «Техника тени», «Дополнительный заговор»…
         val featureSpells = characterClass
@@ -269,7 +290,12 @@ object WizardEngine {
         val spellcasting = characterClass?.let {
             ClassChoiceCatalog.spellcasting(it, subclass, draft.level, finalScores(draft, partial), draft.selections)
         }
-        return partial.copy(spellcasting = spellcasting)
+        // Заклинания списка класса вне школ мистического рыцаря или ловкача — для проверки свободных мест.
+        val offSchool = spellcasting?.takeIf { it.schools.isNotEmpty() }?.let { plan ->
+            library.spells.filter { it.level >= 1 && plan.classCode in it.classes && it.school !in plan.schools }
+                .map { it.id }.toSet()
+        }.orEmpty()
+        return partial.copy(spellcasting = spellcasting, offSchoolSpellIds = offSchool)
     }
 
     /**
@@ -302,10 +328,14 @@ object WizardEngine {
     /**
      * Убирает из расы особенности, которые разновидность переопределяет своей версией, вместе
      * с их заклинаниями и выборами. Языки разновидности тоже заменяют языки расы.
+     *
+     * Кроме одноимённых убираются особенности, которые текст явно называет заменёнными ([SubraceRules.replacedTraits]):
+     * «Наследие Авернуса» Зариэль заменяет «Дьявольское наследие» — иначе тифлинг получал и адское
+     * возмездие с тьмой, и палящую кару с клеймящей карой.
      */
     private fun withoutReplacedTraits(race: RaceRules, subrace: SubraceRules): RaceRules {
         fun norm(text: String) = text.lowercase().replace('ё', 'е').trim()
-        val replaced = subrace.traits.map { norm(it.title) }.toSet()
+        val replaced = (subrace.traits.map { it.title } + subrace.replacedTraits).map(::norm).toSet()
         if (replaced.none { title -> race.traits.any { norm(it.title) == title } }) return race
         val languagesReplaced = "языки" in replaced
         val replacedTitles = race.traits.filter { norm(it.title) in replaced }.map { it.title }.toSet()
@@ -786,6 +816,11 @@ object WizardEngine {
             val spellTarget = plan.knownSpells ?: plan.spellbookSpells ?: 0
             val spellsMissing = spellTarget - draft.spellIds.size
             if (spellsMissing > 0) add(WizardIssue(IssueKind.SPELLS_INCOMPLETE, missing = spellsMissing))
+            // Мистические рыцарь и ловкач: заклинаний других школ не больше свободных мест.
+            val offSchoolOver = draft.spellIds.count { it in context.offSchoolSpellIds } - plan.anySchoolSpells
+            if (plan.schools.isNotEmpty() && offSchoolOver > 0) {
+                add(WizardIssue(IssueKind.SPELLS_SCHOOL_LIMIT, missing = offSchoolOver))
+            }
             if (plan.canPrepare) {
                 val preparedMissing = plan.preparedCount - draft.preparedIds.size
                 if (preparedMissing > 0) add(WizardIssue(IssueKind.PREPARED_INCOMPLETE, missing = preparedMissing))

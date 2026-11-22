@@ -36,12 +36,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.R
-import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
+import com.example.spellbook.ui.components.SpellSummaryText
 import com.example.spellbook.ui.components.imeAwareContentInsets
-import com.example.spellbook.ui.spellLevelLabel
-import com.example.spellbook.ui.spellOptionLabel
 
 /**
  * Экран выбора заклинаний из общей библиотеки для добавления в набор персонажа.
@@ -95,8 +93,8 @@ fun AddSpellsScreen(
                 }
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(visible, key = { it.id }) { spell ->
                         SelectableSpellRow(
@@ -120,20 +118,11 @@ private fun SelectableSpellRow(spell: Spell, checked: Boolean, onCheckedChange: 
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-            Column(modifier = Modifier.padding(start = 8.dp)) {
-                Text(spell.name, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = spellLevelLabel(spell.level) + " · " +
-                        spellOptionLabel(SpellOptions.schools, spell.school),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            SpellSummaryText(spell = spell, modifier = Modifier.weight(1f).padding(end = 12.dp))
         }
     }
 }

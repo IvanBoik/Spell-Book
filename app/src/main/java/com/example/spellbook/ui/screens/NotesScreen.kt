@@ -709,13 +709,13 @@ private fun NoteTableView(paragraph: NoteParagraph, onClick: () -> Unit) {
                                 ),
                             ) { append(text[index]) }
                         }
-                        // Ссылки на заклинания поверх посимвольных стилей заметки.
+                        // Ссылки на заклинания и предметы поверх посимвольных стилей заметки.
                         found.forEach { link ->
                             addLink(
                                 LinkAnnotation.Clickable(
-                                    tag = "spell",
+                                    tag = link.tag,
                                     styles = linkStyles,
-                                    linkInteractionListener = { links?.onOpen?.invoke(link.spell) },
+                                    linkInteractionListener = { links?.open(link) },
                                 ),
                                 link.range.first,
                                 link.range.last + 1,

@@ -128,8 +128,8 @@ class MainActivity : ComponentActivity() {
             val settings = viewModel.uiState.settings
             ProvideAppLocale(settings.language) {
                 SpellBookTheme(appTheme = settings.theme) {
-                    // Ссылки на заклинания во всех текстах приложения.
-                    ProvideSpellLinks(viewModel.uiState.librarySpells) {
+                    // Ссылки на заклинания и магические предметы во всех текстах приложения.
+                    ProvideSpellLinks(viewModel.uiState.librarySpells, viewModel.uiState.libraryMagicItems) {
                         SpellBookApp(
                             incomingUri = incomingUri,
                             onIncomingUriHandled = { incomingUri = null },
@@ -377,6 +377,8 @@ private fun SpellBookApp(
             is Screen.CharacterForm -> viewModel.exitCharacterForm()
             // Мастер обрабатывает «Назад» сам: шаг назад или предупреждение о потере данных.
             Screen.CharacterWizard -> viewModel.closeCharacterWizard()
+            // Окно повышения тоже обрабатывает «Назад» само; сюда попадаем, пока персонаж грузится.
+            is Screen.LevelUp -> viewModel.closeLevelUp()
             is Screen.Details -> viewModel.navigateBackFromDetails()
             is Screen.SpellForm -> {
                 val existing = viewModel.getSpell(screen.spellId)
@@ -396,11 +398,12 @@ private fun SpellBookApp(
             spellCounts = state.spellCounts,
             // Точка входа — домашний раздел персонажа, а не всегда заклинания.
             onCharacterClick = viewModel::openCharacterHome,
-            onAddCharacter = viewModel::openCreateCharacterForm,
+
             onStartWizard = viewModel::openCharacterWizard,
             // Свайп карточки влево: редактирование открывает настройки персонажа.
             onEditCharacter = viewModel::openEditCharacterForm,
             onDeleteCharacter = viewModel::deleteCharacter,
+            onLevelUp = viewModel::openLevelUp,
             onImportSheet = {
                 // Новый лист создаёт персонажа, а не обновляет существующего.
                 sheetImportTargetId = null
@@ -854,6 +857,30 @@ private fun SpellBookApp(
             }
         }
 
+        is Screen.LevelUp -> {
+            val controller = viewModel.levelUp
+            when {
+                viewModel.getCharacter(screen.characterId) == null ->
+                    LaunchedEffect(screen.characterId) { viewModel.openCharacters() }
+                controller == null || controller.characterId != screen.characterId -> {
+                    // Персонаж сопоставляется с библиотекой в фоне. После перезапуска процесса
+                    // состояния нет — открываем окно заново.
+                    LaunchedEffect(screen.characterId) { viewModel.ensureLevelUp(screen.characterId) }
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                    }
+                }
+                else -> com.example.spellbook.ui.wizard.LevelUpScreen(
+                    controller = controller,
+                    library = viewModel.wizardLibrary(),
+                    spells = state.librarySpells,
+                    feats = state.libraryFeats,
+                    onClose = viewModel::closeLevelUp,
+                    onApply = viewModel::finishLevelUp,
+                )
+            }
+        }
+
         is Screen.CharacterForm -> {
             val existing = viewModel.getCharacter(screen.characterId)
             CharacterFormScreen(
@@ -978,6 +1005,7 @@ private fun SpellBookApp(
                     onBack = {
                         viewModel.exitCharacterSection(screen.characterId, CharacterSection.STATS)
                     },
+                    onLevelUp = { viewModel.openLevelUp(screen.characterId) },
                     sectionsBar = {
                         CharacterSections(viewModel, screen.characterId, CharacterSection.STATS)
                     },

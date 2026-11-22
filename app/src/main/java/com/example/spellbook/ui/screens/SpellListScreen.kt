@@ -88,6 +88,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.spellbook.ui.components.SpellSummaryText
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.R
 import com.example.spellbook.data.SpellComponent
@@ -317,7 +318,7 @@ fun SpellListScreen(
                         LazyColumn(
                             state = listState,
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(visibleSpells, key = { it.id }) { spell ->
                                 SpellCard(
@@ -751,34 +752,18 @@ private fun SpellCard(spell: Spell, onClick: () -> Unit, onRemove: (() -> Unit)?
             // Бордовая полоса-акцент слева, как у карточек на dnd.su.
             Box(
                 modifier = Modifier
-                    .width(6.dp)
+                    .width(4.dp)
                     .fillMaxHeight()
                     .background(MaterialTheme.colorScheme.primary),
             )
-            Column(modifier = Modifier.weight(1f).padding(16.dp)) {
-                Text(spell.name, style = MaterialTheme.typography.titleLarge)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = buildString {
-                        append(spellLevelLabel(spell.level))
-                        append(" · ")
-                        append(spellOptionLabel(SpellOptions.schools, spell.school))
-                        // Уточнение школы показываем и в списке: оно важно при выборе заклинания.
-                        if (spell.schoolNote.isNotBlank()) append(" (${spell.schoolNote})")
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                )
-                if (spell.description.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = spell.description.lineSequence().firstOrNull().orEmpty(),
-                        maxLines = 2,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+            // Компактно: название и «круг · компоненты · концентрация · ритуал», без школы и описания.
+            SpellSummaryText(
+                spell = spell,
+                modifier = Modifier
+                    .weight(1f)
+                    .align(Alignment.CenterVertically)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
             if (onRemove != null) {
                 IconButton(
                     onClick = onRemove,

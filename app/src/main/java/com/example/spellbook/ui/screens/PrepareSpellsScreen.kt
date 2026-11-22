@@ -45,11 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.spellbook.R
-import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
-import com.example.spellbook.ui.spellLevelLabel
-import com.example.spellbook.ui.spellOptionLabel
+import com.example.spellbook.ui.components.SpellSummaryText
 import kotlin.math.roundToInt
 
 /** Что перетаскивается: заклинание и его текущее состояние (подготовлено/нет). */
@@ -277,16 +275,7 @@ private fun DragGhost(spell: Spell) {
 
 @Composable
 private fun SpellRowContent(spell: Spell) {
-    Column(modifier = Modifier.padding(12.dp)) {
-        Text(spell.name, style = MaterialTheme.typography.titleMedium)
-        Text(
-            text = spellLevelLabel(spell.level) + " · " +
-                spellOptionLabel(SpellOptions.schools, spell.school),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-        )
-    }
+    SpellSummaryText(spell = spell, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
 }
 
 /**

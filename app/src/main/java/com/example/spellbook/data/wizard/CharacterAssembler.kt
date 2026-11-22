@@ -153,6 +153,9 @@ object CharacterAssembler {
         }
 
         val gold = (context.background?.gold ?: 0) + if (draft.takeClassGold) draft.classGold ?: 0 else 0
+        // Исключения — только то, что мастер реально предлагает и что можно исключить: блоки вариантов
+        // и ключи, оставшиеся от прежнего выбора класса или расы, отбрасываются.
+        val excluded = draft.excludedContent intersect proposal(draft, context, spells).excludableKeys
 
         val character = Character(
             id = characterId,
@@ -164,19 +167,8 @@ object CharacterAssembler {
             maxPreparedSpells = if (plan?.canPrepare == true) plan.preparedCount + alwaysPreparedAll.size else 0,
             maxCantrips = cantripCount,
             spellSlots = plan?.slots.orEmpty(),
-            resources = context.resources.map { spec ->
-                // Ресурс заклинания называется как в библиотеке: в тексте оно бывает в другом падеже
-                // («накладывать палящую кару»).
-                val spellTitle = spec.spellName.takeIf { it.isNotBlank() }
-                    ?.let { name -> matchSpells(listOf(name), spells).firstOrNull()?.let { byId[it]?.name } }
-                CharacterResource(
-                    name = spellTitle ?: spec.name,
-                    description = spec.description,
-                    current = spec.maximum,
-                    maximum = spec.maximum,
-                    maximumFormula = spec.formula,
-                ).normalized()
-            },
+            resources = context.resources.map { spec -> resourceOf(spec, spells, byId) }
+                .filterNot { ContentExclusions.isResourceExcluded(it.name, excluded) },
             coins = if (gold > 0) mapOf(CoinType.GOLD.ordinal to gold) else emptyMap(),
             maxHp = maxHp,
             currentHp = maxHp,
@@ -196,6 +188,7 @@ object CharacterAssembler {
             subrace = context.subrace?.title.orEmpty(),
             subclass = context.subclass?.title.orEmpty(),
             background = context.background?.background?.name.orEmpty(),
+            excludedContent = excluded.sorted(),
         )
 
         return CharacterCreation(
@@ -206,7 +199,7 @@ object CharacterAssembler {
             character = character.withRecalculatedResources().let { recalculated ->
                 recalculated.copy(resources = recalculated.resources.map { it.copy(current = it.maximum) })
             },
-            notes = buildNotes(characterId, draft, context),
+            notes = buildNotes(characterId, draft, context, excluded),
             items = buildItems(characterId, context, equipment),
             spellIds = known,
             preparedIds = prepared,
@@ -218,7 +211,7 @@ object CharacterAssembler {
      * Спасброски от черт: фиксированные и «Устойчивый» — спасброски той же характеристики,
      * что выбрана для увеличения.
      */
-    private fun featSaves(draft: CharacterDraft, context: WizardContext): Set<AbilityType> =
+    internal fun featSaves(draft: CharacterDraft, context: WizardContext): Set<AbilityType> =
         context.featGrants.saves + context.featEffects.values
             .filter { effects -> effects.choices.any { it.kind == ChoiceKind.ABILITY } && effects.savesFollowAbility }
             .flatMap { effects ->
@@ -259,27 +252,115 @@ object CharacterAssembler {
             feats.forEach { feat -> InitiativeRules.featPart(feat)?.let(::add) }
         }.distinctBy { it.id }
 
+    /**
+     * Ресурс персонажа по спецификации, с полными зарядами. Ресурс заклинания называется как
+     * в библиотеке: в тексте оно бывает в другом падеже («накладывать палящую кару»).
+     */
+    internal fun resourceOf(
+        spec: ResourceSpec,
+        spells: List<Spell>,
+        byId: Map<String, Spell> = spells.associateBy { it.id },
+    ): CharacterResource {
+        val spellTitle = spec.spellName.takeIf { it.isNotBlank() }
+            ?.let { name -> matchSpells(listOf(name), spells).firstOrNull()?.let { byId[it]?.name } }
+        return CharacterResource(
+            name = spellTitle ?: spec.name,
+            description = spec.description,
+            current = spec.maximum,
+            maximum = spec.maximum,
+            maximumFormula = spec.formula,
+        ).normalized()
+    }
+
     /** id заклинаний библиотеки, совпадающих по названию с фрагментами из текста. */
-    private fun matchSpells(names: List<String>, spells: List<Spell>): List<String> =
+    internal fun matchSpells(names: List<String>, spells: List<Spell>): List<String> =
         names.mapNotNull { candidate ->
             spells.filter { MarkupText.matchesSpellName(candidate, it.name) }.maxByOrNull { it.name.length }?.id
         }.distinct()
 
     // region Заметки
 
-    private fun buildNotes(characterId: String, draft: CharacterDraft, context: WizardContext): List<NoteBlock> {
+    /**
+     * Блок заметок, который соберёт мастер: абзацы с заголовками — для исключений.
+     *
+     * @param locked блок выбранных вариантов: исключить нельзя.
+     */
+    internal data class PlannedBlock(
+        val title: String,
+        val paragraphs: List<Pair<String, NoteParagraph>>,
+        val texts: List<String>,
+        val locked: Boolean = false,
+    )
+
+    /**
+     * Что мастер создания предлагает записать в заметки и ресурсы — для переключателей на итоговом
+     * шаге. Блоки выбранных вариантов закреплены: по ним повышение восстанавливает взятое.
+     */
+    fun proposal(draft: CharacterDraft, context: WizardContext, spells: List<Spell>): ContentProposal {
+        val byId = spells.associateBy { it.id }
+        val blocks = plannedNotes(draft, context).map { block ->
+            ProposedBlock(
+                key = ContentExclusions.blockKey(block.title),
+                title = block.title,
+                paragraphs = block.paragraphs.mapIndexed { index, (heading, _) ->
+                    ProposedParagraph(
+                        key = ContentExclusions.paragraphKey(block.title, heading),
+                        heading = heading,
+                        text = block.texts.getOrElse(index) { "" },
+                    )
+                },
+                locked = block.locked,
+            )
+        }
+        val resources = context.resources.map { spec ->
+            val resource = resourceOf(spec, spells, byId)
+            ProposedResource(
+                key = ContentExclusions.resourceKey(resource.name),
+                name = resource.name,
+                maximum = resource.maximum,
+                description = resource.description,
+            )
+        }.distinctBy { it.key }
+        return ContentProposal(blocks, resources)
+    }
+
+    private fun buildNotes(
+        characterId: String,
+        draft: CharacterDraft,
+        context: WizardContext,
+        excluded: Set<String> = emptySet(),
+    ): List<NoteBlock> {
         val blocks = mutableListOf<NoteBlock>()
         // Блоки создаются по порядку; сортировка — по убыванию времени, поэтому сдвигаем вниз.
         val baseTime = System.currentTimeMillis()
-        fun block(title: String, paragraphs: List<NoteParagraph>) {
-            if (paragraphs.isEmpty()) return
+        plannedNotes(draft, context).forEach { planned ->
+            // Исключённый блок или абзац не записывается; блоки вариантов — всегда.
+            val paragraphs = planned.paragraphs.filter { (heading, _) ->
+                planned.locked || !ContentExclusions.isParagraphExcluded(planned.title, heading, excluded)
+            }.map { it.second }
+            if (paragraphs.isEmpty()) return@forEach
             blocks += NoteBlock(
                 characterId = characterId,
-                title = title,
+                title = planned.title,
                 collapsed = true,
                 paragraphs = paragraphs,
                 createdAt = baseTime,
                 sortOrder = blocks.size.toLong() - NOTE_ORDER_BASE,
+            )
+        }
+        return blocks
+    }
+
+    /** Блоки заметок нового персонажа до исключений, по порядку. */
+    internal fun plannedNotes(draft: CharacterDraft, context: WizardContext): List<PlannedBlock> {
+        val blocks = mutableListOf<PlannedBlock>()
+        fun block(title: String, items: List<Pair<String, String>>, locked: Boolean = false) {
+            if (items.isEmpty()) return
+            blocks += PlannedBlock(
+                title = title,
+                paragraphs = items.map { (heading, text) -> heading to paragraph(heading, text) },
+                texts = items.map { it.second },
+                locked = locked,
             )
         }
 
@@ -289,7 +370,7 @@ object CharacterAssembler {
             // У расы и разновидности один блок: обе описывают одно происхождение.
             val traits = FeatureRules.noteFeatures(race.traits + subrace?.traits.orEmpty(), draft.level, showOptional = true)
             val title = listOfNotNull(race.race.name, subrace?.title).joinToString(", ")
-            block("Раса: $title", traits.map { paragraph(it.title, it.text) })
+            block("Раса: $title", traits.map { it.title to it.text })
         }
         context.characterClass?.let { rules ->
             val features = FeatureRules.noteFeatures(
@@ -298,7 +379,7 @@ object CharacterAssembler {
             )
             block(
                 "Класс: ${rules.charClass.name}",
-                features.map { paragraph(levelTitle(it), it.text) },
+                features.map { levelTitle(it) to it.text },
             )
         }
         context.subclass?.let { sub ->
@@ -308,13 +389,13 @@ object CharacterAssembler {
             )
             block(
                 "Архетип: ${sub.title}",
-                features.map { paragraph(levelTitle(it), it.text) },
+                features.map { levelTitle(it) to it.text },
             )
         }
         context.background?.let { bg ->
             block(
                 "Предыстория: ${bg.background.name}",
-                listOfNotNull(bg.feature?.let { paragraph(it.title, it.text) }),
+                listOfNotNull(bg.feature?.let { it.title to it.text }),
             )
         }
 
@@ -322,16 +403,16 @@ object CharacterAssembler {
         context.choices.filter { it.kind == ChoiceKind.OPTION }.forEach { choice ->
             val selected = draft.selections[choice.id].orEmpty()
                 .mapNotNull { id -> choice.options.firstOrNull { it.id == id } }
-            block(choice.title, selected.map { paragraph(it.title, it.text) })
+            block(choice.title, selected.map { it.title to it.text }, locked = true)
         }
         return blocks
     }
 
-    private fun levelTitle(feature: RuleFeature): String =
+    internal fun levelTitle(feature: RuleFeature): String =
         if (feature.level > 1) "${feature.title} (${feature.level} ур.)" else feature.title
 
     /** Абзац заметки: жирный заголовок и текст особенности без разметки. */
-    private fun paragraph(title: String, markup: String): NoteParagraph {
+    internal fun paragraph(title: String, markup: String): NoteParagraph {
         val body = noteText(markup)
         val text = if (body.isBlank()) title else "$title\n$body"
         return NoteParagraph(text = text, spans = listOf(NoteSpan(start = 0, end = title.length, bold = true)))

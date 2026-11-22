@@ -55,6 +55,8 @@ import com.example.spellbook.data.model.Spell
 import com.example.spellbook.data.wizard.SpellFilter
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.ui.screens.DescriptionText
+import com.example.spellbook.ui.screens.SpellPreviewDialog
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import com.example.spellbook.ui.screens.groupByBook
 import androidx.compose.ui.res.pluralStringResource
 import com.example.spellbook.ui.spellLevelLabel
@@ -89,7 +91,8 @@ fun isAttackSpell(spell: Spell): Boolean =
 /**
  * Список заклинаний с поиском и фильтром по кругу для выбора прямо на шаге.
  *
- * Строка раскрывается нажатием на название — описание видно, не уходя со списка.
+ * Выбор — флажком; нажатие на строку открывает заклинание на весь экран в том же виде, что и
+ * в библиотеке: время накладывания, дистанция, компоненты, длительность, концентрация, ритуал.
  *
  * @param locked заклинания, отмеченные без возможности снять (например, всегда подготовленные).
  */
@@ -105,7 +108,10 @@ fun SpellSelectionList(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var level by rememberSaveable { mutableStateOf<Int?>(null) }
-    var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openedId by rememberSaveable { mutableStateOf<String?>(null) }
+    candidates.firstOrNull { it.id == openedId }?.let { spell ->
+        SpellPreviewDialog(spell = spell, onDismiss = { openedId = null })
+    }
     val levels = remember(candidates) { candidates.map { it.level }.distinct().sorted() }
     val visible = remember(candidates, query, level) {
         candidates.filter { spell ->
@@ -157,8 +163,7 @@ fun SpellSelectionList(
                 spell = spell,
                 selected = isSelected,
                 enabled = !isLocked && !full,
-                expanded = expandedId == spell.id,
-                onExpand = { expandedId = if (expandedId == spell.id) null else spell.id },
+                onOpen = { openedId = spell.id },
                 onToggle = { onToggle(spell.id) },
                 locked = isLocked,
             )
@@ -171,8 +176,7 @@ private fun SpellRow(
     spell: Spell,
     selected: Boolean,
     enabled: Boolean,
-    expanded: Boolean,
-    onExpand: () -> Unit,
+    onOpen: () -> Unit,
     onToggle: () -> Unit,
     locked: Boolean,
 ) {
@@ -182,22 +186,20 @@ private fun SpellRow(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onExpand)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onOpen)) {
                 Checkbox(checked = selected, onCheckedChange = { onToggle() }, enabled = enabled || (selected && !locked))
-                Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                    Text(spell.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                    Text(
-                        "${spellLevelLabel(spell.level)} · ${spellOptionLabel(SpellOptions.schools, spell.school)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                com.example.spellbook.ui.components.SpellSummaryText(
+                    spell = spell,
+                    modifier = Modifier.weight(1f).padding(vertical = 6.dp),
+                    summaryColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 if (locked) InfoPill(stringResource(R.string.wizard_always_prepared), highlighted = true)
-                Box(Modifier.padding(end = 8.dp))
-            }
-            AnimatedVisibility(visible = expanded) {
-                Box(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
-                    DescriptionText(description = spell.description, onDiceClick = {})
+                IconButton(onClick = onOpen) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = stringResource(R.string.wizard_spell_details),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

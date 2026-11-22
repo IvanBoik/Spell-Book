@@ -32,6 +32,25 @@ fun spellOptionPairs(options: List<SpellOption>): List<Pair<String, String>> {
 fun spellLevelLabel(level: Int): String =
     if (level == 0) stringResource(R.string.spell_level_cantrip) else stringResource(R.string.spell_level_n, level)
 
+/**
+ * Краткая строка заклинания для списков: «3 круг · В, С, М · концентрация · ритуал».
+ * Части без значения (нет компонентов, нет концентрации или ритуала) не показываются.
+ */
+@Composable
+fun spellSummaryLine(spell: com.example.spellbook.data.model.Spell): String {
+    val components = buildList {
+        if (spell.components.vocal) add(stringResource(R.string.component_short_vocal))
+        if (spell.components.somatic) add(stringResource(R.string.component_short_somatic))
+        if (spell.components.material) add(stringResource(R.string.component_short_material))
+    }.joinToString(", ")
+    return listOfNotNull(
+        spellLevelLabel(spell.level),
+        components.takeIf { it.isNotEmpty() },
+        stringResource(R.string.spell_concentration_short).takeIf { spell.components.concentration },
+        stringResource(R.string.spell_ritual).takeIf { spell.components.ritual },
+    ).joinToString(" · ")
+}
+
 /** Пары «круг — подпись» для фильтров и формы. */
 @Composable
 fun spellLevelPairs(): List<Pair<Int, String>> = SpellOptions.levels.map { it to spellLevelLabel(it) }

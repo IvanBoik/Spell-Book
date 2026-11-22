@@ -19,12 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
-import androidx.compose.ui.graphics.Brush
+
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FileDownload
@@ -60,6 +55,7 @@ import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Upgrade
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
@@ -82,18 +78,18 @@ fun CharactersScreen(
     characters: List<Character>,
     spellCounts: Map<String, Int>,
     onCharacterClick: (String) -> Unit,
-    onAddCharacter: () -> Unit,
     onImportSheet: () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
-    /** Пошаговое создание по библиотекам; [onAddCharacter] — быстрая форма. */
-    onStartWizard: () -> Unit = onAddCharacter,
+    /** Создание персонажа — пошаговый мастер по библиотекам. */
+    onStartWizard: () -> Unit,
     /** Кнопка «Редактировать» под сдвинутой карточкой: открывает настройки персонажа. */
     onEditCharacter: (String) -> Unit = {},
     /** Удаление персонажа — вызывается только после подтверждения в диалоге. */
     onDeleteCharacter: (String) -> Unit = {},
+    /** Кнопка «Повысить уровень» под сдвинутой карточкой; null — кнопки нет. */
+    onLevelUp: ((String) -> Unit)? = null,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
-    var chooseCreation by remember { mutableStateOf(false) }
     // Сдвинутой может быть только одна карточка: открытие другой закрывает предыдущую.
     var openedCardId by remember { mutableStateOf<String?>(null) }
     var pendingDeletion by remember { mutableStateOf<Character?>(null) }
@@ -109,13 +105,6 @@ fun CharactersScreen(
         )
     }
 
-    if (chooseCreation) {
-        CreationMethodSheet(
-            onWizard = { chooseCreation = false; onStartWizard() },
-            onQuick = { chooseCreation = false; onAddCharacter() },
-            onDismiss = { chooseCreation = false },
-        )
-    }
 
     Scaffold(
         topBar = { DndTopBar(title = stringResource(R.string.tab_characters)) },
@@ -130,13 +119,7 @@ fun CharactersScreen(
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.primary,
                     )
-                    ExtendedFloatingActionButton(
-                        onClick = { menuExpanded = false; onAddCharacter() },
-                        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                        text = { Text(stringResource(R.string.characters_quick)) },
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                    )
+
                     // Мастер — основной способ, поэтому он залит фирменным цветом.
                     ExtendedFloatingActionButton(
                         onClick = { menuExpanded = false; onStartWizard() },
@@ -163,7 +146,7 @@ fun CharactersScreen(
     ) { padding ->
         if (characters.isEmpty()) {
             EmptyCharacters(
-                onAddCharacter = { chooseCreation = true },
+                onAddCharacter = onStartWizard,
                 onImportSheet = onImportSheet,
                 modifier = Modifier.padding(padding),
             )
@@ -194,6 +177,15 @@ fun CharactersScreen(
                             openedCardId = null
                             onEditCharacter(character.id)
                         },
+                        // На 20 уровне повышать некуда — кнопки нет.
+                        onLevelUp = onLevelUp
+                            ?.takeIf { character.level < com.example.spellbook.data.model.MAX_CLASS_LEVEL }
+                            ?.let { action ->
+                                {
+                                    openedCardId = null
+                                    action(character.id)
+                                }
+                            },
                         onDelete = {
                             openedCardId = null
                             pendingDeletion = character
@@ -232,9 +224,11 @@ private fun SwipeableCharacterCard(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onLevelUp: (() -> Unit)? = null,
 ) {
     val density = LocalDensity.current
-    val actionsWidth = with(density) { (SWIPE_ACTION_SIZE * 2 + SWIPE_ACTION_GAP * 3).toPx() }
+    val actionCount = if (onLevelUp != null) 3 else 2
+    val actionsWidth = with(density) { (SWIPE_ACTION_SIZE * actionCount + SWIPE_ACTION_GAP * (actionCount + 1)).toPx() }
     val state = remember {
         AnchoredDraggableState(
             initialValue = CardSwipe.CLOSED,
@@ -270,6 +264,15 @@ private fun SwipeableCharacterCard(
             horizontalArrangement = Arrangement.spacedBy(SWIPE_ACTION_GAP, Alignment.End),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onLevelUp != null) {
+                SwipeActionButton(
+                    icon = Icons.Default.Upgrade,
+                    description = stringResource(R.string.levelup_action),
+                    background = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    onClick = onLevelUp,
+                )
+            }
             SwipeActionButton(
                 icon = Icons.Default.Edit,
                 description = stringResource(R.string.action_edit),
@@ -428,88 +431,6 @@ fun CharacterAvatar(character: Character, size: Int) {
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-            }
-        }
-    }
-}
-
-/**
- * Выбор способа создания. Мастер выделен градиентом и плашкой «Рекомендуем»,
- * быстрая форма — скромная карточка для тех, кому нужен только список заклинаний.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CreationMethodSheet(onWizard: () -> Unit, onQuick: () -> Unit, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                stringResource(R.string.characters_create),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            val primary = MaterialTheme.colorScheme.primary
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = androidx.compose.ui.graphics.Color.Transparent,
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onWizard),
-            ) {
-                Box(
-                    Modifier
-                        .background(Brush.linearGradient(listOf(primary, MaterialTheme.colorScheme.primaryContainer)))
-                        .padding(20.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.AutoAwesome,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(36.dp),
-                        )
-                        Column(Modifier.padding(start = 16.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondary) {
-                                Text(
-                                    stringResource(R.string.characters_recommended),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSecondary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                )
-                            }
-                            Text(
-                                stringResource(R.string.characters_wizard),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                            Text(
-                                stringResource(R.string.characters_wizard_hint),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                            )
-                        }
-                    }
-                }
-            }
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onQuick),
-            ) {
-                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Bolt, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Column(Modifier.padding(start = 16.dp)) {
-                        Text(stringResource(R.string.characters_quick), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            stringResource(R.string.characters_quick_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
             }
         }
     }

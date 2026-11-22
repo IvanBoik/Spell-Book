@@ -25,25 +25,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.spellbook.R
-import com.example.spellbook.data.SpellLinkIndex
+import com.example.spellbook.data.LibraryLinkIndex
+import com.example.spellbook.data.model.MagicItem
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DndTopBar
 import com.example.spellbook.util.DiceRoller
 
 /**
- * Предоставляет ссылки на заклинания [LocalSpellLinks] всему содержимому и показывает
- * окно-превью по нажатию на ссылку.
+ * Предоставляет ссылки на заклинания и магические предметы [LocalSpellLinks] всему содержимому
+ * и показывает окно-превью по нажатию на ссылку.
  *
- * Индекс перестраивается только при смене списка заклинаний библиотеки.
+ * Индекс перестраивается только при смене библиотек заклинаний или предметов.
  */
 @Composable
-fun ProvideSpellLinks(spells: List<Spell>, content: @Composable () -> Unit) {
-    var opened by remember { mutableStateOf<Spell?>(null) }
-    val index = remember(spells) { SpellLinkIndex(spells) }
-    val links = remember(index) { SpellLinks(index) { opened = it } }
+fun ProvideSpellLinks(
+    spells: List<Spell>,
+    magicItems: List<MagicItem> = emptyList(),
+    content: @Composable () -> Unit,
+) {
+    var openedSpell by remember { mutableStateOf<Spell?>(null) }
+    var openedItem by remember { mutableStateOf<MagicItem?>(null) }
+    val index = remember(spells, magicItems) { LibraryLinkIndex(spells, magicItems) }
+    val links = remember(index) {
+        SpellLinks(
+            index = index,
+            // Окно одно: ссылка внутри окна заменяет его содержимое, а не открывает второе.
+            onOpen = { openedItem = null; openedSpell = it },
+            onOpenItem = { openedSpell = null; openedItem = it },
+        )
+    }
     CompositionLocalProvider(LocalSpellLinks provides links) {
         content()
-        opened?.let { spell -> SpellPreviewDialog(spell = spell, onDismiss = { opened = null }) }
+        openedSpell?.let { spell -> SpellPreviewDialog(spell = spell, onDismiss = { openedSpell = null }) }
+        openedItem?.let { item -> MagicItemPreviewDialog(item = item, onDismiss = { openedItem = null }) }
     }
 }
 
@@ -57,11 +71,64 @@ fun ProvideSpellLinks(spells: List<Spell>, content: @Composable () -> Unit) {
 @Composable
 fun SpellPreviewDialog(spell: Spell, onDismiss: () -> Unit) {
     var rollResult by remember(spell.id) { mutableStateOf<DiceRoller.Result?>(null) }
+    PreviewDialogFrame(title = spell.name, onDismiss = onDismiss) {
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SpellInfoContent(
+                    spell = spell,
+                    onDiceClick = { formula -> DiceRoller.roll(formula)?.let { rollResult = it } },
+                )
+            }
+            rollResult?.let { result ->
+                DiceResultCard(
+                    result = result,
+                    onClose = { rollResult = null },
+                    modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Окно с описанием магического предмета поверх текущего экрана — по нажатию на ссылку в тексте
+ * (заметки, инфузии изобретателя, описания умений). Содержимое — то же, что на экране предмета
+ * в библиотеке ([MagicItemContent]), без действий редактирования.
+ */
+@Composable
+fun MagicItemPreviewDialog(item: MagicItem, onDismiss: () -> Unit) {
+    var rollResult by remember(item.id) { mutableStateOf<DiceRoller.Result?>(null) }
+    PreviewDialogFrame(title = item.name, onDismiss = onDismiss) {
+        Box(Modifier.fillMaxSize()) {
+            MagicItemContent(
+                item = item,
+                onDiceClick = { formula -> DiceRoller.roll(formula)?.let { rollResult = it } },
+            )
+            rollResult?.let { result ->
+                DiceResultCard(
+                    result = result,
+                    onClose = { rollResult = null },
+                    modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Полноэкранное окно-превью с заголовком и кнопкой закрытия. */
+@Composable
+private fun PreviewDialogFrame(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Scaffold(
             topBar = {
                 DndTopBar(
-                    title = spell.name,
+                    title = title,
                     navigationIcon = {
                         IconButton(onClick = onDismiss) {
                             Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close))
@@ -70,27 +137,7 @@ fun SpellPreviewDialog(spell: Spell, onDismiss: () -> Unit) {
                 )
             },
         ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    SpellInfoContent(
-                        spell = spell,
-                        onDiceClick = { formula -> DiceRoller.roll(formula)?.let { rollResult = it } },
-                    )
-                }
-                rollResult?.let { result ->
-                    DiceResultCard(
-                        result = result,
-                        onClose = { rollResult = null },
-                        modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
-                    )
-                }
-            }
+            Box(Modifier.padding(padding).fillMaxSize()) { content() }
         }
     }
 }

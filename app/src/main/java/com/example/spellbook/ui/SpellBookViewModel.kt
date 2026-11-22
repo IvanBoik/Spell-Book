@@ -73,6 +73,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -202,6 +203,9 @@ sealed interface Screen {
 
     /** Пошаговое создание персонажа по библиотекам (мастер). */
     data object CharacterWizard : Screen
+
+    /** Пошаговое повышение уровня персонажа на +1. */
+    data class LevelUp(override val characterId: String) : Screen
     data class AddSpells(override val characterId: String) : Screen
     data class PrepareSpells(override val characterId: String) : Screen
     data class SpellSlots(override val characterId: String) : Screen
@@ -1196,9 +1200,6 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
-    fun openCreateCharacterForm() {
-        uiState = uiState.copy(screen = Screen.CharacterForm(characterId = null))
-    }
 
     /**
      * Состояние мастера создания; null — мастер не открыт.
@@ -1246,6 +1247,107 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * Состояние окна повышения уровня; null — окно не открыто или персонаж ещё загружается.
+     * Хранится здесь, чтобы выбор переживал поворот экрана.
+     */
+    var levelUp by mutableStateOf<com.example.spellbook.ui.wizard.LevelUpController?>(null)
+        private set
+
+    /** Окно, куда вернуться после повышения или отмены. */
+    private var levelUpReturn: Screen? = null
+
+    /** Персонаж, для которого сейчас готовится окно повышения (защита от повторной загрузки). */
+    private var levelUpLoadingId: String? = null
+
+    /**
+     * Готовит окно повышения, если экран открыт без состояния (перезапуск процесса)
+     * и загрузка ещё не идёт.
+     */
+    fun ensureLevelUp(characterId: String) {
+        if (levelUp?.characterId == characterId || levelUpLoadingId == characterId) return
+        openLevelUp(characterId)
+    }
+
+    /**
+     * Открывает окно повышения уровня: персонаж сопоставляется с библиотекой по названиям,
+     * выбранные ранее варианты — по заметкам, известные заклинания и черты — по связям.
+     * На 20 уровне ничего не делает.
+     */
+    fun openLevelUp(characterId: String) {
+        val character = getCharacter(characterId) ?: return
+        if (character.level >= com.example.spellbook.data.model.MAX_CLASS_LEVEL) return
+        if (uiState.screen !is Screen.LevelUp) levelUpReturn = uiState.screen
+        levelUp = null
+        levelUpLoadingId = characterId
+        uiState = uiState.copy(tab = Tab.CHARACTERS, screen = Screen.LevelUp(characterId))
+        val library = wizardLibrary()
+        viewModelScope.launch {
+            val notes = repository.observeNoteBlocks(characterId).first()
+            val known = repository.observeSpellIdsForCharacter(characterId).first().toSet()
+            val prepared = repository.observePreparedSpellIdsForCharacter(characterId).first().toSet()
+            val feats = repository.observeFeatIdsForCharacter(characterId).first()
+            val controller = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                val cache = com.example.spellbook.data.wizard.WizardRulesCache()
+                val base = com.example.spellbook.data.wizard.LevelUpEngine.base(
+                    character, notes, known, prepared, feats, library, cache,
+                )
+                com.example.spellbook.ui.wizard.LevelUpController(base, cache)
+            }
+            if (levelUpLoadingId == characterId) levelUpLoadingId = null
+            // Пользователь мог уйти с экрана, пока персонаж загружался.
+            if ((uiState.screen as? Screen.LevelUp)?.characterId != characterId) return@launch
+            levelUp = controller
+            // Классы для мультиклассирования разбираются заранее в фоне, как в мастере создания.
+            launch(kotlinx.coroutines.Dispatchers.Default) {
+                library.classes.forEach { controller.cache.characterClass(it) }
+            }
+        }
+    }
+
+    /** Закрывает окно повышения уровня без изменений. */
+    fun closeLevelUp() {
+        val characterId = levelUp?.characterId ?: (uiState.screen as? Screen.LevelUp)?.characterId
+        levelUp = null
+        levelUpLoadingId = null
+        leaveLevelUp(characterId)
+    }
+
+    private fun leaveLevelUp(characterId: String?) {
+        val back = levelUpReturn
+        levelUpReturn = null
+        when {
+            back is Screen.Stats -> openStats(back.characterId)
+            back == null || back == Screen.Characters || characterId == null -> openCharacters()
+            else -> openCharacterHome(characterId)
+        }
+    }
+
+    /**
+     * Применяет повышение уровня: лист, заметки, заклинания и черты записываются одной
+     * транзакцией, затем окно закрывается с сообщением.
+     */
+    fun finishLevelUp() {
+        val controller = levelUp ?: return
+        val library = wizardLibrary()
+        val context = controller.context(library)
+        if (!com.example.spellbook.data.wizard.LevelUpEngine.canApply(context)) return
+        val result = com.example.spellbook.data.wizard.LevelUpEngine.build(context, library)
+        val character = result.character.withRecalculatedResources()
+        viewModelScope.launch {
+            repository.applyLevelUp(result.copy(character = character))
+            levelUp = null
+            leaveLevelUp(character.id)
+            uiState = uiState.copy(
+                message = UiMessage.of(
+                    R.string.levelup_done,
+                    character.name,
+                    character.level,
+                ),
+            )
+        }
+    }
+
     /** Библиотеки, из которых выбирает мастер. */
     fun wizardLibrary(): WizardLibrary = WizardLibrary(
         races = uiState.libraryRaces,
@@ -1253,6 +1355,7 @@ class SpellBookViewModel(application: Application) : AndroidViewModel(applicatio
         backgrounds = uiState.libraryBackgrounds,
         feats = uiState.libraryFeats,
         spells = uiState.librarySpells,
+        magicItems = uiState.libraryMagicItems,
     )
 
     fun openEditCharacterForm(characterId: String) {

@@ -559,8 +559,9 @@ object ClassChoiceCatalog {
         }
 
         // Треть-заклинатели: мистический рыцарь, мистический ловкач — таблица в тексте архетипа.
+        // Таблица бывает и в тексте архетипа (мистический рыцарь), и внутри умения (мистический ловкач).
         val table = subclass?.let { sub ->
-            MarkupText.tables(sub.text).firstOrNull { rows ->
+            (listOf(sub.text) + sub.features.map { it.text }).flatMap(MarkupText::tables).firstOrNull { rows ->
                 rows.firstOrNull()?.any { MarkupText.plain(it).equals("Известные заговоры", ignoreCase = true) } == true
             }
         } ?: return null
@@ -592,9 +593,15 @@ object ClassChoiceCatalog {
             preparesFromClassList = false,
             preparedCount = 0,
             schools = schools,
+            // На 3-м уровне три заклинания, «два из которых» — из школ архетипа, третье любое;
+            // на 8, 14 и 20 уровне — ещё по одному любой школы.
+            anySchoolSpells = if (schools.isEmpty()) 0 else MYSTIC_FREE_LEVELS.count { it <= level },
             slots = slots,
         )
     }
+
+    /** Уровни мистических рыцаря и ловкача, на которых одно известное заклинание — любой школы. */
+    val MYSTIC_FREE_LEVELS = listOf(3, 8, 14, 20)
 
     /** Заклинания домена или клятвы, всегда подготовленные на текущем уровне. */
     private fun alwaysPrepared(subclass: SubclassRules, level: Int, type: CharacterClass): List<String> {

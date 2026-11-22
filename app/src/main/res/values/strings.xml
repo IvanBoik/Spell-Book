@@ -1,6 +1,17 @@
 <resources>
     <string name="app_name" translatable="false">Spell Book</string>
 
+    <!-- Excluding notes and resources in the wizards -->
+    <string name="content_exclusion_title">Notes and resources</string>
+    <string name="content_exclusion_hint">Uncheck what you don’t want to keep. Excluded items are remembered and not added on level up until you include them again.</string>
+    <string name="content_exclusion_notes">Notes</string>
+    <string name="content_exclusion_resources">Resources</string>
+    <string name="content_exclusion_count">Features: %1$d of %2$d</string>
+    <string name="content_exclusion_existing">appended to the existing note</string>
+    <string name="content_exclusion_earlier">excluded earlier</string>
+    <string name="content_exclusion_locked">needed for level up — can’t be excluded</string>
+    <string name="content_exclusion_resource_value">%1$s: %2$d</string>
+
     <!-- Character sections bar -->
     <string name="section_settings">Settings</string>
     <string name="section_spells">Spells</string>
@@ -371,6 +382,10 @@
 
     <!-- Spell list and details -->
     <string name="spell_ritual">ritual</string>
+    <string name="spell_concentration_short">concentration</string>
+    <string name="component_short_vocal">V</string>
+    <string name="component_short_somatic">S</string>
+    <string name="component_short_material">M</string>
     <string name="spell_concentration_prefix">Concentration, </string>
     <string name="spell_casting_time">Casting time</string>
     <string name="spell_duration">Duration</string>
@@ -914,10 +929,7 @@
     <string name="action_clear">Clear</string>
     <string name="action_done">Done</string>
     <string name="characters_wizard">Step-by-step creation</string>
-    <string name="characters_wizard_hint">Race, class, background and ability scores by the rules</string>
-    <string name="characters_quick">Quick creation</string>
-    <string name="characters_quick_hint">Name and classes, everything else by hand</string>
-    <string name="characters_recommended">Recommended</string>
+
     <string name="wizard_title">New character</string>
     <string name="wizard_created">Character created</string>
     <string name="wizard_count">%1$d / %2$d</string>
@@ -1058,6 +1070,8 @@
     <string name="wizard_slot">Lv %1$d: %2$d</string>
     <string name="wizard_cantrips_hint">Choose cantrips from the class list: %1$d.</string>
     <string name="wizard_known_hint">Known spells of available levels: %1$d.</string>
+    <string name="wizard_any_school_hint">Spells of any school allowed: %1$d (taken: %2$d). The rest must be from the subclass schools.</string>
+    <string name="wizard_issue_school_limit">Too many spells outside the subclass schools: %1$d extra</string>
     <string name="wizard_spellbook_hint">Spells in the wizard’s spellbook: %1$d (6 at level 1 and 2 per level).</string>
     <string name="wizard_prepare_hint">Prepared spells: %1$d (ability modifier + level).</string>
     <string name="wizard_prepare_all_known">The whole class list becomes known — choose prepared spells here.</string>
@@ -1220,4 +1234,112 @@
     <string name="wizard_bg_feat_fixed">The background grants the feat “%1$s” — confirm it on the Feats step.</string>
     <string name="wizard_feat_from_background">From background</string>
     <string name="wizard_feat_allowed">Available: %1$s</string>
+
+    <!-- Level up -->
+    <string name="levelup_action">Level up</string>
+    <string name="levelup_top_title">Level up: %1$s</string>
+    <string name="levelup_done">%1$s reached level %2$d</string>
+    <string name="levelup_exit_title">Stop leveling up?</string>
+    <string name="levelup_exit_text">Your choices for the new level will be lost. The character stays unchanged.</string>
+    <string name="levelup_step_replacements">Replacements</string>
+    <string name="levelup_max_level">The character is already at the maximum level 20</string>
+    <string name="levelup_issue_multiclass">Multiclass requirements not met: %1$s</string>
+    <string name="levelup_issue_hp">Roll the hit die or enter a value</string>
+    <string name="levelup_issue_replacement">%1$s: choose both what to replace and the replacement, or cancel it</string>
+    <string name="levelup_issue_conflict">%1$s: only one of these replacements can be taken</string>
+    <string name="wizard_spell_details">Spell details</string>
+    <string name="levelup_issue_duplicate">“%1$s” is already taken as new at this level — replace the old one with something else</string>
+    <string name="levelup_warning_race">Race “%1$s” was not found in the library — racial features are not added.</string>
+    <string name="levelup_warning_background">Background “%1$s” was not found in the library.</string>
+    <string name="levelup_warning_class">Class “%1$s” was not found in the library — only level, proficiency bonus, hit points and spell slots will change.</string>
+    <string name="levelup_warning_subclass">Subclass “%1$s” was not found in the library — its features are not added.</string>
+    <string name="levelup_source_race">Race</string>
+    <string name="levelup_source_subrace">Subrace</string>
+    <string name="levelup_source_class">Class</string>
+    <string name="levelup_source_subclass">Subclass</string>
+    <string name="levelup_source_background">Background</string>
+    <string name="levelup_source_feat">Feat</string>
+    <string name="levelup_or">" or "</string>
+    <string name="levelup_and">" and "</string>
+    <string name="levelup_class_title">New level</string>
+    <string name="levelup_class_subtitle">Level %1$d → %2$d · proficiency bonus %3$s → %4$s</string>
+    <string name="levelup_current_classes">Raise a class</string>
+    <string name="levelup_class_level_change">Level %1$d → %2$d</string>
+    <string name="levelup_new_class">New class (multiclass)</string>
+    <string name="levelup_new_class_hint">Take level 1 of another class. You need the ability scores required by both the new class and your current ones.</string>
+    <string name="levelup_show_new_classes">Show classes</string>
+    <string name="levelup_hide_new_classes">Hide classes</string>
+    <string name="levelup_requirements">Requirements: %1$s</string>
+    <string name="levelup_no_requirements">No multiclass requirements found</string>
+    <string name="levelup_unmet">Not enough for %1$s: %2$s</string>
+    <string name="levelup_limited">The class is not in the library: there are no features or choices, but level, hit points and spell slots will be updated.</string>
+    <string name="levelup_multiclass_grants">Multiclass proficiencies</string>
+    <string name="levelup_multiclass_none">The class grants no proficiencies when multiclassing.</string>
+    <string name="levelup_subclass_hint">At this level you choose: %1$s.</string>
+    <string name="levelup_new_features">New features</string>
+    <string name="levelup_no_features">No new features at this level.</string>
+    <string name="levelup_features_hint">They will be added to the character notes.</string>
+    <string name="levelup_asi_subtitle">Increase one ability by 2, two abilities by 1, or take a feat. Scores cannot exceed 20.</string>
+    <string name="levelup_asi_step_hint">Each selected ability increases by %1$d.</string>
+    <string name="levelup_change">%1$s → %2$s</string>
+    <string name="levelup_hp_subtitle">Hit die d%1$d, Constitution modifier %2$s.</string>
+    <string name="levelup_hp_average_hint">Average for d%1$d: %2$d plus the Constitution modifier.</string>
+    <string name="levelup_hp_rolled">Rolled: %1$d</string>
+    <string name="levelup_hp_roll">Roll d%1$d</string>
+    <string name="levelup_hp_manual_label">Hit die result (1–%1$d)</string>
+    <string name="levelup_hp_gain">+%1$d HP</string>
+    <string name="levelup_hp_total">Maximum hit points: %1$d → %2$d</string>
+    <string name="levelup_hp_retro_hint">The gain is at least 1. If Constitution or a feat like Tough raises hit points per level, the bonus is applied to previous levels too.</string>
+    <string name="levelup_tab_replace">Replace</string>
+    <string name="levelup_added_from_list">All %2$d spells of circle %1$d from the class list are added automatically — prepare them as usual.</string>
+    <string name="levelup_always_prepared">Always prepared: %1$s</string>
+    <string name="levelup_no_spell_picks">Nothing to choose at this level.</string>
+    <string name="levelup_cantrips_hint">Choose %1$d new cantrips.</string>
+    <string name="levelup_known_hint">Choose %1$d new known spells.</string>
+    <string name="levelup_spellbook_hint">Write %1$d spells into your spellbook (up to circle %2$d).</string>
+    <string name="levelup_replace_optional">Replacements are optional — skip them if you are happy with your choices.</string>
+    <string name="levelup_replacements_subtitle">You may replace one option with another. This is optional.</string>
+    <string name="levelup_replace_group">Only one replacement from “%1$s” can be taken per level.</string>
+    <string name="levelup_replace_group_taken">Another replacement from this group is already chosen: “%1$s” (step “%2$s”). Cancel it to pick this one.</string>
+    <string name="levelup_replace_group_conflict">Another replacement from this group is also chosen: “%1$s” (step “%2$s”). Keep only one.</string>
+    <string name="levelup_replace_from">Replace</string>
+    <string name="levelup_replace_to">With</string>
+    <string name="levelup_replace_pick_old_first">First choose what to replace.</string>
+    <string name="levelup_replace_none">Do not replace</string>
+    <string name="levelup_summary_title">Summary</string>
+    <string name="levelup_summary_subtitle">What changes on the character sheet.</string>
+    <string name="levelup_summary_class_new">%1$s 1 (new class)</string>
+    <string name="levelup_summary_prepared">Prepared spells</string>
+    <string name="levelup_summary_subclass">Subclass</string>
+    <string name="levelup_summary_slots">Spell slots</string>
+    <string name="levelup_slot_circle">Circle %1$d</string>
+    <string name="levelup_resource_new">new</string>
+    <string name="levelup_resource_removed">removed</string>
+    <string name="levelup_resource_restored">restored</string>
+    <string name="levelup_resource_missing_title">Resource “%1$s” was deleted</string>
+    <string name="levelup_resource_missing_text">It changes at this level (maximum %1$d → %2$d), but the character no longer has it. Restore it with full charges?</string>
+    <string name="levelup_resource_restore">Restore</string>
+    <string name="levelup_resource_skip">Don’t restore</string>
+    <string name="levelup_issue_resource">Decide whether to restore “%1$s”</string>
+    <string name="levelup_issue_prepared_free">%1$d preparation slots are free — you may prepare more spells</string>
+    <string name="levelup_issue_prepared_over">%1$d spells over the preparation limit — unprepare some</string>
+    <string name="levelup_step_prepare">Preparation</string>
+    <string name="levelup_prepare_title">Prepare spells</string>
+    <string name="levelup_prepare_subtitle">Optional: your current prepared spells are kept. Limit: %1$d → %2$d.</string>
+    <string name="levelup_prepare_subtitle_book">Optional: prepare spells from your spellbook, including the new entries of this level. Limit: %1$d → %2$d.</string>
+    <string name="levelup_prepare_count">Prepared %1$d of %2$d</string>
+    <string name="levelup_prepare_reset">Keep current preparation</string>
+    <string name="levelup_new_always_prepared_title">New always prepared spells</string>
+    <string name="levelup_new_always_prepared_text">From this level these spells are always prepared and do not count against the preparation limit:</string>
+    <string name="levelup_summary_prepared_added">Prepared</string>
+    <string name="levelup_summary_prepared_removed">No longer prepared</string>
+    <string name="wizard_group_taken">Taken: %1$d</string>
+    <string name="wizard_group_hint">Can be learned several times — each copy is a different item and takes one known infusion.</string>
+    <string name="levelup_summary_spells_added">New spells</string>
+    <string name="levelup_summary_spells_removed">Removed spells</string>
+    <string name="levelup_summary_proficiencies">New proficiencies</string>
+    <string name="levelup_saves">Saving throws</string>
+    <string name="levelup_expertise">Expertise</string>
+    <string name="levelup_summary_can_apply">You can level up now and finish the choices later by hand.</string>
+    <string name="levelup_summary_blocked">Fix the marked issues to level up.</string>
 </resources>

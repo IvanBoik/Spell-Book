@@ -186,25 +186,6 @@ fun ArticleDetailsScreen(
 ) {
     var rollResult by remember { mutableStateOf<DiceRoller.Result?>(null) }
 
-    val sections = remember(description) { splitDescriptionSections(description) }
-    val withHeader = needsHeader(book, showSectionMenu, summary)
-    val items = remember(sections, withHeader) { buildArticleItems(sections, withHeader) }
-    val navigableSections = remember(sections) { sections.indices.filterNot { sections[it].isIntro } }
-
-    // Раскрытые блоки хранятся номерами: заголовки повторяются («Unearthed Arcana» и т. п.).
-    // По умолчанию всё свёрнуто, как на сайте: иначе перед глазами сразу десятки подклассов.
-    var expandedSections by remember(articleId) { mutableStateOf(emptySet<Int>()) }
-
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-
-    /** Раскрывает блок и прокручивает к нему: переход в свёрнутый блок бессмыслен. */
-    fun scrollTo(sectionIndex: Int, subheadingIndex: Int? = null) {
-        expandedSections = expandedSections + sectionIndex
-        val target = items.indexOfTarget(sectionIndex, subheadingIndex)
-        if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
-    }
-
     Scaffold(
         topBar = {
             DndTopBar(
@@ -224,59 +205,16 @@ fun ArticleDetailsScreen(
         // и протаскивать флаг параметром через всю иерархию было бы шумно.
         CompositionLocalProvider(LocalRefEmphasis provides refEmphasis) {
             Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(CONTENT_PADDING),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(items.size, key = { items[it].key }) { index ->
-                        val onDiceClick: (String) -> Unit = { formula ->
-                            rollResult = DiceRoller.roll(formula)
-                        }
-                        // Названия умений в таблице развития ведут к их описанию.
-                        val onFeatureClick: (String) -> Unit = { feature ->
-                            sections.findFeature(feature)?.let {
-                                scrollTo(it.sectionIndex, it.subheadingIndex)
-                            }
-                        }
-                        when (val item = items[index]) {
-                            ArticleItem.Header -> ArticleHeader(
-                                book = book,
-                                summary = summary,
-                                titles = if (showSectionMenu) {
-                                    navigableSections.map { sections[it].title }
-                                } else {
-                                    emptyList()
-                                },
-                                onSectionClick = { position -> scrollTo(navigableSections[position]) },
-                            )
-
-                            is ArticleItem.PartTitle -> ArticlePartTitle(sections[item.sectionIndex])
-
-                            is ArticleItem.Chunk -> DescriptionText(
-                                description = item.text,
-                                onDiceClick = onDiceClick,
-                                onFeatureClick = onFeatureClick,
-                            )
-
-                            is ArticleItem.Collapsible -> CollapsibleSectionCard(
-                                section = sections[item.sectionIndex],
-                                collapsed = item.sectionIndex !in expandedSections,
-                                onToggle = {
-                                    expandedSections = expandedSections.toMutableSet().apply {
-                                        if (!add(item.sectionIndex)) remove(item.sectionIndex)
-                                    }
-                                },
-                                onDiceClick = onDiceClick,
-                                onFeatureClick = onFeatureClick,
-                            )
-                        }
-                    }
-
+                ArticleContent(
+                    articleId = articleId,
+                    book = book,
+                    description = description,
+                    showSectionMenu = showSectionMenu,
+                    summary = summary,
+                    onDiceClick = { formula -> rollResult = DiceRoller.roll(formula) },
                     // Место под плавающий блок действий: внизу он оказывается ниже текста.
-                    item { Spacer(Modifier.height(DetailsActionBarReservedHeight)) }
-                }
+                    bottomSpace = DetailsActionBarReservedHeight,
+                )
 
                 DetailsActionBar(
                     onEdit = onEdit,
@@ -302,6 +240,95 @@ fun ArticleDetailsScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * Прокручиваемое содержимое статьи: шапка со сводкой и книгой, разделы и сворачиваемые блоки.
+ *
+ * Общее для экрана статьи и окна-превью предмета поверх другого экрана ([MagicItemPreviewDialog]).
+ * Выделение терминов берётся из [LocalRefEmphasis].
+ *
+ * @param bottomSpace пустое место под текстом (под плавающий блок действий).
+ */
+@Composable
+fun ArticleContent(
+    articleId: String,
+    book: String,
+    description: String,
+    showSectionMenu: Boolean,
+    summary: List<String>,
+    onDiceClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    bottomSpace: androidx.compose.ui.unit.Dp = 0.dp,
+) {
+    val sections = remember(description) { splitDescriptionSections(description) }
+    val withHeader = needsHeader(book, showSectionMenu, summary)
+    val items = remember(sections, withHeader) { buildArticleItems(sections, withHeader) }
+    val navigableSections = remember(sections) { sections.indices.filterNot { sections[it].isIntro } }
+
+    // Раскрытые блоки хранятся номерами: заголовки повторяются («Unearthed Arcana» и т. п.).
+    // По умолчанию всё свёрнуто, как на сайте: иначе перед глазами сразу десятки подклассов.
+    var expandedSections by remember(articleId) { mutableStateOf(emptySet<Int>()) }
+
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    /** Раскрывает блок и прокручивает к нему: переход в свёрнутый блок бессмыслен. */
+    fun scrollTo(sectionIndex: Int, subheadingIndex: Int? = null) {
+        expandedSections = expandedSections + sectionIndex
+        val target = items.indexOfTarget(sectionIndex, subheadingIndex)
+        if (target >= 0) scope.launch { listState.animateScrollToItem(target) }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(CONTENT_PADDING),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(items.size, key = { items[it].key }) { index ->
+            // Названия умений в таблице развития ведут к их описанию.
+            val onFeatureClick: (String) -> Unit = { feature ->
+                sections.findFeature(feature)?.let {
+                    scrollTo(it.sectionIndex, it.subheadingIndex)
+                }
+            }
+            when (val item = items[index]) {
+                ArticleItem.Header -> ArticleHeader(
+                    book = book,
+                    summary = summary,
+                    titles = if (showSectionMenu) {
+                        navigableSections.map { sections[it].title }
+                    } else {
+                        emptyList()
+                    },
+                    onSectionClick = { position -> scrollTo(navigableSections[position]) },
+                )
+
+                is ArticleItem.PartTitle -> ArticlePartTitle(sections[item.sectionIndex])
+
+                is ArticleItem.Chunk -> DescriptionText(
+                    description = item.text,
+                    onDiceClick = onDiceClick,
+                    onFeatureClick = onFeatureClick,
+                )
+
+                is ArticleItem.Collapsible -> CollapsibleSectionCard(
+                    section = sections[item.sectionIndex],
+                    collapsed = item.sectionIndex !in expandedSections,
+                    onToggle = {
+                        expandedSections = expandedSections.toMutableSet().apply {
+                            if (!add(item.sectionIndex)) remove(item.sectionIndex)
+                        }
+                    },
+                    onDiceClick = onDiceClick,
+                    onFeatureClick = onFeatureClick,
+                )
+            }
+        }
+
+        if (bottomSpace > 0.dp) item { Spacer(Modifier.height(bottomSpace)) }
     }
 }
 

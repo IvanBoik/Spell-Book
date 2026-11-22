@@ -40,7 +40,7 @@ import com.example.spellbook.data.model.Spell
         Background::class,
         MagicItem::class,
     ],
-    version = 34,
+    version = 35,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -483,6 +483,13 @@ abstract class SpellBookDatabase : RoomDatabase() {
             }
         }
 
+        /** Исключённые заметки и ресурсы мастера; у старых персонажей ничего не исключено. */
+        private val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE characters ADD COLUMN excludedContent TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         @Volatile
         private var instance: SpellBookDatabase? = null
 
@@ -526,6 +533,7 @@ abstract class SpellBookDatabase : RoomDatabase() {
                 MIGRATION_31_32,
                 MIGRATION_32_33,
                 MIGRATION_33_34,
+                MIGRATION_34_35,
                 ).build()
             }
     }

@@ -135,6 +135,11 @@ data class CharacterDraft(
      * Нет решения — действует базовое умение из «Книги игрока».
      */
     val optionalSwaps: Map<String, Boolean> = emptyMap(),
+    /**
+     * Исключённые на итоговом шаге заметки и ресурсы (ключи [ContentExclusions]): блоки целиком,
+     * абзацы внутри блоков и ресурсы. Заметки выбранных вариантов исключить нельзя.
+     */
+    val excludedContent: Set<String> = emptySet(),
 )
 
 /**
@@ -161,6 +166,11 @@ data class WizardContext(
     val featEffects: Map<String, FeatEffects> = emptyMap(),
     /** Опциональные умения, взаимоисключающие с базовыми: выбор между ними на шаге класса. */
     val swaps: List<OptionalSwap> = emptyList(),
+    /**
+     * Мистические рыцарь и ловкач: заклинания списка класса не из школ архетипа. Их можно
+     * взять не больше [SpellcastingPlan.anySchoolSpells]; пусто — ограничения школ нет.
+     */
+    val offSchoolSpellIds: Set<String> = emptySet(),
 ) {
     /** Владения без выбора от всех выбранных черт («Знаток тяжёлых доспехов»). */
     val featGrants: FeatureGrants

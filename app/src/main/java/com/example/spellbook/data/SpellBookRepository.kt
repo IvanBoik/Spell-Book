@@ -152,6 +152,38 @@ class SpellBookRepository(
         }
     }
 
+    /**
+     * Записывает повышение уровня одной транзакцией: лист персонажа, изменённые и новые блоки
+     * заметок, заменённые заклинания (связи убираются), новые заклинания с отметками
+     * подготовки и новые черты.
+     */
+    suspend fun applyLevelUp(result: com.example.spellbook.data.wizard.LevelUpResult) {
+        database.withTransaction {
+            val characterId = result.character.id
+            characterDao.upsert(result.character)
+            result.notes.forEach { noteDao.upsertBlock(it) }
+            result.removedSpellIds.forEach { spellDao.removeSpellFromCharacter(characterId, it) }
+            result.addedSpellIds.forEach { spellId ->
+                spellDao.addSpellToCharacter(
+                    CharacterSpellCrossRef(
+                        characterId = characterId,
+                        spellId = spellId,
+                        prepared = spellId in result.preparedSpellIds,
+                    ),
+                )
+            }
+            // Уже известные заклинания, ставшие всегда подготовленными (заклинания домена нового круга).
+            result.preparedSpellIds.filter { it !in result.addedSpellIds }.forEach { spellId ->
+                spellDao.setPrepared(characterId, spellId, true)
+            }
+            // Переподготовка: с убранных заклинаний подготовка снимается, сами заклинания остаются.
+            result.unpreparedSpellIds.forEach { spellId -> spellDao.setPrepared(characterId, spellId, false) }
+            result.addedFeatIds.forEach { featId ->
+                featDao.addFeatToCharacter(CharacterFeatCrossRef(characterId = characterId, featId = featId))
+            }
+        }
+    }
+
     // endregion
 
     // region Связь персонаж — заклинание

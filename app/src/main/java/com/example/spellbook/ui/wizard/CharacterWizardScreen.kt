@@ -267,7 +267,7 @@ private fun StepRibbon(
 }
 
 @Composable
-private fun StepChip(
+internal fun StepChip(
     number: Int,
     label: String,
     current: Boolean,
@@ -328,8 +328,13 @@ private fun StepChip(
 
 
 
+/**
+ * Нижняя панель мастера: «Назад», «Далее» и на последнем шаге — итоговое действие.
+ *
+ * @param finishLabel подпись итоговой кнопки; null — «Создать персонажа».
+ */
 @Composable
-private fun WizardBottomBar(
+internal fun WizardBottomBar(
     isFirst: Boolean,
     isLast: Boolean,
     canCreate: Boolean,
@@ -337,6 +342,8 @@ private fun WizardBottomBar(
     onBack: () -> Unit,
     onNext: () -> Unit,
     onCreate: () -> Unit,
+    finishLabel: String? = null,
+    finishIcon: androidx.compose.ui.graphics.vector.ImageVector = Icons.Default.PersonAdd,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
         Column {
@@ -356,9 +363,9 @@ private fun WizardBottomBar(
                 }
                 if (isLast) {
                     Button(onClick = onCreate, enabled = canCreate, modifier = Modifier.weight(1.4f)) {
-                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(finishIcon, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.wizard_create))
+                        Text(finishLabel ?: stringResource(R.string.wizard_create), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 } else {
                     // Незавершённый шаг не блокирует переход: вернуться можно в любой момент,

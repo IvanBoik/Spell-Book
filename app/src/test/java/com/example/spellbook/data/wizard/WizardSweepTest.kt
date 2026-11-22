@@ -151,7 +151,8 @@ class WizardSweepTest {
         context = WizardEngine.context(draft, library, cache)
         context.spellcasting?.let { plan ->
             val classFilter = SpellFilter(classCodes = setOf(plan.classCode), schools = plan.schools)
-            val cantrips = filterSpells(spells, classFilter.copy(maxLevel = 0)).map { it.id }.take(plan.cantrips).toSet()
+            // Заговоры школой не ограничены — как на шаге заклинаний.
+            val cantrips = filterSpells(spells, classFilter.copy(maxLevel = 0, schools = emptySet())).map { it.id }.take(plan.cantrips).toSet()
             val target = plan.knownSpells ?: plan.spellbookSpells ?: 0
             val known = if (plan.maxSpellLevel > 0) {
                 filterSpells(spells, classFilter.copy(minLevel = 1, maxLevel = plan.maxSpellLevel), plan.extraSpellNames)

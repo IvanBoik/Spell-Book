@@ -42,6 +42,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -62,7 +63,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.spellbook.R
-import com.example.spellbook.data.SpellLinkIndex
+import com.example.spellbook.data.LibraryLink
+import com.example.spellbook.data.LibraryLinkIndex
+import com.example.spellbook.data.model.MagicItem
 import com.example.spellbook.data.SpellOptions
 import com.example.spellbook.data.model.Spell
 import com.example.spellbook.ui.components.DetailsActionBar
@@ -93,15 +96,26 @@ enum class RefEmphasis {
 val LocalRefEmphasis = staticCompositionLocalOf { RefEmphasis.STRONG }
 
 /**
- * Ссылки на заклинания в текстах: индекс библиотеки и действие по нажатию.
+ * Ссылки в текстах на заклинания и магические предметы: общий индекс библиотек и действия
+ * по нажатию.
  *
  * Предоставляется в корне приложения, поэтому ссылки работают везде, где текст рисуется
  * через [DescriptionText]: в библиотеке, мастере создания, описаниях ресурсов и заметках.
  * Диалоги наследуют значение, так что ссылки активны и в окнах поверх экрана.
  */
-class SpellLinks(val index: SpellLinkIndex, val onOpen: (Spell) -> Unit)
+class SpellLinks(
+    val index: LibraryLinkIndex,
+    val onOpen: (Spell) -> Unit,
+    val onOpenItem: (MagicItem) -> Unit = {},
+) {
+    /** Открывает окно записи, на которую указывает ссылка. */
+    fun open(link: LibraryLink) = when (link) {
+        is LibraryLink.ToSpell -> onOpen(link.spell)
+        is LibraryLink.ToItem -> onOpenItem(link.item)
+    }
+}
 
-/** Ссылки на заклинания; null — текст показывается без них. */
+/** Ссылки на заклинания и предметы; null — текст показывается без них. */
 val LocalSpellLinks = staticCompositionLocalOf<SpellLinks?> { null }
 
 /** Расстояние между блоками описания и пунктами списка. */
@@ -404,11 +418,21 @@ private fun DescriptionQuote(quote: DescriptionBlock.Quote, onDiceClick: (String
  * и ссылками на заклинания ([LocalSpellLinks]).
  */
 @Composable
-private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit): AnnotatedString =
-    withSpellLinks(formattedDescription(text, onDiceClick))
+private fun annotatedDescription(text: String, onDiceClick: (String) -> Unit): AnnotatedString {
+    // Разбор токенов (шесть регулярных выражений) запоминается: в длинных таблицах он шёл
+    // на каждую ячейку при каждой перекомпоновке. Нажатие на кость читает актуальный обработчик.
+    val currentDice by rememberUpdatedState(onDiceClick)
+    val primary = MaterialTheme.colorScheme.primary
+    val emphasis = LocalRefEmphasis.current
+    val formatted = remember(text, primary, emphasis) {
+        formattedDescription(text, primary, emphasis) { currentDice(it) }
+    }
+    return withSpellLinks(formatted)
+}
 
 /**
- * Добавляет в готовый текст ссылки на заклинания: «адское возмездие [hellish rebuke]».
+ * Добавляет в готовый текст ссылки на заклинания и предметы: «адское возмездие [hellish rebuke]»,
+ * «Сумка хранения [bag of holding]».
  *
  * Ищем уже в отформатированном тексте — без звёздочек и токенов, поэтому ссылка работает
  * и внутри курсива («*порча [bane]*»), и внутри жирного. Стили текста при этом сохраняются.
@@ -424,9 +448,9 @@ internal fun withSpellLinks(text: AnnotatedString): AnnotatedString {
         found.forEach { link ->
             addLink(
                 LinkAnnotation.Clickable(
-                    tag = "spell",
+                    tag = link.tag,
                     styles = styles,
-                    linkInteractionListener = { links.onOpen(link.spell) },
+                    linkInteractionListener = { links.open(link) },
                 ),
                 link.range.first,
                 link.range.last + 1,
@@ -435,7 +459,14 @@ internal fun withSpellLinks(text: AnnotatedString): AnnotatedString {
     }
 }
 
-/** Оформление ссылки на заклинание — как у ссылок на умения в таблице класса. */
+/** Метка ссылки в тексте: заклинание или предмет. */
+internal val LibraryLink.tag: String
+    get() = when (this) {
+        is LibraryLink.ToSpell -> "spell"
+        is LibraryLink.ToItem -> "item"
+    }
+
+/** Оформление ссылки на заклинание или предмет — как у ссылок на умения в таблице класса. */
 @Composable
 internal fun spellLinkStyles(): TextLinkStyles = TextLinkStyles(
     style = SpanStyle(
@@ -445,16 +476,20 @@ internal fun spellLinkStyles(): TextLinkStyles = TextLinkStyles(
 )
 
 /** Текст с костями, словами-ссылками и инлайновыми выделениями. */
-@Composable
-private fun formattedDescription(text: String, onDiceClick: (String) -> Unit) = buildAnnotatedString {
+private fun formattedDescription(
+    text: String,
+    primary: Color,
+    emphasis: RefEmphasis,
+    onDiceClick: (String) -> Unit,
+) = buildAnnotatedString {
     val diceLinkStyle = TextLinkStyles(
         style = SpanStyle(
-            color = MaterialTheme.colorScheme.primary,
+            color = primary,
             fontWeight = FontWeight.Bold,
             textDecoration = TextDecoration.Underline,
         ),
     )
-    val refStyle = when (LocalRefEmphasis.current) {
+    val refStyle = when (emphasis) {
         RefEmphasis.STRONG -> SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
         RefEmphasis.SUBTLE -> SpanStyle(fontStyle = FontStyle.Italic)
     }
